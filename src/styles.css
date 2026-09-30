@@ -115,3 +115,25 @@ button:disabled, input:disabled { cursor: not-allowed; opacity: .45; }
 .chart-data caption { text-align: left; color: #607682; font-size: 11px; padding: 0 8px 8px; }
 .chart-data th { position: sticky; top: 0; background: #fff; }
 @media (max-width: 760px) { .chart-card .card-heading { gap: 8px; } }
+
+/* Session 4: make the simulated allocation explicit and adjustable. */
+.portfolio-controls .card-heading { margin-bottom: 18px; }
+.weight-row { grid-template-columns: minmax(0, 1fr) 68px 15px; padding: 10px 0; min-height: 0; row-gap: 7px; }
+.weight-row input[type="number"] { grid-column: 2; grid-row: 1; }
+.weight-slider { grid-column: 1 / -1; grid-row: 2; width: 100%; accent-color: #e76f51; cursor: pointer; }
+.weight-breakdown { grid-column: 1 / -1; grid-row: 3; display: flex; justify-content: space-between; gap: 8px; color: #607682; font-family: 'DM Mono', monospace; font-size: 9px; }
+.weight-breakdown b { color: #17324a; font-weight: 500; }
+.allocation-bar { display: flex; height: 14px; margin-top: 18px; background: #edf1f3; overflow: hidden; }
+.allocation-bar span { min-width: 2px; border-right: 1px solid #fff; }
+.allocation-legend { display: flex; flex-wrap: wrap; gap: 7px 12px; margin-top: 9px; color: #607682; font-size: 10px; }
+.allocation-legend i { display: inline-block; width: 7px; height: 7px; margin-right: 4px; border-radius: 50%; }
+.allocation-legend b { color: #17324a; font-family: 'DM Mono', monospace; font-weight: 500; }
+.weight-total span { line-height: 1.4; }
+.portfolio-summary .featured { padding-top: 18px; padding-bottom: 18px; }
+.portfolio-summary .featured strong { font-size: 29px; }
+.portfolio-summary .metric.featured strong { font-size: 17px; color: #17324a; }
+.portfolio-summary .metric.featured.negative strong { color: #cf5b55; }
+@media (max-width: 560px) {
+  .weight-breakdown { flex-direction: column; gap: 3px; }
+  .portfolio-summary .featured strong { font-size: 25px; }
+}

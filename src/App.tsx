@@ -536,6 +536,7 @@ function PortfolioView({
   onNormalize: () => void;
 }) {
   const totalWeight = assets.reduce((sum, asset) => sum + (weights[asset.id] ?? 0), 0);
+  const normalizedWeights = Object.fromEntries(assets.map((asset) => [asset.id, totalWeight > 0 ? (weights[asset.id] ?? 0) / totalWeight * 100 : 0]));
   const portfolioData = portfolio?.points ?? [];
 
   return <div className="portfolio-layout">
@@ -545,14 +546,23 @@ function PortfolioView({
         <div><h2>Construire une allocation</h2><p>{activePreset === "custom" ? "Les pondérations sont normalisées pour le calcul." : `${presetModified ? "Allocation candidate modifiée" : "Ventilation candidate chargée"}. Les actifs du picker sont verrouillés.`}</p></div>
       </div>
       <div className="weight-list">
-        {assets.map((asset) => <label className="weight-row" key={asset.id}>
-          <span className="weight-name"><i style={{ background: asset.accentColor }} />{asset.name}</span>
-          <input type="number" min="0" max="100" step="1" value={Math.round((weights[asset.id] ?? 0) * 10) / 10} onChange={(event) => onWeightChange(asset.id, Number(event.target.value))} />
-          <span className="weight-percent">%</span>
-        </label>)}
+        {assets.map((asset) => {
+          const enteredWeight = weights[asset.id] ?? 0;
+          return <div className="weight-row" key={asset.id}>
+            <label className="weight-name" htmlFor={`weight-${asset.id}`}><i style={{ background: asset.accentColor }} />{asset.name}</label>
+            <input id={`weight-${asset.id}`} type="number" min="0" max="100" step="0.1" value={Math.round(enteredWeight * 10) / 10} aria-label={`Poids saisi pour ${asset.name}`} onChange={(event) => onWeightChange(asset.id, Number(event.target.value))} />
+            <span className="weight-percent">%</span>
+            <input className="weight-slider" type="range" min="0" max="100" step="0.1" value={enteredWeight} aria-label={`Slider du poids saisi pour ${asset.name}`} onChange={(event) => onWeightChange(asset.id, Number(event.target.value))} />
+            <div className="weight-breakdown"><span>Saisi <b>{enteredWeight.toFixed(1)} %</b></span><span>Normalisé <b>{normalizedWeights[asset.id].toFixed(1)} %</b></span><span>Utilisé <b>{enteredWeight > 0 ? normalizedWeights[asset.id].toFixed(1) : "0.0"} %</b></span></div>
+          </div>;
+        })}
       </div>
+      <div className="allocation-bar" aria-label="Répartition normalisée des poids">
+        {assets.filter((asset) => normalizedWeights[asset.id] > 0).map((asset) => <span key={asset.id} title={`${asset.name}: ${normalizedWeights[asset.id].toFixed(1)} %`} style={{ width: `${normalizedWeights[asset.id]}%`, background: asset.accentColor }} />)}
+      </div>
+      <div className="allocation-legend">{assets.filter((asset) => normalizedWeights[asset.id] > 0).map((asset) => <span key={asset.id}><i style={{ background: asset.accentColor }} />{asset.name} <b>{normalizedWeights[asset.id].toFixed(1)} %</b></span>)}</div>
       <div className={`weight-total ${Math.abs(totalWeight - 100) < 0.01 ? "valid" : "invalid"}`}>
-        <span>Total saisi</span><strong>{totalWeight.toFixed(1)} %</strong>
+        <span>Total saisi · simulation normalisée à 100 %</span><strong>{totalWeight.toFixed(1)} %</strong>
       </div>
       <button className="normalize-button" onClick={onNormalize}>Normaliser à 100 %</button>
       <p className="method-note">Simulation basée sur des rendements annuels et un rééquilibrage annuel implicite. Les résultats décrivent un scénario historique, pas une prévision.</p>
@@ -560,9 +570,9 @@ function PortfolioView({
 
     {portfolio ? <>
        <section className="portfolio-summary">
-         <div className="portfolio-kpi"><span>TCAM annualisé · {mode === "nominal" ? "nominal" : "réel"}</span><strong>{formatPercent(portfolio.cagr)}</strong><small>Performance moyenne par an, composée.</small></div>
-         <Metric label="Volatilité" value={formatPercent(portfolio.volatility)} description="Variation annuelle des rendements." />
-         <Metric label="Drawdown maximal" value={formatPercent(portfolio.maxDrawdown)} description="Plus forte baisse depuis un sommet." negative />
+         <div className="portfolio-kpi featured"><span>Rendement annualisé · {mode === "nominal" ? "nominal" : "réel"}</span><strong>{formatPercent(portfolio.cagr)}</strong><small>Performance moyenne par an, composée.</small></div>
+         <Metric label="Volatilité" value={formatPercent(portfolio.volatility)} description="Variation annuelle des rendements." featured />
+         <Metric label="Drawdown maximal" value={formatPercent(portfolio.maxDrawdown)} description="Plus forte baisse depuis un sommet." negative featured />
          <Metric label="Sharpe brut" value={portfolio.sharpe === null ? "n.d." : portfolio.sharpe.toFixed(2)} description="Rendement rapporté au risque." />
          <Metric label="Années positives" value={`${portfolio.positiveRate.toFixed(0)} %`} description="Part des années au-dessus de 0 %." positive />
          <Metric label="Pire année" value={portfolio.worst ? `${portfolio.worst.year} · ${formatPercent(portfolio.worst.return)}` : "n.d."} description="Rendement annuel le plus faible." negative />
@@ -632,7 +642,7 @@ function Overview({ assets, stats, mode, start, end }: { assets: Asset[]; stats:
   </>;
 }
 
-function Metric({ label, value, description, positive, negative }: { label: string; value: string; description: string; positive?: boolean; negative?: boolean }) { return <div className={`metric ${positive ? "positive" : negative ? "negative" : ""}`}><span>{label}</span><strong>{value}</strong><small>{description}</small></div>; }
+function Metric({ label, value, description, positive, negative, featured }: { label: string; value: string; description: string; positive?: boolean; negative?: boolean; featured?: boolean }) { return <div className={`metric ${positive ? "positive" : negative ? "negative" : ""} ${featured ? "featured" : ""}`}><span>{label}</span><strong>{value}</strong><small>{description}</small></div>; }
 
 function RankingTable({ assets, stats, mode, best }: { assets: Asset[]; stats: Record<string, ReturnType<typeof computeStats>>; mode: Mode; best: boolean }) { return <div className="ranking-table">{[0, 1, 2, 3, 4].map((index) => <div className="ranking-row" key={index}><span className="rank">0{index + 1}</span>{assets.map((asset) => { const row = (best ? stats[asset.id]?.best5 : stats[asset.id]?.worst5)?.[index]; return <div className="rank-asset" key={asset.id}><span>{asset.name}</span><strong style={{ color: asset.accentColor }}>{row ? `${row.year} · ${formatPercent(returnValue(row, mode))}` : "n.d."}</strong></div>; })}</div>)}</div>; }
 
