@@ -36,6 +36,8 @@ import {
 type Tab = "overview" | "price" | "returns" | "growth" | "decades" | "portfolio" | "correlations";
 type Dataset = Record<string, Row[]>;
 type PresetId = "custom" | "pure" | "constrained" | "robust" | "bitcoin";
+type ChartRow = Record<string, number | string | null>;
+type ChartColumn = { key: string; label: string };
 
 interface CandidatePreset {
   id: Exclude<PresetId, "custom">;
@@ -60,13 +62,14 @@ const historicalPhases = [
 
 const chartTabs: { id: Tab; label: string }[] = [
   { id: "overview", label: "Vue d'ensemble" },
+  { id: "growth", label: "100 $ investis" },
   { id: "price", label: "Niveaux" },
   { id: "returns", label: "Rendements" },
-  { id: "growth", label: "100 $ investis" },
   { id: "decades", label: "Décennies" },
-];
+]; 
 
 const dataUrl = (file: string) => `/data/${encodeURIComponent(file)}`;
+const preferredIds = ["msci_world", "gold", "us_lt_govt_bonds"];
 
 function App() {
   const isCorrelationPage = window.location.pathname.replace(/\/+$/, "") === "/correlations";
@@ -111,7 +114,6 @@ function App() {
         setAssets(registry);
         setPresetDefinitions(presets);
         setData(Object.fromEntries(loaded));
-        const preferredIds = ["msci_world", "gold", "us_lt_govt_bonds"];
         const initialSelection = preferredIds.filter((id) => registry.some((asset) => asset.id === id));
         setSelected(initialSelection);
         setWeights(Object.fromEntries(registry.map((asset) => [asset.id, initialSelection.includes(asset.id) ? 100 / initialSelection.length : 0])));
@@ -207,6 +209,7 @@ function App() {
   const portfolioWeights = Object.fromEntries(selectedAssets.map((asset) => [asset.id, weights[asset.id] ?? 0]));
   const portfolio = computePortfolio(data, portfolioWeights, start, end, mode);
   const correlations = computeCorrelationMatrix(data, selectedAssets.map((asset) => asset.id), start, end, mode);
+  const availableAssets = assets.filter((asset) => data[asset.id]?.length);
 
   const selectPreset = (presetId: Exclude<PresetId, "custom">) => {
     const preset = presetDefinitions.find((candidate) => candidate.id === presetId);
@@ -243,7 +246,7 @@ function App() {
   const normalizeWeights = () => {
     if (activePreset !== "custom") setPresetModified(true);
     const total = selectedAssets.reduce((sum, asset) => sum + (weights[asset.id] ?? 0), 0);
-    if (total <= 0) {
+    if (total <= 0 && selectedAssets.length > 0) {
       const equalWeight = 100 / selectedAssets.length;
       setWeights((current) => selectedAssets.reduce((next, asset) => ({ ...next, [asset.id]: equalWeight }), { ...current }));
       return;
@@ -251,8 +254,23 @@ function App() {
     setWeights((current) => selectedAssets.reduce((next, asset) => ({ ...next, [asset.id]: (current[asset.id] ?? 0) / total * 100 }), { ...current }));
   };
 
+  const resetConfiguration = () => {
+    const initialSelection = preferredIds.filter((id) => availableAssets.some((asset) => asset.id === id));
+    const fallbackSelection = initialSelection.length ? initialSelection : availableAssets.slice(0, 3).map((asset) => asset.id);
+    setActivePreset("custom");
+    setPresetModified(false);
+    setSelected(fallbackSelection);
+    setWeights(Object.fromEntries(assets.map((asset) => [asset.id, fallbackSelection.includes(asset.id) ? 100 / Math.max(1, fallbackSelection.length) : 0])));
+    setCommonPeriod(true);
+    setRange([1970, 2025]);
+    setMode("nominal");
+    setActiveTab("overview");
+  };
+
   const activeLabel = mode === "nominal" ? "nominal" : "réel";
   const selectedCount = selectedAssets.length;
+  const chartColumns: ChartColumn[] = [{ key: "year", label: "Année" }, ...selectedAssets.map((asset) => ({ key: asset.id, label: asset.name }))];
+  const decadeColumns: ChartColumn[] = [{ key: "decade", label: "Décennie" }, ...selectedAssets.map((asset) => ({ key: asset.id, label: asset.name }))];
 
   return (
     <main className="app-shell">
@@ -278,29 +296,49 @@ function App() {
           isCorrelationPage ? (
             <CorrelationView assets={assets} data={data} mode="nominal" />
           ) : <>
-            <section className="control-panel">
-              <div className="control-heading"><div><span className="section-index">A</span><h2>{activePreset === "custom" ? "Univers de comparaison" : "Allocation candidate"}</h2></div><span className="selection-count">{activePreset === "custom" ? `${selectedCount}/4 sélectionnés` : `${presetDefinitions.find((preset) => preset.id === activePreset)?.label ?? "Candidate"}${presetModified ? " · modifiée" : ""}`}</span></div>
-              <div className="preset-chips">
-                <button className={`preset-chip custom ${activePreset === "custom" ? "selected" : ""}`} onClick={selectCustom}><span className="chip-dot" /> À la carte</button>
-                {presetDefinitions.map((preset) => <button key={preset.id} className={`preset-chip ${activePreset === preset.id ? "selected" : ""}`} onClick={() => selectPreset(preset.id)}><span className="chip-dot" /> {preset.label}</button>)}
-              </div>
-              <p className="preset-description">{activePreset === "custom" ? "Sélectionne les actifs à comparer et construis ta propre allocation." : `${presetDefinitions.find((preset) => preset.id === activePreset)?.description ?? "Allocation candidate calculée sur les données historiques."}${presetModified ? " Les pondérations ont été modifiées." : ""}`}</p>
-              <div className={`asset-chips ${activePreset !== "custom" ? "locked" : ""}`}>
-                {assets.map((asset) => {
-                  const isSelected = selected.includes(asset.id);
-                  return <button key={asset.id} className={`asset-chip ${isSelected ? "selected" : ""}`} style={{ "--asset-color": asset.accentColor } as React.CSSProperties} onClick={() => toggleAsset(asset.id)} disabled={activePreset !== "custom" || (!isSelected && selected.length >= 4)}>
-                    <span className="chip-dot" /> {asset.name}
-                  </button>;
-                })}
-              </div>
-              <div className="control-row">
-                <label className="switch-control"><input type="checkbox" checked={commonPeriod} onChange={(event) => setCommonPeriod(event.target.checked)} /><span className="switch" /> Période commune <strong>{commonStart}–{commonEnd}</strong></label>
-                {!commonPeriod && <label className="range-control">De <input type="number" value={range[0]} onChange={(event) => setRange([Number(event.target.value), range[1]])} /> à <input type="number" value={range[1]} onChange={(event) => setRange([range[0], Number(event.target.value)])} /></label>}
-                <div className="mode-toggle"><button className={mode === "nominal" ? "active" : ""} onClick={() => setMode("nominal")}>Nominal</button><button className={mode === "real" ? "active" : ""} onClick={() => setMode("real")}>Réel</button></div>
-              </div>
-            </section>
+             <section className="control-panel">
+               <div className="control-heading"><div><div className="section-index">Configuration</div><h2>Préparer l'analyse</h2></div><div className="control-heading-actions"><span className="selection-count">{activePreset === "custom" ? `${selectedCount}/4 sélectionnés` : `${presetDefinitions.find((preset) => preset.id === activePreset)?.label ?? "Candidate"}${presetModified ? " · modifiée" : ""}`}</span><button className="reset-button" onClick={resetConfiguration}>Réinitialiser</button></div></div>
+               <div className="configuration-steps">
+                 <section className="configuration-step">
+                   <div className="step-heading"><span className="step-number">01</span><div><h3>Actifs</h3><p>Choisis jusqu'à quatre séries à comparer.</p></div><strong>{selectedCount}/4</strong></div>
+                   <div className="preset-chips">
+                     <button className={`preset-chip custom ${activePreset === "custom" ? "selected" : ""}`} onClick={selectCustom}><span className="chip-dot" /> À la carte</button>
+                     {presetDefinitions.map((preset) => <button key={preset.id} className={`preset-chip ${activePreset === preset.id ? "selected" : ""}`} onClick={() => selectPreset(preset.id)}><span className="chip-dot" /> {preset.label}</button>)}
+                   </div>
+                   <p className="preset-description">{activePreset === "custom" ? "Sélectionne les actifs à comparer et construis ta propre allocation." : `${presetDefinitions.find((preset) => preset.id === activePreset)?.description ?? "Allocation candidate calculée sur les données historiques."}${presetModified ? " Les pondérations ont été modifiées." : ""}`}</p>
+                   <div className={`asset-chips ${activePreset !== "custom" ? "locked" : ""}`}>
+                     {assets.map((asset) => {
+                       const isSelected = selected.includes(asset.id);
+                       const hasData = Boolean(data[asset.id]?.length);
+                       return <button key={asset.id} className={`asset-chip ${isSelected ? "selected" : ""} ${!hasData ? "unavailable" : ""}`} style={{ "--asset-color": asset.accentColor } as React.CSSProperties} onClick={() => toggleAsset(asset.id)} disabled={!hasData || activePreset !== "custom" || (!isSelected && selected.length >= 4)} title={!hasData ? "Données indisponibles" : undefined}>
+                         <span className="chip-dot" /> {asset.name}{!hasData && <small>indisponible</small>}
+                       </button>;
+                     })}
+                   </div>
+                   {!availableAssets.length && <div className="configuration-message error"><CircleHelp size={16} /> Aucune série historique n'est disponible pour le moment.</div>}
+                 </section>
 
-            <section className="signal-strip">
+                 <section className="configuration-step">
+                   <div className="step-heading"><span className="step-number">02</span><div><h3>Période</h3><p>Définis la fenêtre historique à analyser.</p></div><strong>{start}–{end}</strong></div>
+                   <div className="control-row">
+                     <label className="switch-control"><input type="checkbox" checked={commonPeriod} onChange={(event) => setCommonPeriod(event.target.checked)} /><span className="switch" /> <span>Utiliser la période commune</span></label>
+                     {commonPeriod && <strong className="period-value">{selectedCount ? `${commonStart}–${commonEnd}` : "En attente d'actifs"}</strong>}
+                     {!commonPeriod && <label className="range-control">De <input type="number" value={range[0]} onChange={(event) => setRange([Number(event.target.value), range[1]])} /> à <input type="number" value={range[1]} onChange={(event) => setRange([range[0], Number(event.target.value)])} /></label>}
+                   </div>
+                   <p className="period-explanation">{commonPeriod ? selectedCount ? `La période s'ajuste automatiquement aux années disponibles pour les ${selectedCount} actifs sélectionnés. Elle sera recalculée à chaque changement.` : "Sélectionne au moins un actif pour calculer la période commune." : "Chaque actif est analysé sur la période saisie, lorsque ses données sont disponibles."}</p>
+                 </section>
+
+                 <section className="configuration-step">
+                   <div className="step-heading"><span className="step-number">03</span><div><h3>Lecture</h3><p>Choisis l'effet de l'inflation sur les rendements.</p></div><strong>{mode === "nominal" ? "Nominal" : "Réel"}</strong></div>
+                   <div className="mode-toggle"><button className={mode === "nominal" ? "active" : ""} onClick={() => setMode("nominal")}>Nominal</button><button className={mode === "real" ? "active" : ""} onClick={() => setMode("real")}>Réel</button></div>
+                   <p className="period-explanation">Nominal conserve les montants courants ; réel retire l'effet de l'inflation.</p>
+                 </section>
+               </div>
+               {selectedCount === 0 && <div className="configuration-message empty"><CircleHelp size={16} /> Sélectionne au moins un actif pour commencer l'analyse.</div>}
+             </section>
+
+             {selectedCount > 0 && <>
+             <section className="signal-strip">
               <div><span className="strip-label">Fenêtre analysée</span><strong>{start} <span>→</span> {end}</strong><small>{duration} années</small></div>
               <div><span className="strip-label">Lecture courante</span><strong>{mode === "nominal" ? "Rendements nominaux" : "Rendements après inflation"}</strong><small>Dividendes réinvestis quand disponibles</small></div>
               <div><span className="strip-label">Actifs actifs</span><strong>{selectedCount}</strong><small>{activePreset === "custom" ? "Maximum quatre séries" : "Ventilation de la candidate"}</small></div>
@@ -309,16 +347,17 @@ function App() {
             <nav className="tabs" aria-label="Vues d'analyse">{chartTabs.map((tab) => <button key={tab.id} className={activeTab === tab.id ? "active" : ""} onClick={() => setActiveTab(tab.id)}>{tab.label}</button>)}<button className={activeTab === "portfolio" ? "active" : ""} onClick={() => setActiveTab("portfolio")}>Portefeuille</button><button className={activeTab === "correlations" ? "active" : ""} onClick={() => setActiveTab("correlations")}>Corrélations</button></nav>
 
             {activeTab === "overview" && <Overview assets={selectedAssets} stats={stats} mode={mode} start={start} end={end} />}
-            {activeTab === "price" && <ChartCard title={`Niveaux de prix ${mode === "real" ? "réels" : "nominaux"}`} subtitle="Une échelle propre à chaque actif. Utilisez la croissance cumulée pour comparer les trajectoires." icon={<SlidersHorizontal size={18} />}><ResponsiveContainer width="100%" height={390}><LineChart data={priceData}><ChartGrid /><XAxis dataKey="year" {...axisProps} /><YAxis scale="log" domain={["auto", "auto"]} {...axisProps} tickFormatter={(value) => value >= 1000 ? `${Math.round(value / 1000)}k` : value} /><Tooltip content={<ChartTooltip assets={assets} type="number" />} /><Legend formatter={(value) => assets.find((asset) => asset.id === value)?.name ?? value} />{selectedAssets.map((asset) => <Line key={asset.id} type="monotone" dataKey={asset.id} stroke={asset.accentColor} strokeWidth={2.5} dot={false} connectNulls={false} />)}</LineChart></ResponsiveContainer></ChartCard>}
-            {activeTab === "returns" && <ChartCard title={`Rendements annuels ${activeLabel}s`} subtitle="Les années positives et négatives sont affichées côte à côte pour faire ressortir les régimes de marché." icon={<BarChart3 size={18} />}><ResponsiveContainer width="100%" height={390}><BarChart data={annualData}><ChartGrid /><XAxis dataKey="year" {...axisProps} /><YAxis {...axisProps} tickFormatter={(value) => `${value}%`} /><Tooltip content={<ChartTooltip assets={assets} type="percent" />} /><Legend formatter={(value) => assets.find((asset) => asset.id === value)?.name ?? value} /><ReferenceLine y={0} stroke="#18324a" />{selectedAssets.map((asset) => <Bar key={asset.id} dataKey={asset.id} fill={asset.accentColor} radius={[3, 3, 0, 0]} />)}</BarChart></ResponsiveContainer></ChartCard>}
-            {activeTab === "growth" && <ChartCard title={`100 $ investis en ${start}`} subtitle={`Croissance cumulée en termes ${activeLabel}s, avec réinvestissement des rendements disponibles.`} icon={<Activity size={18} />}><ResponsiveContainer width="100%" height={390}><AreaChart data={growthData}><ChartGrid /><XAxis dataKey="year" {...axisProps} /><YAxis scale="log" domain={["auto", "auto"]} {...axisProps} tickFormatter={formatMoney} /><Tooltip content={<ChartTooltip assets={assets} type="money" />} /><Legend formatter={(value) => assets.find((asset) => asset.id === value)?.name ?? value} />{selectedAssets.map((asset) => <Area key={asset.id} type="monotone" dataKey={asset.id} stroke={asset.accentColor} fill={asset.accentColor} fillOpacity={0.08} strokeWidth={2.5} connectNulls={false} />)}</AreaChart></ResponsiveContainer></ChartCard>}
-            {activeTab === "decades" && <ChartCard title={`TCAM par décennie · ${activeLabel}`} subtitle="Moyenne géométrique des rendements annuels disponibles dans chaque décennie." icon={<CalendarDays size={18} />}><ResponsiveContainer width="100%" height={390}><BarChart data={decadeData}><ChartGrid /><XAxis dataKey="decade" {...axisProps} /><YAxis {...axisProps} tickFormatter={(value) => `${value}%`} /><Tooltip content={<ChartTooltip assets={assets} type="percent" />} /><Legend formatter={(value) => assets.find((asset) => asset.id === value)?.name ?? value} /><ReferenceLine y={0} stroke="#18324a" />{selectedAssets.map((asset) => <Bar key={asset.id} dataKey={asset.id} fill={asset.accentColor} radius={[3, 3, 0, 0]} />)}</BarChart></ResponsiveContainer></ChartCard>}
+             {activeTab === "price" && <ChartCard title={`Niveaux de prix ${mode === "real" ? "réels" : "nominaux"}`} subtitle="Une échelle propre à chaque actif. Utilisez la croissance cumulée pour comparer les trajectoires." icon={<SlidersHorizontal size={18} />} data={priceData} columns={chartColumns} format="number"><ResponsiveContainer width="100%" height={390}><LineChart data={priceData}><ChartGrid /><XAxis dataKey="year" {...axisProps} /><YAxis scale="log" domain={["auto", "auto"]} {...axisProps} tickFormatter={(value) => value >= 1000 ? `${Math.round(value / 1000)}k` : value} /><Tooltip content={<ChartTooltip assets={assets} type="number" />} /><Legend formatter={(value) => assets.find((asset) => asset.id === value)?.name ?? value} />{selectedAssets.map((asset) => <Line key={asset.id} type="monotone" dataKey={asset.id} stroke={asset.accentColor} strokeWidth={2.5} dot={false} connectNulls={false} />)}</LineChart></ResponsiveContainer></ChartCard>}
+             {activeTab === "returns" && <ChartCard title={`Rendements annuels ${activeLabel}s`} subtitle="Les années positives et négatives sont affichées côte à côte pour faire ressortir les régimes de marché." icon={<BarChart3 size={18} />} data={annualData} columns={chartColumns} format="percent"><ResponsiveContainer width="100%" height={390}><BarChart data={annualData}><ChartGrid /><XAxis dataKey="year" {...axisProps} /><YAxis {...axisProps} tickFormatter={(value) => `${value}%`} /><Tooltip content={<ChartTooltip assets={assets} type="percent" />} /><Legend formatter={(value) => assets.find((asset) => asset.id === value)?.name ?? value} /><ReferenceLine y={0} stroke="#18324a" />{selectedAssets.map((asset) => <Bar key={asset.id} dataKey={asset.id} fill={asset.accentColor} radius={[3, 3, 0, 0]} />)}</BarChart></ResponsiveContainer></ChartCard>}
+             {activeTab === "growth" && <ChartCard title={`100 $ investis en ${start}`} subtitle={`Croissance cumulée en termes ${activeLabel}s, avec réinvestissement des rendements disponibles.`} icon={<Activity size={18} />} data={growthData} columns={chartColumns} format="money"><ResponsiveContainer width="100%" height={390}><AreaChart data={growthData}><ChartGrid /><XAxis dataKey="year" {...axisProps} /><YAxis scale="log" domain={["auto", "auto"]} {...axisProps} tickFormatter={formatMoney} /><Tooltip content={<ChartTooltip assets={assets} type="money" />} /><Legend formatter={(value) => assets.find((asset) => asset.id === value)?.name ?? value} />{selectedAssets.map((asset) => <Area key={asset.id} type="monotone" dataKey={asset.id} stroke={asset.accentColor} fill={asset.accentColor} fillOpacity={0.08} strokeWidth={2.5} connectNulls={false} />)}</AreaChart></ResponsiveContainer></ChartCard>}
+             {activeTab === "decades" && <ChartCard title={`TCAM par décennie · ${activeLabel}`} subtitle="Moyenne géométrique des rendements annuels disponibles dans chaque décennie." icon={<CalendarDays size={18} />} data={decadeData} columns={decadeColumns} format="percent"><ResponsiveContainer width="100%" height={390}><BarChart data={decadeData}><ChartGrid /><XAxis dataKey="decade" {...axisProps} /><YAxis {...axisProps} tickFormatter={(value) => `${value}%`} /><Tooltip content={<ChartTooltip assets={assets} type="percent" />} /><Legend formatter={(value) => assets.find((asset) => asset.id === value)?.name ?? value} /><ReferenceLine y={0} stroke="#18324a" />{selectedAssets.map((asset) => <Bar key={asset.id} dataKey={asset.id} fill={asset.accentColor} radius={[3, 3, 0, 0]} />)}</BarChart></ResponsiveContainer></ChartCard>}
 
              {activeTab === "portfolio" && <PortfolioView assets={selectedAssets} weights={weights} portfolio={portfolio} correlations={correlations} mode={mode} presetModified={presetModified} activePreset={activePreset} onWeightChange={updateWeight} onNormalize={normalizeWeights} />}
               {activeTab === "correlations" && <CorrelationView assets={selectedAssets} data={data} mode={mode} embedded start={start} end={end} />}
 
              {activeTab !== "correlations" && <HistoricalTable assets={selectedAssets} data={data} phases={visiblePhases} mode={mode} />}
-          </>
+             </>}
+           </>
         )}
 
         <footer><span>Sources consolidées : Federal Reserve · MSCI · FTSE NAREIT · Bloomberg · CoinGecko</span><span>Analyse exploratoire · USD · 1925–2025</span></footer>
@@ -563,8 +602,27 @@ function ChartTooltip({ active, payload, label, assets, type }: { active?: boole
   return <div className="chart-tooltip"><strong>{label}</strong>{payload.map((item) => { const asset = assets.find((candidate) => candidate.id === item.dataKey); const value = item.value; return <div key={item.dataKey} style={{ color: asset?.accentColor }}><span>{asset?.name ?? item.dataKey}</span><b>{type === "percent" ? formatPercent(value) : type === "money" ? formatMoney(value ?? 0) : formatNumber(value)}</b></div>; })}</div>;
 }
 
-function ChartCard({ title, subtitle, icon, children }: { title: string; subtitle: string; icon: React.ReactNode; children: React.ReactNode }) {
-  return <section className="chart-card"><div className="card-heading"><div className="heading-icon">{icon}</div><div><h2>{title}</h2><p>{subtitle}</p></div><button className="icon-button" title="Exporter les données" aria-label="Exporter les données"><Download size={16} /></button></div><div className="chart-wrap">{children}</div></section>;
+function exportChartData(data: ChartRow[], columns: ChartColumn[], title: string) {
+  const escapeCell = (value: number | string | null) => `"${String(value ?? "").replace(/"/g, '""')}"`;
+  const csv = [columns.map((column) => escapeCell(column.label)).join(","), ...data.map((row) => columns.map((column) => escapeCell(row[column.key])).join(","))].join("\n");
+  const blob = new Blob([`\ufeff${csv}`], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `${title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "donnees"}.csv`;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+function ChartCard({ title, subtitle, icon, children, data, columns, format = "number" }: { title: string; subtitle: string; icon: React.ReactNode; children: React.ReactNode; data?: ChartRow[]; columns?: ChartColumn[]; format?: "percent" | "money" | "number" }) {
+  const formatCell = (value: number | string | null) => {
+    if (value === null || typeof value === "string") return value ?? "n.d.";
+    if (format === "percent") return formatPercent(value);
+    if (format === "money") return formatMoney(value);
+    return formatNumber(value);
+  };
+
+  return <section className="chart-card"><div className="card-heading"><div className="heading-icon">{icon}</div><div><h2>{title}</h2><p>{subtitle}</p></div><div className="chart-actions"><button className="icon-button" title="Exporter les données CSV" aria-label="Exporter les données CSV" onClick={() => data && columns && exportChartData(data, columns, title)} disabled={!data || !columns}><Download size={16} /></button></div></div><div className="chart-wrap">{children}</div>{data && columns && <details className="chart-data"><summary>Voir les données du graphique</summary><div className="table-scroll"><table><caption>{title} · données tabulaires</caption><thead><tr>{columns.map((column) => <th key={column.key}>{column.label}</th>)}</tr></thead><tbody>{data.map((row, index) => <tr key={`${String(row[columns[0].key])}-${index}`}>{columns.map((column) => <td key={column.key}>{formatCell(row[column.key])}</td>)}</tr>)}</tbody></table></div></details>}</section>;
 }
 
 function Overview({ assets, stats, mode, start, end }: { assets: Asset[]; stats: Record<string, ReturnType<typeof computeStats>>; mode: Mode; start: number; end: number }) {
