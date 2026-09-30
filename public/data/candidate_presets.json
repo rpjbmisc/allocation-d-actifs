@@ -1,0 +1,82 @@
+[
+  {
+    "id": "pure",
+    "label": "Optimum historique pur",
+    "description": "CAGR réel moyen maximal sur trois fenêtres de 25 ans, sans contrainte de drawdown.",
+    "weights": {
+      "sp500": 0,
+      "gold": 0,
+      "bitcoin": 0,
+      "msci_world": 0,
+      "msci_em": 10,
+      "reit_us": 70,
+      "russell2000": 0,
+      "tbills_us": 0,
+      "us_total_market": 20,
+      "highyield_us": 0,
+      "us_lt_govt_bonds": 0
+    },
+    "start": 2001,
+    "end": 2025
+  },
+  {
+    "id": "constrained",
+    "label": "Optimum sous drawdown ≤ 40 %",
+    "description": "CAGR réel moyen maximal sur trois fenêtres de 25 ans, avec moins de 40 % de drawdown sur chacune.",
+    "weights": {
+      "sp500": 0,
+      "gold": 10,
+      "bitcoin": 0,
+      "msci_world": 0,
+      "msci_em": 10,
+      "reit_us": 60,
+      "russell2000": 0,
+      "tbills_us": 0,
+      "us_total_market": 20,
+      "highyield_us": 0,
+      "us_lt_govt_bonds": 0
+    },
+    "start": 2001,
+    "end": 2025
+  },
+  {
+    "id": "robust",
+    "label": "Allocation robuste",
+    "description": "Meilleur pire-CAGR sur trois fenêtres de 25 ans, sous 40 % de drawdown sur chacune.",
+    "weights": {
+      "sp500": 0,
+      "gold": 20,
+      "bitcoin": 0,
+      "msci_world": 0,
+      "msci_em": 20,
+      "reit_us": 30,
+      "russell2000": 0,
+      "tbills_us": 0,
+      "us_total_market": 30,
+      "highyield_us": 0,
+      "us_lt_govt_bonds": 0
+    },
+    "start": 2001,
+    "end": 2025
+  },
+  {
+    "id": "bitcoin",
+    "label": "Allocation avec Bitcoin",
+    "description": "Scénario calculé sur 2014–2025, première année complète de rendement Bitcoin.",
+    "weights": {
+      "sp500": 10,
+      "gold": 40,
+      "bitcoin": 50,
+      "msci_world": 0,
+      "msci_em": 0,
+      "reit_us": 0,
+      "russell2000": 0,
+      "tbills_us": 0,
+      "us_total_market": 0,
+      "highyield_us": 0,
+      "us_lt_govt_bonds": 0
+    },
+    "start": 2014,
+    "end": 2025
+  }
+]
