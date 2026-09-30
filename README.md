@@ -16,7 +16,7 @@ Puis ouvrir l'URL affichée par Vite, généralement `http://localhost:5173`.
 - `src/` : application React, calculs statistiques et simulation de portefeuille.
 - `public/data/` : registre et séries CSV utilisées par l'interface.
 - `MultiAssetComparison.tsx` : version Dust originale conservée comme référence.
-- `Bourse/`, `Immobilier/`, `SCPI/`, `Suivi_Epargne.xlsx` : corpus migré depuis l'ancien dossier.
+- `Bourse/`, `Immobilier/`, `SCPI/`, `Suivi_Epargne.xlsx` : documents personnels conservés localement et exclus du dépôt Git.
 
 Le tableau de bord charge les actifs déclarés dans `public/data/assets_index.json`. Les fichiers CSV enrichis sont conservés dans le corpus, mais ne sont pas affichés tant qu'ils ne sont pas ajoutés au registre des actifs.
 
