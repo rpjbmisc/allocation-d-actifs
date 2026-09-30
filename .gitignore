@@ -1,3 +1,9 @@
 node_modules/
 dist/
 .DS_Store
+
+# Personal financial documents, kept local only.
+Bourse/
+Immobilier/
+SCPI/
+Suivi_Epargne.xlsx
