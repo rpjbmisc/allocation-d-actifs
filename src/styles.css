@@ -137,3 +137,9 @@ button:disabled, input:disabled { cursor: not-allowed; opacity: .45; }
   .weight-breakdown { flex-direction: column; gap: 3px; }
   .portfolio-summary .featured strong { font-size: 25px; }
 }
+
+/* Session 5: make the two correlation contexts and matrix details explicit. */
+.correlation-cell { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; }
+.correlation-cell strong { font-family: 'DM Mono', monospace; font-size: 12px; font-weight: 500; color: #17324a; }
+.correlation-cell small { color: #536b7a; font-family: 'DM Mono', monospace; font-size: 9px; }
+.correlation-cell.diagonal small { color: #718290; }

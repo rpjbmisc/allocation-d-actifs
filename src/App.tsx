@@ -70,16 +70,26 @@ const chartTabs: { id: Tab; label: string }[] = [
 
 const dataUrl = (file: string) => `/data/${encodeURIComponent(file)}`;
 const preferredIds = ["msci_world", "gold", "us_lt_govt_bonds"];
+const tabIds = new Set<Tab>(["overview", "price", "returns", "growth", "decades", "portfolio", "correlations"]);
+
+function readTab(value: string | null): Tab {
+  return value && tabIds.has(value as Tab) ? value as Tab : "overview";
+}
+
+function readIds(value: string | null | undefined): string[] {
+  return value ? value.split(",").filter(Boolean) : [];
+}
 
 function App() {
   const isCorrelationPage = window.location.pathname.replace(/\/+$/, "") === "/correlations";
   const [assets, setAssets] = useState<Asset[]>(fallbackAssets);
   const [data, setData] = useState<Dataset>({});
-  const [selected, setSelected] = useState<string[]>([]);
-  const [mode, setMode] = useState<Mode>("nominal");
-  const [range, setRange] = useState<[number, number]>([1970, 2025]);
-  const [commonPeriod, setCommonPeriod] = useState(true);
-  const [activeTab, setActiveTab] = useState<Tab>("overview");
+  const initialParams = new URLSearchParams(window.location.search);
+  const [selected, setSelected] = useState<string[]>(readIds(initialParams.get("assets")));
+  const [mode, setMode] = useState<Mode>(initialParams.get("mode") === "real" ? "real" : "nominal");
+  const [range, setRange] = useState<[number, number]>([Number(initialParams.get("start")) || 1970, Number(initialParams.get("end")) || 2025]);
+  const [commonPeriod, setCommonPeriod] = useState(initialParams.get("common") !== "false");
+  const [activeTab, setActiveTab] = useState<Tab>(readTab(initialParams.get("tab")));
   const [weights, setWeights] = useState<Record<string, number>>({});
   const [activePreset, setActivePreset] = useState<PresetId>("custom");
   const [presetDefinitions, setPresetDefinitions] = useState<CandidatePreset[]>([]);
@@ -114,7 +124,8 @@ function App() {
         setAssets(registry);
         setPresetDefinitions(presets);
         setData(Object.fromEntries(loaded));
-        const initialSelection = preferredIds.filter((id) => registry.some((asset) => asset.id === id));
+        const sharedSelection = selected.filter((id) => registry.some((asset) => asset.id === id));
+        const initialSelection = sharedSelection.length ? sharedSelection : preferredIds.filter((id) => registry.some((asset) => asset.id === id));
         setSelected(initialSelection);
         setWeights(Object.fromEntries(registry.map((asset) => [asset.id, initialSelection.includes(asset.id) ? 100 / initialSelection.length : 0])));
       } catch (cause) {
@@ -126,6 +137,18 @@ function App() {
     void load();
     return () => { cancelled = true; };
   }, []);
+
+  useEffect(() => {
+    if (loading || isCorrelationPage) return;
+    const params = new URLSearchParams(window.location.search);
+    params.set("tab", activeTab);
+    params.set("assets", selected.join(","));
+    params.set("mode", mode);
+    params.set("common", String(commonPeriod));
+    params.set("start", String(range[0]));
+    params.set("end", String(range[1]));
+    window.history.replaceState(null, "", `${window.location.pathname}?${params.toString()}`);
+  }, [activeTab, commonPeriod, isCorrelationPage, loading, mode, range, selected]);
 
   const selectedAssets = useMemo(() => assets.filter((asset) => selected.includes(asset.id) && data[asset.id]?.length), [assets, data, selected]);
   const commonStart = selectedAssets.length ? Math.max(...selectedAssets.map((asset) => data[asset.id][0].year)) : 1970;
@@ -279,14 +302,14 @@ function App() {
         <header className="hero">
           <div>
             <p className="eyebrow"><span className="eyebrow-dot" /> Laboratoire patrimonial · données 1925–2025</p>
-            {isCorrelationPage ? <><h1>Corrélations<br /><em>entre actifs</em></h1><p className="hero-copy">Explorer les relations entre les grandes classes d'actifs et repérer les combinaisons les plus complémentaires.</p></> : <><h1>Allocation<br /><em>d'actifs</em></h1><p className="hero-copy">Comparer les moteurs de performance, les périodes de stress et la résistance réelle des grandes classes d'actifs.</p></>}
+            {isCorrelationPage ? <><h1>Matrice<br /><em>globale</em></h1><p className="hero-copy">Explorer les relations historiques entre les grandes classes d'actifs et repérer les combinaisons les plus complémentaires.</p></> : <><h1>Allocation<br /><em>d'actifs</em></h1><p className="hero-copy">Comparer les moteurs de performance, les périodes de stress et la résistance réelle des grandes classes d'actifs.</p></>}
           </div>
           <div className="hero-note"><span>01</span><p>Une lecture historique<br />avant toute allocation.</p></div>
         </header>
 
         <nav className="page-navigation" aria-label="Navigation principale">
-          <a className={!isCorrelationPage ? "active" : ""} href="/">Analyse des actifs</a>
-          <a className={isCorrelationPage ? "active" : ""} href="/correlations">Corrélations</a>
+          <a className={!isCorrelationPage ? "active" : ""} aria-current={!isCorrelationPage ? "page" : undefined} href="/">Analyse des actifs</a>
+          <a className={isCorrelationPage ? "active" : ""} aria-current={isCorrelationPage ? "page" : undefined} href="/correlations">Matrice globale</a>
         </nav>
 
         {loading && <div className="loading-panel"><Activity size={18} /> Chargement du corpus historique...</div>}
@@ -344,7 +367,7 @@ function App() {
               <div><span className="strip-label">Actifs actifs</span><strong>{selectedCount}</strong><small>{activePreset === "custom" ? "Maximum quatre séries" : "Ventilation de la candidate"}</small></div>
             </section>
 
-            <nav className="tabs" aria-label="Vues d'analyse">{chartTabs.map((tab) => <button key={tab.id} className={activeTab === tab.id ? "active" : ""} onClick={() => setActiveTab(tab.id)}>{tab.label}</button>)}<button className={activeTab === "portfolio" ? "active" : ""} onClick={() => setActiveTab("portfolio")}>Portefeuille</button><button className={activeTab === "correlations" ? "active" : ""} onClick={() => setActiveTab("correlations")}>Corrélations</button></nav>
+             <nav className="tabs" aria-label="Vues d'analyse" role="tablist">{chartTabs.map((tab) => <button key={tab.id} role="tab" aria-selected={activeTab === tab.id} className={activeTab === tab.id ? "active" : ""} onClick={() => setActiveTab(tab.id)}>{tab.label}</button>)}<button role="tab" aria-selected={activeTab === "portfolio"} className={activeTab === "portfolio" ? "active" : ""} onClick={() => setActiveTab("portfolio")}>Portefeuille</button><button role="tab" aria-selected={activeTab === "correlations"} className={activeTab === "correlations" ? "active" : ""} onClick={() => setActiveTab("correlations")}>Corrélations de la sélection</button></nav>
 
             {activeTab === "overview" && <Overview assets={selectedAssets} stats={stats} mode={mode} start={start} end={end} />}
              {activeTab === "price" && <ChartCard title={`Niveaux de prix ${mode === "real" ? "réels" : "nominaux"}`} subtitle="Une échelle propre à chaque actif. Utilisez la croissance cumulée pour comparer les trajectoires." icon={<SlidersHorizontal size={18} />} data={priceData} columns={chartColumns} format="number"><ResponsiveContainer width="100%" height={390}><LineChart data={priceData}><ChartGrid /><XAxis dataKey="year" {...axisProps} /><YAxis scale="log" domain={["auto", "auto"]} {...axisProps} tickFormatter={(value) => value >= 1000 ? `${Math.round(value / 1000)}k` : value} /><Tooltip content={<ChartTooltip assets={assets} type="number" />} /><Legend formatter={(value) => assets.find((asset) => asset.id === value)?.name ?? value} />{selectedAssets.map((asset) => <Line key={asset.id} type="monotone" dataKey={asset.id} stroke={asset.accentColor} strokeWidth={2.5} dot={false} connectNulls={false} />)}</LineChart></ResponsiveContainer></ChartCard>}
@@ -385,10 +408,11 @@ function CorrelationView({
   start?: number;
   end?: number;
 }) {
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [range, setRange] = useState<[number, number]>([1970, 2025]);
-  const [commonPeriod, setCommonPeriod] = useState(false);
-  const [pageMode, setPageMode] = useState<Mode>(parentMode);
+  const correlationParams = !embedded ? new URLSearchParams(window.location.search) : null;
+  const [selectedIds, setSelectedIds] = useState<string[]>(readIds(correlationParams?.get("assets")));
+  const [range, setRange] = useState<[number, number]>([Number(correlationParams?.get("start")) || 1970, Number(correlationParams?.get("end")) || 2025]);
+  const [commonPeriod, setCommonPeriod] = useState(correlationParams?.get("common") === "true");
+  const [pageMode, setPageMode] = useState<Mode>(correlationParams?.get("mode") === "real" ? "real" : parentMode);
 
   useEffect(() => {
     if (embedded || !assets.length) return;
@@ -398,6 +422,17 @@ function CorrelationView({
   const selectedAssets = useMemo(() => embedded
     ? assets.filter((asset) => data[asset.id]?.length)
     : assets.filter((asset) => selectedIds.includes(asset.id) && data[asset.id]?.length), [assets, data, embedded, selectedIds]);
+
+  useEffect(() => {
+    if (embedded || !selectedAssets.length) return;
+    const params = new URLSearchParams(window.location.search);
+    params.set("assets", selectedIds.join(","));
+    params.set("mode", pageMode);
+    params.set("common", String(commonPeriod));
+    params.set("start", String(range[0]));
+    params.set("end", String(range[1]));
+    window.history.replaceState(null, "", `${window.location.pathname}?${params.toString()}`);
+  }, [commonPeriod, embedded, pageMode, range, selectedAssets.length, selectedIds]);
   const commonStart = selectedAssets.length ? Math.max(...selectedAssets.map((asset) => data[asset.id][0].year)) : range[0];
   const commonEnd = selectedAssets.length ? Math.min(...selectedAssets.map((asset) => data[asset.id].at(-1)?.year ?? range[1])) : range[1];
   const [start, end] = embedded
@@ -446,16 +481,16 @@ function CorrelationView({
     <section className={`correlation-controls ${embedded ? "embedded" : ""}`}>
       <div className="card-heading compact">
         <div className="heading-icon"><Activity size={17} /></div>
-        <div><h2>Univers de corrélation</h2><p>{embedded ? "Actifs sélectionnés dans le picker principal. Les contrôles de période et de mode sont partagés avec l'analyse." : "Tous les actifs sont inclus par défaut. Les cellules utilisent uniquement les années communes à chaque paire."}</p></div>
+        <div><h2>{embedded ? "Corrélations de la sélection" : "Univers de corrélation"}</h2><p>{embedded ? "Lecture des actifs sélectionnés dans l'analyse principale, avec la même période et le même mode." : "Tous les actifs sont inclus par défaut. Les cellules utilisent uniquement les années communes à chaque paire."}</p></div>
       </div>
       {!embedded && <>
         <div className="correlation-assets">
-          {assets.map((asset) => <button key={asset.id} className={`correlation-asset-chip ${selectedIds.includes(asset.id) ? "selected" : ""}`} style={{ "--asset-color": asset.accentColor } as React.CSSProperties} onClick={() => toggleAsset(asset.id)}><span className="chip-dot" />{asset.name}</button>)}
+          {assets.map((asset) => <button key={asset.id} aria-pressed={selectedIds.includes(asset.id)} className={`correlation-asset-chip ${selectedIds.includes(asset.id) ? "selected" : ""}`} style={{ "--asset-color": asset.accentColor } as React.CSSProperties} onClick={() => toggleAsset(asset.id)}><span className="chip-dot" />{asset.name}</button>)}
         </div>
         <div className="correlation-control-row">
           <label className="switch-control"><input type="checkbox" checked={commonPeriod} onChange={(event) => setCommonPeriod(event.target.checked)} /><span className="switch" />Période commune <strong>{commonStart}–{commonEnd}</strong></label>
           {!commonPeriod && <label className="range-control">De <input type="number" value={range[0]} min={1925} max={range[1] - 1} onChange={(event) => setRange([Number(event.target.value), range[1]])} /> à <input type="number" value={range[1]} min={range[0] + 1} max={2025} onChange={(event) => setRange([range[0], Number(event.target.value)])} /></label>}
-          <div className="mode-toggle"><button className={mode === "nominal" ? "active" : ""} onClick={() => setPageMode("nominal")}>Nominal</button><button className={mode === "real" ? "active" : ""} onClick={() => setPageMode("real")}>Réel</button></div>
+          <div className="mode-toggle"><button aria-pressed={mode === "nominal"} className={mode === "nominal" ? "active" : ""} onClick={() => setPageMode("nominal")}>Nominal</button><button aria-pressed={mode === "real"} className={mode === "real" ? "active" : ""} onClick={() => setPageMode("real")}>Réel</button></div>
           <span className="correlation-period">{selectedAssets.length} actifs · {periodLabel} · lecture {mode === "nominal" ? "nominale" : "réelle"}</span>
         </div>
       </>}
@@ -471,7 +506,7 @@ function CorrelationView({
       </section>
 
       <section className="table-card correlation-matrix-card">
-        <div className="card-heading compact"><div className="heading-icon"><Activity size={17} /></div><div><h2>Matrice des corrélations</h2><p>Rendements {mode === "nominal" ? "nominaux" : "réels"} sur {periodLabel}. Survolez une cellule pour voir le nombre d’observations.</p></div></div>
+        <div className="card-heading compact"><div className="heading-icon"><Activity size={17} /></div><div><h2>Matrice globale</h2><p>Rendements {mode === "nominal" ? "nominaux" : "réels"} sur {periodLabel}. Chaque cellule affiche sa valeur et son nombre d'observations.</p></div></div>
         <div className="correlation-matrix-scroll"><div className="correlation-matrix" style={{ gridTemplateColumns: `minmax(160px, 1.5fr) repeat(${selectedAssets.length}, minmax(78px, 1fr))` }}>
           <div className="correlation-corner">Actif</div>
           {selectedAssets.map((asset) => <div className="correlation-header" key={asset.id} style={{ color: asset.accentColor }}>{asset.name}</div>)}
@@ -481,8 +516,9 @@ function CorrelationView({
               const cell = details[asset.id]?.[other.id];
               const value = cell?.value ?? null;
               const diagonal = asset.id === other.id;
-              return <div key={`${asset.id}-${other.id}`} className={`correlation-cell ${diagonal ? "diagonal" : ""} ${value === null ? "unavailable" : ""}`} style={{ backgroundColor: correlationColor(value, diagonal) }} title={value === null ? `${cell?.observations ?? 0} observations` : `${value.toFixed(2)} · ${cell?.observations ?? 0} observations`}>
-                {value === null ? "n.d." : value.toFixed(2)}
+              const observations = cell?.observations ?? 0;
+              return <div key={`${asset.id}-${other.id}`} className={`correlation-cell ${diagonal ? "diagonal" : ""} ${value === null ? "unavailable" : ""}`} style={{ backgroundColor: correlationColor(value, diagonal) }} aria-label={`${asset.name}, ${other.name}: ${value === null ? "donnée indisponible" : value.toFixed(2)}, ${observations} observations`} title={`${observations} observations`}>
+                <strong>{value === null ? "n.d." : value.toFixed(2)}</strong><small>n={observations}</small>
               </div>;
             }),
           ])}
