@@ -14,6 +14,7 @@ Puis ouvrir l'URL affichée par Vite, généralement `http://localhost:5173`.
 ## Contenu
 
 - `src/` : application React, calculs statistiques et simulation de portefeuille.
+- `UX_AUDIT.md` : audit UX, décisions prises et feuille de route par sessions.
 - `public/data/` : registre et séries CSV utilisées par l'interface.
 - `MultiAssetComparison.tsx` : version Dust originale conservée comme référence.
 - `Bourse/`, `Immobilier/`, `SCPI/`, `Suivi_Epargne.xlsx` : documents personnels conservés localement et exclus du dépôt Git.
