@@ -7,7 +7,6 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
-  Legend,
   Line,
   LineChart,
   ReferenceLine,
@@ -16,7 +15,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { Activity, ArrowDownRight, ArrowUpRight, BarChart3, CalendarDays, CircleHelp, Download, SlidersHorizontal } from "lucide-react";
+import { Activity, AlertTriangle, ArrowDownRight, ArrowUpRight, BarChart3, CalendarDays, CircleHelp, Download, EyeOff, RotateCcw, Search, SlidersHorizontal } from "lucide-react";
 import {
   Asset,
   computeStats,
@@ -38,6 +37,8 @@ type Dataset = Record<string, Row[]>;
 type PresetId = "custom" | "pure" | "constrained" | "robust" | "bitcoin";
 type ChartRow = Record<string, number | string | null>;
 type ChartColumn = { key: string; label: string };
+type AssetCategory = "Tous" | "Actions" | "Obligations" | "Immobilier" | "Métaux" | "Alternatives";
+type ChartMetadata = { unit: string; source: string; period: string; observations: number };
 
 interface CandidatePreset {
   id: Exclude<PresetId, "custom">;
@@ -71,6 +72,51 @@ const chartTabs: { id: Tab; label: string }[] = [
 const dataUrl = (file: string) => `/data/${encodeURIComponent(file)}`;
 const preferredIds = ["msci_world", "gold", "us_lt_govt_bonds"];
 const tabIds = new Set<Tab>(["overview", "price", "returns", "growth", "decades", "portfolio", "correlations"]);
+const assetCategories: AssetCategory[] = ["Tous", "Actions", "Obligations", "Immobilier", "Métaux", "Alternatives"];
+const crisisMarkers = [
+  { year: 1929, label: "1929" },
+  { year: 1973, label: "1973" },
+  { year: 2000, label: "2000" },
+  { year: 2008, label: "2008" },
+  { year: 2020, label: "2020" },
+];
+
+function assetCategory(id: string): AssetCategory {
+  if (["sp500", "msci_world", "msci_em", "russell2000", "us_total_market"].includes(id)) return "Actions";
+  if (["tbills_us", "us_lt_govt_bonds", "highyield_us"].includes(id)) return "Obligations";
+  if (id === "reit_us") return "Immobilier";
+  if (id === "gold") return "Métaux";
+  return "Alternatives";
+}
+
+function assetUnit(id: string): string {
+  if (id === "gold") return "USD / once";
+  if (id === "bitcoin") return "USD / BTC";
+  return "Indice / USD";
+}
+
+function candidateRisk(id: string): string {
+  if (id === "bitcoin") return "Très élevé";
+  if (id === "pure") return "Élevé";
+  if (id === "constrained") return "Encadré";
+  return "Modéré";
+}
+
+function maxDrawdown(rows: Row[], start: number, end: number, mode: Mode): number | null {
+  let value = 100;
+  let peak = value;
+  let drawdown = 0;
+  let observed = false;
+  rows.filter((row) => row.year >= start && row.year <= end).forEach((row) => {
+    const current = returnValue(row, mode);
+    if (current === null) return;
+    observed = true;
+    value *= 1 + current / 100;
+    peak = Math.max(peak, value);
+    drawdown = Math.min(drawdown, (value / peak - 1) * 100);
+  });
+  return observed ? drawdown : null;
+}
 
 function readTab(value: string | null): Tab {
   return value && tabIds.has(value as Tab) ? value as Tab : "overview";
@@ -90,6 +136,10 @@ function App() {
   const [range, setRange] = useState<[number, number]>([Number(initialParams.get("start")) || 1970, Number(initialParams.get("end")) || 2025]);
   const [commonPeriod, setCommonPeriod] = useState(initialParams.get("common") !== "false");
   const [activeTab, setActiveTab] = useState<Tab>(readTab(initialParams.get("tab")));
+  const [configurationOpen, setConfigurationOpen] = useState(false);
+  const [assetSearch, setAssetSearch] = useState("");
+  const [assetCategoryFilter, setAssetCategoryFilter] = useState<AssetCategory>("Tous");
+  const [hiddenAssets, setHiddenAssets] = useState<string[]>([]);
   const [weights, setWeights] = useState<Record<string, number>>({});
   const [activePreset, setActivePreset] = useState<PresetId>("custom");
   const [presetDefinitions, setPresetDefinitions] = useState<CandidatePreset[]>([]);
@@ -231,8 +281,34 @@ function App() {
 
   const portfolioWeights = Object.fromEntries(selectedAssets.map((asset) => [asset.id, weights[asset.id] ?? 0]));
   const portfolio = computePortfolio(data, portfolioWeights, start, end, mode);
+  const equalWeights = Object.fromEntries(selectedAssets.map((asset) => [asset.id, 100 / Math.max(1, selectedAssets.length)]));
+  const equalPortfolio = computePortfolio(data, equalWeights, start, end, mode);
   const correlations = computeCorrelationMatrix(data, selectedAssets.map((asset) => asset.id), start, end, mode);
   const availableAssets = assets.filter((asset) => data[asset.id]?.length);
+  const visibleChartAssets = selectedAssets.filter((asset) => !hiddenAssets.includes(asset.id));
+  const filteredAssets = assets.filter((asset) => {
+    const matchesCategory = assetCategoryFilter === "Tous" || assetCategory(asset.id) === assetCategoryFilter;
+    const matchesSearch = asset.name.toLocaleLowerCase().includes(assetSearch.toLocaleLowerCase());
+    return matchesCategory && matchesSearch;
+  });
+  const chartObservationCount = selectedAssets.reduce((sum, asset) => sum + data[asset.id].filter((row) => row.year >= start && row.year <= end && returnValue(row, mode) !== null).length, 0);
+  const priceObservationCount = selectedAssets.reduce((sum, asset) => sum + data[asset.id].filter((row) => row.year >= start && row.year <= end && Number.isFinite(row.price)).length, 0);
+  const periodGap = selectedAssets.length ? commonStart - Math.min(...selectedAssets.map((asset) => asset.startYear)) : 0;
+  const limitingAssets = selectedAssets.filter((asset) => asset.startYear === commonStart);
+  const decisionStats = selectedAssets.map((asset) => {
+    const stat = stats[asset.id];
+    return stat ? { asset, stat, drawdown: maxDrawdown(data[asset.id], start, end, mode) } : null;
+  }).filter((entry): entry is { asset: Asset; stat: NonNullable<typeof stats[string]>; drawdown: number | null } => Boolean(entry));
+  const bestAsset = [...decisionStats].sort((left, right) => (mode === "nominal" ? right.stat.cagrNominal ?? -Infinity : right.stat.cagrReal ?? -Infinity) - (mode === "nominal" ? left.stat.cagrNominal ?? -Infinity : left.stat.cagrReal ?? -Infinity))[0];
+  const lowestRiskAsset = [...decisionStats].sort((left, right) => left.stat.volatility - right.stat.volatility)[0];
+  const worstDrawdownAsset = [...decisionStats].sort((left, right) => (left.drawdown ?? 0) - (right.drawdown ?? 0))[0];
+  const portfolioContributions = selectedAssets.map((asset) => {
+    const stat = stats[asset.id];
+    const weight = portfolioWeights[asset.id] ?? 0;
+    const normalizedWeight = Object.values(portfolioWeights).reduce((total, current) => total + current, 0) > 0 ? weight / Object.values(portfolioWeights).reduce((total, current) => total + current, 0) * 100 : 0;
+    const cagr = mode === "nominal" ? stat?.cagrNominal ?? null : stat?.cagrReal ?? null;
+    return { asset, weight: normalizedWeight, contribution: cagr === null ? null : normalizedWeight / 100 * cagr };
+  });
 
   const selectPreset = (presetId: Exclude<PresetId, "custom">) => {
     const preset = presetDefinitions.find((candidate) => candidate.id === presetId);
@@ -288,6 +364,12 @@ function App() {
     setRange([1970, 2025]);
     setMode("nominal");
     setActiveTab("overview");
+    setHiddenAssets([]);
+    setConfigurationOpen(false);
+  };
+
+  const toggleHiddenAsset = (id: string) => {
+    setHiddenAssets((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
   };
 
   const activeLabel = mode === "nominal" ? "nominal" : "réel";
@@ -320,26 +402,40 @@ function App() {
             <CorrelationView assets={assets} data={data} mode="nominal" />
           ) : <>
              <section className="control-panel">
-               <div className="control-heading"><div><div className="section-index">Configuration</div><h2>Préparer l'analyse</h2></div><div className="control-heading-actions"><span className="selection-count">{activePreset === "custom" ? `${selectedCount}/4 sélectionnés` : `${presetDefinitions.find((preset) => preset.id === activePreset)?.label ?? "Candidate"}${presetModified ? " · modifiée" : ""}`}</span><button className="reset-button" onClick={resetConfiguration}>Réinitialiser</button></div></div>
+               <div className="context-bar">
+                 <div className="context-selection"><span className="section-index">Analyse active</span><div className="context-assets">{selectedAssets.length ? selectedAssets.map((asset) => <span key={asset.id} className="context-asset" style={{ "--asset-color": asset.accentColor } as React.CSSProperties}><i />{asset.name}</span>) : <span className="context-empty">Aucun actif sélectionné</span>}</div></div>
+                 <div className="context-detail"><span>Période</span><strong>{selectedCount ? `${start}–${end}` : "—"}</strong></div>
+                 <div className="context-detail"><span>Lecture</span><strong>{mode === "nominal" ? "Nominal" : "Réel"}</strong></div>
+                 <div className="context-actions"><button className="context-edit" onClick={() => setConfigurationOpen((open) => !open)}>{configurationOpen ? "Fermer" : "Modifier"}</button><button className="reset-button" onClick={resetConfiguration} title="Réinitialiser la configuration"><RotateCcw size={14} /> Réinitialiser</button></div>
+               </div>
+               {commonPeriod && periodGap >= 5 && <div className="context-warning"><AlertTriangle size={15} /><span>La période commune est limitée à <strong>{commonStart}–{commonEnd}</strong> par {limitingAssets.map((asset) => asset.name).join(", ")}.</span><button onClick={() => setConfigurationOpen(true)}>Voir pourquoi</button></div>}
+               {configurationOpen && <div className="configuration-editor">
+               <div className="control-heading"><div><div className="section-index">Configuration</div><h2>Préparer l'analyse</h2></div><div className="control-heading-actions"><span className="selection-count">{activePreset === "custom" ? `${selectedCount}/4 sélectionnés` : `${presetDefinitions.find((preset) => preset.id === activePreset)?.label ?? "Candidate"}${presetModified ? " · modifiée" : ""}`}</span></div></div>
                <div className="configuration-steps">
-                 <section className="configuration-step">
-                   <div className="step-heading"><span className="step-number">01</span><div><h3>Actifs</h3><p>Choisis jusqu'à quatre séries à comparer.</p></div><strong>{selectedCount}/4</strong></div>
-                   <div className="preset-chips">
-                     <button className={`preset-chip custom ${activePreset === "custom" ? "selected" : ""}`} onClick={selectCustom}><span className="chip-dot" /> À la carte</button>
-                     {presetDefinitions.map((preset) => <button key={preset.id} className={`preset-chip ${activePreset === preset.id ? "selected" : ""}`} onClick={() => selectPreset(preset.id)}><span className="chip-dot" /> {preset.label}</button>)}
-                   </div>
-                   <p className="preset-description">{activePreset === "custom" ? "Sélectionne les actifs à comparer et construis ta propre allocation." : `${presetDefinitions.find((preset) => preset.id === activePreset)?.description ?? "Allocation candidate calculée sur les données historiques."}${presetModified ? " Les pondérations ont été modifiées." : ""}`}</p>
-                   <div className={`asset-chips ${activePreset !== "custom" ? "locked" : ""}`}>
-                     {assets.map((asset) => {
-                       const isSelected = selected.includes(asset.id);
-                       const hasData = Boolean(data[asset.id]?.length);
-                       return <button key={asset.id} className={`asset-chip ${isSelected ? "selected" : ""} ${!hasData ? "unavailable" : ""}`} style={{ "--asset-color": asset.accentColor } as React.CSSProperties} onClick={() => toggleAsset(asset.id)} disabled={!hasData || activePreset !== "custom" || (!isSelected && selected.length >= 4)} title={!hasData ? "Données indisponibles" : undefined}>
-                         <span className="chip-dot" /> {asset.name}{!hasData && <small>indisponible</small>}
-                       </button>;
-                     })}
-                   </div>
-                   {!availableAssets.length && <div className="configuration-message error"><CircleHelp size={16} /> Aucune série historique n'est disponible pour le moment.</div>}
-                 </section>
+                  <section className="configuration-step">
+                    <div className="step-heading"><span className="step-number">01</span><div><h3>Actifs</h3><p>Choisis jusqu'à quatre séries à comparer.</p></div><strong>{selectedCount}/4</strong></div>
+                    <div className="candidate-grid">
+                      <button className={`candidate-card custom ${activePreset === "custom" ? "selected" : ""}`} onClick={selectCustom}><div className="candidate-card-heading"><strong>À la carte</strong><span>Libre</span></div><p>Construire une sélection et une allocation personnalisées.</p><div className="candidate-card-footer">Jusqu'à 4 actifs</div></button>
+                      {presetDefinitions.map((preset) => <button key={preset.id} className={`candidate-card ${activePreset === preset.id ? "selected" : ""}`} onClick={() => selectPreset(preset.id)}><div className="candidate-card-heading"><strong>{preset.label}</strong><span>Risque {candidateRisk(preset.id)}</span></div><p>{preset.description}</p><div className="candidate-allocation">{Object.entries(preset.weights).filter(([, weight]) => weight > 0).map(([id, weight]) => { const asset = assets.find((candidate) => candidate.id === id); return <span key={id} style={{ width: `${weight}%`, background: asset?.accentColor ?? "#9aa8b0" }} title={`${asset?.name ?? id}: ${weight} %`} />; })}</div><div className="candidate-card-footer">{preset.start}–{preset.end} · {Object.values(preset.weights).filter((weight) => weight > 0).length} actifs</div></button>)}
+                    </div>
+                    <p className="preset-description">{activePreset === "custom" ? "Sélectionne les actifs à comparer et construis ta propre allocation." : `${presetDefinitions.find((preset) => preset.id === activePreset)?.description ?? "Allocation candidate calculée sur les données historiques."}${presetModified ? " Les pondérations ont été modifiées." : ""}`}</p>
+                    <div className="asset-picker-toolbar">
+                      <label className="asset-search"><Search size={15} /><span className="sr-only">Rechercher un actif</span><input value={assetSearch} onChange={(event) => setAssetSearch(event.target.value)} placeholder="Rechercher un actif" /></label>
+                      <div className="asset-categories" aria-label="Catégories d'actifs">{assetCategories.map((category) => <button key={category} className={assetCategoryFilter === category ? "active" : ""} onClick={() => setAssetCategoryFilter(category)}>{category}</button>)}</div>
+                    </div>
+                    <div className={`asset-chips ${activePreset !== "custom" ? "locked" : ""}`}>
+                      {filteredAssets.map((asset) => {
+                        const isSelected = selected.includes(asset.id);
+                        const hasData = Boolean(data[asset.id]?.length);
+                        return <button key={asset.id} className={`asset-chip ${isSelected ? "selected" : ""} ${!hasData ? "unavailable" : ""}`} style={{ "--asset-color": asset.accentColor } as React.CSSProperties} onClick={() => toggleAsset(asset.id)} disabled={!hasData || activePreset !== "custom" || (!isSelected && selected.length >= 4)} title={!hasData ? "Données indisponibles" : undefined} aria-pressed={isSelected}>
+                          <span className="chip-dot" /> <span>{asset.name}</span><small>{asset.startYear}–{asset.endYear}</small>{!hasData && <small>indisponible</small>}
+                        </button>;
+                      })}
+                    </div>
+                    {!filteredAssets.length && <div className="configuration-message">Aucun actif ne correspond à cette recherche.</div>}
+                    {!availableAssets.length && <div className="configuration-message error"><CircleHelp size={16} /> Aucune série historique n'est disponible pour le moment.</div>}
+                    {commonPeriod && periodGap >= 5 && <div className="configuration-message warning"><AlertTriangle size={16} /><span><strong>La période commune est raccourcie.</strong> {limitingAssets.map((asset) => asset.name).join(", ")} commence{limitingAssets.length > 1 ? "nt" : ""} en {commonStart}, ce qui retire {periodGap} années à l'historique disponible.</span></div>}
+                  </section>
 
                  <section className="configuration-step">
                    <div className="step-heading"><span className="step-number">02</span><div><h3>Période</h3><p>Définis la fenêtre historique à analyser.</p></div><strong>{start}–{end}</strong></div>
@@ -358,6 +454,7 @@ function App() {
                  </section>
                </div>
                {selectedCount === 0 && <div className="configuration-message empty"><CircleHelp size={16} /> Sélectionne au moins un actif pour commencer l'analyse.</div>}
+               </div>}
              </section>
 
              {selectedCount > 0 && <>
@@ -365,20 +462,22 @@ function App() {
               <div><span className="strip-label">Fenêtre analysée</span><strong>{start} <span>→</span> {end}</strong><small>{duration} années</small></div>
               <div><span className="strip-label">Lecture courante</span><strong>{mode === "nominal" ? "Rendements nominaux" : "Rendements après inflation"}</strong><small>Dividendes réinvestis quand disponibles</small></div>
               <div><span className="strip-label">Actifs actifs</span><strong>{selectedCount}</strong><small>{activePreset === "custom" ? "Maximum quatre séries" : "Ventilation de la candidate"}</small></div>
-            </section>
+             </section>
+
+             <DecisionSummary bestAsset={bestAsset} lowestRiskAsset={lowestRiskAsset} worstDrawdownAsset={worstDrawdownAsset} mode={mode} />
 
              <nav className="tabs" aria-label="Vues d'analyse" role="tablist">{chartTabs.map((tab) => <button key={tab.id} role="tab" aria-selected={activeTab === tab.id} className={activeTab === tab.id ? "active" : ""} onClick={() => setActiveTab(tab.id)}>{tab.label}</button>)}<button role="tab" aria-selected={activeTab === "portfolio"} className={activeTab === "portfolio" ? "active" : ""} onClick={() => setActiveTab("portfolio")}>Portefeuille</button><button role="tab" aria-selected={activeTab === "correlations"} className={activeTab === "correlations" ? "active" : ""} onClick={() => setActiveTab("correlations")}>Corrélations de la sélection</button></nav>
 
             {activeTab === "overview" && <Overview assets={selectedAssets} stats={stats} mode={mode} start={start} end={end} />}
-             {activeTab === "price" && <ChartCard title={`Niveaux de prix ${mode === "real" ? "réels" : "nominaux"}`} subtitle="Une échelle propre à chaque actif. Utilisez la croissance cumulée pour comparer les trajectoires." icon={<SlidersHorizontal size={18} />} data={priceData} columns={chartColumns} format="number"><ResponsiveContainer width="100%" height={390}><LineChart data={priceData}><ChartGrid /><XAxis dataKey="year" {...axisProps} /><YAxis scale="log" domain={["auto", "auto"]} {...axisProps} tickFormatter={(value) => value >= 1000 ? `${Math.round(value / 1000)}k` : value} /><Tooltip content={<ChartTooltip assets={assets} type="number" />} /><Legend formatter={(value) => assets.find((asset) => asset.id === value)?.name ?? value} />{selectedAssets.map((asset) => <Line key={asset.id} type="monotone" dataKey={asset.id} stroke={asset.accentColor} strokeWidth={2.5} dot={false} connectNulls={false} />)}</LineChart></ResponsiveContainer></ChartCard>}
-             {activeTab === "returns" && <ChartCard title={`Rendements annuels ${activeLabel}s`} subtitle="Les années positives et négatives sont affichées côte à côte pour faire ressortir les régimes de marché." icon={<BarChart3 size={18} />} data={annualData} columns={chartColumns} format="percent"><ResponsiveContainer width="100%" height={390}><BarChart data={annualData}><ChartGrid /><XAxis dataKey="year" {...axisProps} /><YAxis {...axisProps} tickFormatter={(value) => `${value}%`} /><Tooltip content={<ChartTooltip assets={assets} type="percent" />} /><Legend formatter={(value) => assets.find((asset) => asset.id === value)?.name ?? value} /><ReferenceLine y={0} stroke="#18324a" />{selectedAssets.map((asset) => <Bar key={asset.id} dataKey={asset.id} fill={asset.accentColor} radius={[3, 3, 0, 0]} />)}</BarChart></ResponsiveContainer></ChartCard>}
-             {activeTab === "growth" && <ChartCard title={`100 $ investis en ${start}`} subtitle={`Croissance cumulée en termes ${activeLabel}s, avec réinvestissement des rendements disponibles.`} icon={<Activity size={18} />} data={growthData} columns={chartColumns} format="money"><ResponsiveContainer width="100%" height={390}><AreaChart data={growthData}><ChartGrid /><XAxis dataKey="year" {...axisProps} /><YAxis scale="log" domain={["auto", "auto"]} {...axisProps} tickFormatter={formatMoney} /><Tooltip content={<ChartTooltip assets={assets} type="money" />} /><Legend formatter={(value) => assets.find((asset) => asset.id === value)?.name ?? value} />{selectedAssets.map((asset) => <Area key={asset.id} type="monotone" dataKey={asset.id} stroke={asset.accentColor} fill={asset.accentColor} fillOpacity={0.08} strokeWidth={2.5} connectNulls={false} />)}</AreaChart></ResponsiveContainer></ChartCard>}
-             {activeTab === "decades" && <ChartCard title={`TCAM par décennie · ${activeLabel}`} subtitle="Moyenne géométrique des rendements annuels disponibles dans chaque décennie." icon={<CalendarDays size={18} />} data={decadeData} columns={decadeColumns} format="percent"><ResponsiveContainer width="100%" height={390}><BarChart data={decadeData}><ChartGrid /><XAxis dataKey="decade" {...axisProps} /><YAxis {...axisProps} tickFormatter={(value) => `${value}%`} /><Tooltip content={<ChartTooltip assets={assets} type="percent" />} /><Legend formatter={(value) => assets.find((asset) => asset.id === value)?.name ?? value} /><ReferenceLine y={0} stroke="#18324a" />{selectedAssets.map((asset) => <Bar key={asset.id} dataKey={asset.id} fill={asset.accentColor} radius={[3, 3, 0, 0]} />)}</BarChart></ResponsiveContainer></ChartCard>}
+             {activeTab === "price" && <ChartCard title={`Niveaux de prix ${mode === "real" ? "réels" : "nominaux"}`} subtitle="Unités propres à chaque actif ; utilisez la croissance cumulée pour comparer les trajectoires." icon={<SlidersHorizontal size={18} />} data={priceData} columns={chartColumns} format="number" legend={<AssetLegend assets={selectedAssets} hiddenAssets={hiddenAssets} onToggle={toggleHiddenAsset} />} metadata={{ unit: "Unité propre à chaque actif · échelle logarithmique", source: "Corpus historique consolidé", period: `${start}–${end}`, observations: priceObservationCount }}><ResponsiveContainer width="100%" height={390}><LineChart data={priceData}><ChartGrid /><XAxis dataKey="year" {...axisProps} /><YAxis scale="log" domain={["auto", "auto"]} {...axisProps} tickFormatter={(value) => value >= 1000 ? `${Math.round(value / 1000)}k` : value} /><Tooltip content={<ChartTooltip assets={assets} type="number" />} />{crisisMarkers.filter((marker) => marker.year >= start && marker.year <= end).map((marker) => <ReferenceLine key={marker.year} x={marker.year} stroke="#a6b3bb" strokeDasharray="4 4" label={{ value: marker.label, position: "insideTop", fill: "#718290", fontSize: 10 }} />)}{visibleChartAssets.map((asset) => <Line key={asset.id} type="monotone" dataKey={asset.id} stroke={asset.accentColor} strokeWidth={2.5} dot={false} connectNulls={false} />)}</LineChart></ResponsiveContainer></ChartCard>}
+              {activeTab === "returns" && <ChartCard title={`Rendements annuels ${activeLabel}s`} subtitle="Les années positives et négatives sont affichées côte à côte pour faire ressortir les régimes de marché." icon={<BarChart3 size={18} />} data={annualData} columns={chartColumns} format="percent" legend={<AssetLegend assets={selectedAssets} hiddenAssets={hiddenAssets} onToggle={toggleHiddenAsset} />} metadata={{ unit: "% par an", source: "Corpus historique consolidé", period: `${start}–${end}`, observations: chartObservationCount }}><ResponsiveContainer width="100%" height={390}><BarChart data={annualData}><ChartGrid /><XAxis dataKey="year" {...axisProps} /><YAxis {...axisProps} tickFormatter={(value) => `${value}%`} /><Tooltip content={<ChartTooltip assets={assets} type="percent" />} /><ReferenceLine y={0} stroke="#18324a" />{crisisMarkers.filter((marker) => marker.year >= start && marker.year <= end).map((marker) => <ReferenceLine key={marker.year} x={marker.year} stroke="#a6b3bb" strokeDasharray="4 4" label={{ value: marker.label, position: "insideTop", fill: "#718290", fontSize: 10 }} />)}{visibleChartAssets.map((asset) => <Bar key={asset.id} dataKey={asset.id} fill={asset.accentColor} radius={[3, 3, 0, 0]} />)}</BarChart></ResponsiveContainer></ChartCard>}
+              {activeTab === "growth" && <ChartCard title={`100 $ investis en ${start}`} subtitle={`Croissance cumulée en termes ${activeLabel}s, avec réinvestissement des rendements disponibles.`} icon={<Activity size={18} />} data={growthData} columns={chartColumns} format="money" legend={<AssetLegend assets={selectedAssets} hiddenAssets={hiddenAssets} onToggle={toggleHiddenAsset} />} metadata={{ unit: "Valeur de 100 $ · échelle logarithmique", source: "Corpus historique consolidé", period: `${start}–${end}`, observations: chartObservationCount }}><ResponsiveContainer width="100%" height={390}><AreaChart data={growthData}><ChartGrid /><XAxis dataKey="year" {...axisProps} /><YAxis scale="log" domain={["auto", "auto"]} {...axisProps} tickFormatter={formatMoney} /><Tooltip content={<ChartTooltip assets={assets} type="money" />} />{crisisMarkers.filter((marker) => marker.year >= start && marker.year <= end).map((marker) => <ReferenceLine key={marker.year} x={marker.year} stroke="#a6b3bb" strokeDasharray="4 4" label={{ value: marker.label, position: "insideTop", fill: "#718290", fontSize: 10 }} />)}{visibleChartAssets.map((asset) => <Area key={asset.id} type="monotone" dataKey={asset.id} stroke={asset.accentColor} fill={asset.accentColor} fillOpacity={0.08} strokeWidth={2.5} connectNulls={false} />)}</AreaChart></ResponsiveContainer></ChartCard>}
+              {activeTab === "decades" && <ChartCard title={`TCAM par décennie · ${activeLabel}`} subtitle="Moyenne géométrique des rendements annuels disponibles dans chaque décennie." icon={<CalendarDays size={18} />} data={decadeData} columns={decadeColumns} format="percent" legend={<AssetLegend assets={selectedAssets} hiddenAssets={hiddenAssets} onToggle={toggleHiddenAsset} />} metadata={{ unit: "% annualisé par décennie", source: "Corpus historique consolidé", period: `${start}–${end}`, observations: chartObservationCount }}><ResponsiveContainer width="100%" height={390}><BarChart data={decadeData}><ChartGrid /><XAxis dataKey="decade" {...axisProps} /><YAxis {...axisProps} tickFormatter={(value) => `${value}%`} /><Tooltip content={<ChartTooltip assets={assets} type="percent" />} /><ReferenceLine y={0} stroke="#18324a" />{visibleChartAssets.map((asset) => <Bar key={asset.id} dataKey={asset.id} fill={asset.accentColor} radius={[3, 3, 0, 0]} />)}</BarChart></ResponsiveContainer></ChartCard>}
 
-             {activeTab === "portfolio" && <PortfolioView assets={selectedAssets} weights={weights} portfolio={portfolio} correlations={correlations} mode={mode} presetModified={presetModified} activePreset={activePreset} onWeightChange={updateWeight} onNormalize={normalizeWeights} />}
+              {activeTab === "portfolio" && <PortfolioView assets={selectedAssets} data={data} phases={visiblePhases} weights={weights} portfolio={portfolio} equalPortfolio={equalPortfolio} contributions={portfolioContributions} correlations={correlations} mode={mode} presetModified={presetModified} activePreset={activePreset} onWeightChange={updateWeight} onNormalize={normalizeWeights} />}
               {activeTab === "correlations" && <CorrelationView assets={selectedAssets} data={data} mode={mode} embedded start={start} end={end} />}
 
-             {activeTab !== "correlations" && <HistoricalTable assets={selectedAssets} data={data} phases={visiblePhases} mode={mode} />}
+              {activeTab !== "correlations" && activeTab !== "portfolio" && <HistoricalTable assets={selectedAssets} data={data} phases={visiblePhases} mode={mode} />}
              </>}
            </>
         )}
@@ -392,6 +491,32 @@ function App() {
 const axisProps = { tick: { fill: "#718096", fontSize: 11 }, axisLine: false, tickLine: false };
 
 function ChartGrid() { return <CartesianGrid stroke="#e4e9ee" strokeDasharray="2 4" vertical={false} />; }
+
+function DecisionSummary({
+  bestAsset,
+  lowestRiskAsset,
+  worstDrawdownAsset,
+  mode,
+}: {
+  bestAsset?: { asset: Asset; stat: NonNullable<ReturnType<typeof computeStats>>; drawdown: number | null };
+  lowestRiskAsset?: { asset: Asset; stat: NonNullable<ReturnType<typeof computeStats>>; drawdown: number | null };
+  worstDrawdownAsset?: { asset: Asset; stat: NonNullable<ReturnType<typeof computeStats>>; drawdown: number | null };
+  mode: Mode;
+}) {
+  const cagr = (entry?: typeof bestAsset) => entry ? mode === "nominal" ? entry.stat.cagrNominal : entry.stat.cagrReal : null;
+  return <section className="decision-summary" aria-label="Résumé décisionnel">
+    <div className="decision-card positive"><span>Meilleur rendement</span><strong>{bestAsset?.asset.name ?? "n.d."}</strong><small>{bestAsset ? formatPercent(cagr(bestAsset)) : "Données insuffisantes"}</small></div>
+    <div className="decision-card neutral"><span>Risque le plus faible</span><strong>{lowestRiskAsset?.asset.name ?? "n.d."}</strong><small>{lowestRiskAsset ? `Volatilité ${formatPercent(lowestRiskAsset.stat.volatility)}` : "Données insuffisantes"}</small></div>
+    <div className="decision-card negative"><span>Pire drawdown</span><strong>{worstDrawdownAsset?.asset.name ?? "n.d."}</strong><small>{worstDrawdownAsset?.drawdown !== null && worstDrawdownAsset?.drawdown !== undefined ? formatPercent(worstDrawdownAsset.drawdown) : "Données insuffisantes"}</small></div>
+  </section>;
+}
+
+function AssetLegend({ assets, hiddenAssets, onToggle }: { assets: Asset[]; hiddenAssets: string[]; onToggle: (id: string) => void }) {
+  return <div className="asset-legend" aria-label="Visibilité des séries">{assets.map((asset) => {
+    const hidden = hiddenAssets.includes(asset.id);
+    return <button key={asset.id} className={hidden ? "hidden" : ""} aria-pressed={!hidden} onClick={() => onToggle(asset.id)}><i style={{ background: asset.accentColor }} />{asset.name}{hidden && <EyeOff size={13} />}</button>;
+  })}</div>;
+}
 
 function CorrelationView({
   assets,
@@ -552,8 +677,12 @@ function correlationColor(value: number | null, diagonal: boolean): string {
 
 function PortfolioView({
   assets,
+  data,
+  phases,
   weights,
   portfolio,
+  equalPortfolio,
+  contributions,
   correlations,
   mode,
   activePreset,
@@ -562,8 +691,12 @@ function PortfolioView({
   onNormalize,
 }: {
   assets: Asset[];
+  data: Dataset;
+  phases: typeof historicalPhases;
   weights: Record<string, number>;
   portfolio: PortfolioStats | null;
+  equalPortfolio: PortfolioStats | null;
+  contributions: Array<{ asset: Asset; weight: number; contribution: number | null }>;
   correlations: Record<string, Record<string, number | null>>;
   mode: Mode;
   activePreset: PresetId;
@@ -610,18 +743,22 @@ function PortfolioView({
          <Metric label="Volatilité" value={formatPercent(portfolio.volatility)} description="Variation annuelle des rendements." featured />
          <Metric label="Drawdown maximal" value={formatPercent(portfolio.maxDrawdown)} description="Plus forte baisse depuis un sommet." negative featured />
          <Metric label="Sharpe brut" value={portfolio.sharpe === null ? "n.d." : portfolio.sharpe.toFixed(2)} description="Rendement rapporté au risque." />
-         <Metric label="Années positives" value={`${portfolio.positiveRate.toFixed(0)} %`} description="Part des années au-dessus de 0 %." positive />
-         <Metric label="Pire année" value={portfolio.worst ? `${portfolio.worst.year} · ${formatPercent(portfolio.worst.return)}` : "n.d."} description="Rendement annuel le plus faible." negative />
-      </section>
-      <section className="chart-card portfolio-chart">
-        <div className="card-heading compact"><div className="heading-icon"><Activity size={17} /></div><div><h2>Trajectoire de l’allocation</h2><p>Valeur de 100 unités investies au début de la période.</p></div></div>
-        <ResponsiveContainer width="100%" height={330}><LineChart data={portfolioData}><ChartGrid /><XAxis dataKey="year" {...axisProps} /><YAxis scale="log" domain={["auto", "auto"]} {...axisProps} tickFormatter={formatMoney} /><Tooltip content={<PortfolioTooltip />} /><Line type="monotone" dataKey="value" name="Valeur" stroke="#e76f51" strokeWidth={2.5} dot={false} /></LineChart></ResponsiveContainer>
-      </section>
-      <section className="chart-card drawdown-chart">
-        <div className="card-heading compact"><div className="heading-icon cool"><ArrowDownRight size={17} /></div><div><h2>Drawdown dans le temps</h2><p>Écart entre la valeur du portefeuille et son plus-haut historique.</p></div></div>
-        <ResponsiveContainer width="100%" height={260}><AreaChart data={portfolioData}><ChartGrid /><XAxis dataKey="year" {...axisProps} /><YAxis {...axisProps} tickFormatter={(value) => `${value}%`} /><Tooltip content={<DrawdownTooltip />} /><ReferenceLine y={0} stroke="#18324a" /><Area type="monotone" dataKey="drawdown" name="Drawdown" stroke="#cf5b55" fill="#cf5b55" fillOpacity={0.14} /></AreaChart></ResponsiveContainer>
-      </section>
-      <section className="table-card correlation-card">
+          <Metric label="Années positives" value={`${portfolio.positiveRate.toFixed(0)} %`} description="Part des années au-dessus de 0 %." positive />
+          <Metric label="Pire année" value={portfolio.worst ? `${portfolio.worst.year} · ${formatPercent(portfolio.worst.return)}` : "n.d."} description="Rendement annuel le plus faible." negative />
+          <Metric label="Récupération" value={portfolio.recoveryYears === null ? "n.d." : `${portfolio.recoveryYears} an${portfolio.recoveryYears > 1 ? "s" : ""}`} description="Temps pour retrouver le précédent sommet." />
+        </section>
+        <PortfolioComparison portfolio={portfolio} equalPortfolio={equalPortfolio} mode={mode} />
+        <section className="chart-card portfolio-chart">
+          <div className="card-heading compact"><div className="heading-icon"><Activity size={17} /></div><div><h2>Trajectoire de l'allocation</h2><p>Valeur de 100 unités investies au début de la période.</p></div></div>
+          <ResponsiveContainer width="100%" height={330}><LineChart data={portfolioData}><ChartGrid /><XAxis dataKey="year" {...axisProps} /><YAxis scale="log" domain={["auto", "auto"]} {...axisProps} tickFormatter={formatMoney} /><Tooltip content={<PortfolioTooltip />} /><Line type="monotone" dataKey="value" name="Valeur" stroke="#e76f51" strokeWidth={2.5} dot={false} /></LineChart></ResponsiveContainer><ChartMeta unit="Valeur de 100 unités · échelle logarithmique" source="Rendements annuels consolidés" period={`${portfolioData[0]?.year ?? "—"}–${portfolioData.at(-1)?.year ?? "—"}`} observations={portfolioData.length} />
+        </section>
+        <ContributionChart contributions={contributions} mode={mode} />
+        <section className="chart-card drawdown-chart">
+         <div className="card-heading compact"><div className="heading-icon cool"><ArrowDownRight size={17} /></div><div><h2>Drawdown dans le temps</h2><p>Écart entre la valeur du portefeuille et son plus-haut historique.</p></div></div>
+         <ResponsiveContainer width="100%" height={260}><AreaChart data={portfolioData}><ChartGrid /><XAxis dataKey="year" {...axisProps} /><YAxis {...axisProps} tickFormatter={(value) => `${value}%`} /><Tooltip content={<DrawdownTooltip />} /><ReferenceLine y={0} stroke="#18324a" /><Area type="monotone" dataKey="drawdown" name="Drawdown" stroke="#cf5b55" fill="#cf5b55" fillOpacity={0.14} /></AreaChart></ResponsiveContainer><ChartMeta unit="Écart au plus-haut · %" source="Simulation du portefeuille" period={`${portfolioData[0]?.year ?? "—"}–${portfolioData.at(-1)?.year ?? "—"}`} observations={portfolioData.length} />
+       </section>
+       <HistoricalTable assets={assets} data={data} phases={phases} mode={mode} />
+       <section className="table-card correlation-card">
         <div className="card-heading compact"><div className="heading-icon"><Activity size={17} /></div><div><h2>Corrélations entre actifs</h2><p>Corrélations des rendements {mode === "nominal" ? "nominaux" : "réels"} sur la période commune.</p></div></div>
         <div className="table-scroll"><table><thead><tr><th>Actif</th>{assets.map((asset) => <th key={asset.id} style={{ color: asset.accentColor }}>{asset.name}</th>)}</tr></thead><tbody>{assets.map((asset) => <tr key={asset.id}><td>{asset.name}</td>{assets.map((other) => { const value = correlations[asset.id]?.[other.id]; return <td key={other.id} className={value === null ? "" : value < 0.3 ? "positive" : value > 0.7 ? "negative" : ""}>{value === null ? "n.d." : value.toFixed(2)}</td>; })}</tr>)}</tbody></table></div>
       </section>
@@ -631,6 +768,35 @@ function PortfolioView({
       </section>
     </> : <div className="error-panel portfolio-empty">Attribue au moins une pondération à un actif disposant de données sur toute la période commune.</div>}
   </div>;
+}
+
+function PortfolioComparison({ portfolio, equalPortfolio, mode }: { portfolio: PortfolioStats; equalPortfolio: PortfolioStats | null; mode: Mode }) {
+  const delta = (current: number | null, equal: number | null) => current !== null && equal !== null ? formatPercent(current - equal, 1) : "n.d.";
+  return <section className="portfolio-comparison">
+    <div className="card-heading compact"><div className="heading-icon warm"><BarChart3 size={17} /></div><div><h2>Allocation active vs équipondérée</h2><p>Repère simple pour situer l'effet des pondérations choisies.</p></div></div>
+    <div className="comparison-grid">
+      <div className="comparison-card active"><span>Allocation active</span><strong>{formatPercent(portfolio.cagr)}</strong><small>Volatilité {formatPercent(portfolio.volatility)} · drawdown {formatPercent(portfolio.maxDrawdown)}</small></div>
+      <div className="comparison-card"><span>Équipondérée</span><strong>{equalPortfolio ? formatPercent(equalPortfolio.cagr) : "n.d."}</strong><small>{equalPortfolio ? `Volatilité ${formatPercent(equalPortfolio.volatility)} · drawdown ${formatPercent(equalPortfolio.maxDrawdown)}` : "Données insuffisantes"}</small></div>
+      <div className="comparison-delta"><span>Écart de rendement annualisé</span><strong>{delta(portfolio.cagr, equalPortfolio?.cagr ?? null)}</strong><small>Lecture {mode === "nominal" ? "nominale" : "réelle"}</small></div>
+    </div>
+  </section>;
+}
+
+function ContributionChart({ contributions, mode }: { contributions: Array<{ asset: Asset; weight: number; contribution: number | null }>; mode: Mode }) {
+  const sortedContributions = [...contributions].sort((left, right) => (right.contribution ?? -Infinity) - (left.contribution ?? -Infinity));
+  const available = sortedContributions.filter((entry) => entry.contribution !== null);
+  const scale = Math.max(0.1, ...available.map((entry) => Math.abs(entry.contribution as number)));
+  const totalContribution = available.reduce((total, entry) => total + (entry.contribution as number), 0);
+  const formatContributionShare = (contribution: number) => Math.abs(totalContribution) < Number.EPSILON ? "n.d." : `${(contribution / totalContribution * 100).toFixed(2).replace(".", ",")}%`;
+  return <section className="contribution-card">
+    <div className="card-heading compact"><div className="heading-icon cool"><Activity size={17} /></div><div><h2>Contribution au rendement</h2><p>Points de rendement annualisé apportés par chaque actif selon son poids normalisé.</p></div></div>
+    <div className="contribution-list">{sortedContributions.map(({ asset, weight, contribution }) => <div className="contribution-row" key={asset.id}><div className="contribution-label"><i style={{ background: asset.accentColor }} /><span>{asset.name}</span><b>{weight.toFixed(1)} %</b></div><div className="contribution-track"><span className={contribution !== null && contribution < 0 ? "negative" : ""} style={{ width: `${contribution === null ? 0 : Math.max(4, Math.abs(contribution) / scale * 100)}%`, background: asset.accentColor }} /></div><strong>{contribution === null ? "n.d." : `${contribution >= 0 ? "+" : ""}${contribution.toFixed(2)} pts (${formatContributionShare(contribution)})`}</strong></div>)}</div>
+    <p className="method-note">Cette lecture décrit une contribution au rendement {mode === "nominal" ? "nominal" : "réel"}, pas une prévision.</p>
+  </section>;
+}
+
+function ChartMeta({ unit, source, period, observations }: ChartMetadata) {
+  return <div className="chart-metadata"><span>Unité <b>{unit}</b></span><span>Source <b>{source}</b></span><span>Période <b>{period}</b></span><span>Observations <b>{observations}</b></span></div>;
 }
 
 function PortfolioTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ value?: number | null }>; label?: string | number }) {
@@ -660,7 +826,7 @@ function exportChartData(data: ChartRow[], columns: ChartColumn[], title: string
   URL.revokeObjectURL(url);
 }
 
-function ChartCard({ title, subtitle, icon, children, data, columns, format = "number" }: { title: string; subtitle: string; icon: React.ReactNode; children: React.ReactNode; data?: ChartRow[]; columns?: ChartColumn[]; format?: "percent" | "money" | "number" }) {
+function ChartCard({ title, subtitle, icon, children, data, columns, format = "number", legend, metadata }: { title: string; subtitle: string; icon: React.ReactNode; children: React.ReactNode; data?: ChartRow[]; columns?: ChartColumn[]; format?: "percent" | "money" | "number"; legend?: React.ReactNode; metadata?: ChartMetadata }) {
   const formatCell = (value: number | string | null) => {
     if (value === null || typeof value === "string") return value ?? "n.d.";
     if (format === "percent") return formatPercent(value);
@@ -668,7 +834,7 @@ function ChartCard({ title, subtitle, icon, children, data, columns, format = "n
     return formatNumber(value);
   };
 
-  return <section className="chart-card"><div className="card-heading"><div className="heading-icon">{icon}</div><div><h2>{title}</h2><p>{subtitle}</p></div><div className="chart-actions"><button className="icon-button" title="Exporter les données CSV" aria-label="Exporter les données CSV" onClick={() => data && columns && exportChartData(data, columns, title)} disabled={!data || !columns}><Download size={16} /></button></div></div><div className="chart-wrap">{children}</div>{data && columns && <details className="chart-data"><summary>Voir les données du graphique</summary><div className="table-scroll"><table><caption>{title} · données tabulaires</caption><thead><tr>{columns.map((column) => <th key={column.key}>{column.label}</th>)}</tr></thead><tbody>{data.map((row, index) => <tr key={`${String(row[columns[0].key])}-${index}`}>{columns.map((column) => <td key={column.key}>{formatCell(row[column.key])}</td>)}</tr>)}</tbody></table></div></details>}</section>;
+  return <section className="chart-card"><div className="card-heading"><div className="heading-icon">{icon}</div><div><h2>{title}</h2><p>{subtitle}</p></div><div className="chart-actions"><button className="icon-button" title="Exporter les données CSV" aria-label="Exporter les données CSV" onClick={() => data && columns && exportChartData(data, columns, title)} disabled={!data || !columns}><Download size={16} /></button></div></div><div className="chart-wrap">{children}</div>{legend && <div className="chart-legend">{legend}</div>}{metadata && <div className="chart-metadata"><span>Unité <b>{metadata.unit}</b></span><span>Source <b>{metadata.source}</b></span><span>Période <b>{metadata.period}</b></span><span>Observations <b>{metadata.observations}</b></span></div>}{data && columns && <details className="chart-data"><summary>Voir les données du graphique</summary><div className="table-scroll"><table><caption>{title} · données tabulaires</caption><thead><tr>{columns.map((column) => <th key={column.key}>{column.label}</th>)}</tr></thead><tbody>{data.map((row, index) => <tr key={`${String(row[columns[0].key])}-${index}`}>{columns.map((column) => <td key={column.key}>{formatCell(row[column.key])}</td>)}</tr>)}</tbody></table></div></details>}</section>;
 }
 
 function Overview({ assets, stats, mode, start, end }: { assets: Asset[]; stats: Record<string, ReturnType<typeof computeStats>>; mode: Mode; start: number; end: number }) {
