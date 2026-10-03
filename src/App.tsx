@@ -50,16 +50,18 @@ interface CandidatePreset {
   end: number;
 }
 
+type HistoricalPhase = { id: string; name: string; start: number; end: number; color: string };
+
 const fallbackAssets: Asset[] = [];
-const historicalPhases = [
-  { name: "Grande Dépression", start: 1929, end: 1939, color: "#6d5ce7" },
-  { name: "Boom d'après-guerre", start: 1946, end: 1965, color: "#2a9d8f" },
-  { name: "Stagflation", start: 1970, end: 1979, color: "#e9a23b" },
-  { name: "Désinflation & bull 80-90s", start: 1980, end: 1999, color: "#e76f51" },
-  { name: "Bulle Internet", start: 2000, end: 2002, color: "#d1495b" },
-  { name: "Crise financière", start: 2008, end: 2009, color: "#9b2226" },
-  { name: "Reprise post-GFC", start: 2010, end: 2019, color: "#2a9d8f" },
-  { name: "Covid & post-Covid", start: 2020, end: 2025, color: "#457b9d" },
+const historicalPhases: HistoricalPhase[] = [
+  { id: "great-depression", name: "Grande Dépression", start: 1929, end: 1939, color: "#6d5ce7" },
+  { id: "post-war-boom", name: "Boom d'après-guerre", start: 1946, end: 1965, color: "#2a9d8f" },
+  { id: "stagflation", name: "Stagflation", start: 1970, end: 1979, color: "#e9a23b" },
+  { id: "disinflation-bull", name: "Désinflation & bull 80-90s", start: 1980, end: 1999, color: "#e76f51" },
+  { id: "dot-com", name: "Bulle Internet", start: 2000, end: 2002, color: "#d1495b" },
+  { id: "financial-crisis", name: "Crise financière", start: 2008, end: 2009, color: "#9b2226" },
+  { id: "post-gfc", name: "Reprise post-GFC", start: 2010, end: 2019, color: "#2a9d8f" },
+  { id: "covid", name: "Covid & post-Covid", start: 2020, end: 2025, color: "#457b9d" },
 ];
 
 const chartTabs: { id: Tab; label: string }[] = [
@@ -119,12 +121,25 @@ function maxDrawdown(rows: Row[], start: number, end: number, mode: Mode): numbe
   return observed ? drawdown : null;
 }
 
+function assetCoversPeriod(rows: Row[] | undefined, start: number, end: number): boolean {
+  if (!rows?.length || start > end) return false;
+  return rows.some((row) => row.year <= start) && rows.some((row) => row.year >= end);
+}
+
 function readTab(value: string | null): Tab {
   return value && tabIds.has(value as Tab) ? value as Tab : "overview";
 }
 
 function readIds(value: string | null | undefined): string[] {
   return value ? value.split(",").filter(Boolean) : [];
+}
+
+function PeriodSelector({ start, end, onChange }: { start: number; end: number; onChange: (start: number, end: number) => void }) {
+  const selectedId = historicalPhases.find((phase) => phase.start === start && phase.end === end)?.id ?? "custom";
+  return <label className="period-selector"><span>Période historique</span><select value={selectedId} onChange={(event) => {
+    const phase = historicalPhases.find((candidate) => candidate.id === event.target.value);
+    if (phase) onChange(phase.start, phase.end);
+  }}><option value="custom">Dates personnalisées</option>{historicalPhases.map((phase) => <option key={phase.id} value={phase.id}>{phase.name} ({phase.start}–{phase.end})</option>)}</select></label>;
 }
 
 function App() {
@@ -310,6 +325,8 @@ function App() {
   const equalPortfolio = computePortfolio(data, equalWeights, start, end, mode);
   const correlations = computeCorrelationMatrix(data, selectedAssets.map((asset) => asset.id), start, end, mode);
   const availableAssets = assets.filter((asset) => data[asset.id]?.length);
+  const periodRestricted = !commonPeriod;
+  const periodEligibleAssets = useMemo(() => new Set(assets.filter((asset) => assetCoversPeriod(data[asset.id], range[0], range[1])).map((asset) => asset.id)), [assets, data, range]);
   const visibleChartAssets = selectedAssets.filter((asset) => !hiddenAssets.includes(asset.id));
   const filteredAssets = assets.filter((asset) => {
     const matchesCategory = assetCategoryFilter === "Tous" || assetCategory(asset.id) === assetCategoryFilter;
@@ -353,6 +370,14 @@ function App() {
     setAutomaticWeights(false);
     setPresetModified(false);
   };
+
+  useEffect(() => {
+    if (!periodRestricted || activePreset !== "custom") return;
+    setSelected((current) => {
+      const next = current.filter((id) => periodEligibleAssets.has(id));
+      return next.length === current.length ? current : next;
+    });
+  }, [activePreset, periodEligibleAssets, periodRestricted]);
 
   const toggleAsset = (id: string) => {
     if (activePreset !== "custom") return;
@@ -455,11 +480,12 @@ function App() {
                     </div>
                     <div className={`asset-chips ${activePreset !== "custom" ? "locked" : ""}`}>
                       {filteredAssets.map((asset) => {
-                        const isSelected = selected.includes(asset.id);
-                        const hasData = Boolean(data[asset.id]?.length);
-                        return <button key={asset.id} className={`asset-chip ${isSelected ? "selected" : ""} ${!hasData ? "unavailable" : ""}`} style={{ "--asset-color": asset.accentColor } as React.CSSProperties} onClick={() => toggleAsset(asset.id)} disabled={!hasData || activePreset !== "custom" || (!isSelected && selected.length >= 4)} title={!hasData ? "Données indisponibles" : undefined} aria-pressed={isSelected}>
-                          <span className="chip-dot" /> <span>{asset.name}</span><small>{asset.startYear}–{asset.endYear}</small>{!hasData && <small>indisponible</small>}
-                        </button>;
+                         const isSelected = selected.includes(asset.id);
+                         const hasData = Boolean(data[asset.id]?.length);
+                         const availableForPeriod = !periodRestricted || periodEligibleAssets.has(asset.id);
+                         return <button key={asset.id} className={`asset-chip ${isSelected ? "selected" : ""} ${!hasData || !availableForPeriod ? "unavailable" : ""}`} style={{ "--asset-color": asset.accentColor } as React.CSSProperties} onClick={() => toggleAsset(asset.id)} disabled={!hasData || (periodRestricted && !availableForPeriod) || activePreset !== "custom" || (!isSelected && selected.length >= 4)} title={!hasData ? "Données indisponibles" : !availableForPeriod ? `Indice non disponible sur ${range[0]}–${range[1]}` : undefined} aria-pressed={isSelected}>
+                           <span className="chip-dot" /> <span>{asset.name}</span><small>{asset.startYear}–{asset.endYear}</small>{!hasData && <small>indisponible</small>}{hasData && !availableForPeriod && <small>hors période</small>}
+                         </button>;
                       })}
                     </div>
                     {!filteredAssets.length && <div className="configuration-message">Aucun actif ne correspond à cette recherche.</div>}
@@ -472,9 +498,10 @@ function App() {
                    <div className="control-row">
                      <label className="switch-control"><input type="checkbox" checked={commonPeriod} onChange={(event) => setCommonPeriod(event.target.checked)} /><span className="switch" /> <span>Utiliser la période commune</span></label>
                      {commonPeriod && <strong className="period-value">{selectedCount ? `${commonStart}–${commonEnd}` : "En attente d'actifs"}</strong>}
-                     {!commonPeriod && <label className="range-control">De <input type="number" value={range[0]} onChange={(event) => setRange([Number(event.target.value), range[1]])} /> à <input type="number" value={range[1]} onChange={(event) => setRange([range[0], Number(event.target.value)])} /></label>}
-                   </div>
-                   <p className="period-explanation">{commonPeriod ? selectedCount ? `La période s'ajuste automatiquement aux années disponibles pour les ${selectedCount} actifs sélectionnés. Elle sera recalculée à chaque changement.` : "Sélectionne au moins un actif pour calculer la période commune." : "Chaque actif est analysé sur la période saisie, lorsque ses données sont disponibles."}</p>
+                      {!commonPeriod && <label className="range-control">De <input type="number" value={range[0]} onChange={(event) => setRange([Number(event.target.value), range[1]])} /> à <input type="number" value={range[1]} onChange={(event) => setRange([range[0], Number(event.target.value)])} /></label>}
+                    </div>
+                    <PeriodSelector start={range[0]} end={range[1]} onChange={(nextStart, nextEnd) => { setCommonPeriod(false); setRange([nextStart, nextEnd]); }} />
+                    <p className="period-explanation">{commonPeriod ? selectedCount ? `La période s'ajuste automatiquement aux années disponibles pour les ${selectedCount} actifs sélectionnés. Elle sera recalculée à chaque changement.` : "Sélectionne au moins un actif pour calculer la période commune." : "Chaque actif est analysé sur la période saisie, lorsque ses données sont disponibles. Les actifs dont les données CSV ne couvrent pas toute la plage sont désactivés."}</p>
                  </section>
 
                  <section className="configuration-step">
@@ -578,6 +605,17 @@ function CorrelationView({
     ? assets.filter((asset) => data[asset.id]?.length)
     : assets.filter((asset) => selectedIds.includes(asset.id) && data[asset.id]?.length), [assets, data, embedded, selectedIds]);
 
+  const periodRestricted = !embedded && !commonPeriod;
+  const periodEligibleAssets = useMemo(() => new Set(assets.filter((asset) => assetCoversPeriod(data[asset.id], range[0], range[1])).map((asset) => asset.id)), [assets, data, range]);
+
+  useEffect(() => {
+    if (!periodRestricted) return;
+    setSelectedIds((current) => {
+      const next = current.filter((id) => periodEligibleAssets.has(id));
+      return next.length === current.length ? current : next;
+    });
+  }, [periodEligibleAssets, periodRestricted]);
+
   useEffect(() => {
     if (embedded || !selectedAssets.length) return;
     const params = new URLSearchParams(window.location.search);
@@ -626,6 +664,7 @@ function CorrelationView({
     : null;
 
   const toggleAsset = (id: string) => {
+    if (periodRestricted && !periodEligibleAssets.has(id)) return;
     setSelectedIds((current) => {
       if (current.includes(id)) return current.length > 1 ? current.filter((item) => item !== id) : current;
       return [...current, id];
@@ -636,19 +675,20 @@ function CorrelationView({
     <section className={`correlation-controls ${embedded ? "embedded" : ""}`}>
       <div className="card-heading compact">
         <div className="heading-icon"><Activity size={17} /></div>
-        <div><h2>{embedded ? "Corrélations de la sélection" : "Univers de corrélation"}</h2><p>{embedded ? "Lecture des actifs sélectionnés dans l'analyse principale, avec la même période et le même mode." : "Tous les actifs sont inclus par défaut. Les cellules utilisent uniquement les années communes à chaque paire."}</p></div>
+         <div><h2>{embedded ? "Corrélations de la sélection" : "Univers de corrélation"}</h2><p>{embedded ? "Lecture des actifs sélectionnés dans l'analyse principale, avec la même période et le même mode." : "Les actifs disponibles sur toute la période sont inclus par défaut. Les cellules utilisent uniquement les années communes à chaque paire."}</p></div>
       </div>
       {!embedded && <>
         <div className="correlation-assets">
-          {assets.map((asset) => <button key={asset.id} aria-pressed={selectedIds.includes(asset.id)} className={`correlation-asset-chip ${selectedIds.includes(asset.id) ? "selected" : ""}`} style={{ "--asset-color": asset.accentColor } as React.CSSProperties} onClick={() => toggleAsset(asset.id)}><span className="chip-dot" />{asset.name}</button>)}
+           {assets.map((asset) => { const availableForPeriod = !periodRestricted || periodEligibleAssets.has(asset.id); return <button key={asset.id} aria-pressed={selectedIds.includes(asset.id)} className={`correlation-asset-chip ${selectedIds.includes(asset.id) ? "selected" : ""} ${!availableForPeriod ? "unavailable" : ""}`} style={{ "--asset-color": asset.accentColor } as React.CSSProperties} onClick={() => toggleAsset(asset.id)} disabled={!availableForPeriod} title={!availableForPeriod ? `Indice non disponible sur ${range[0]}–${range[1]}` : undefined}><span className="chip-dot" />{asset.name}{!availableForPeriod && <small>hors période</small>}</button>; })}
         </div>
         <div className="correlation-control-row">
           <label className="switch-control"><input type="checkbox" checked={commonPeriod} onChange={(event) => setCommonPeriod(event.target.checked)} /><span className="switch" />Période commune <strong>{commonStart}–{commonEnd}</strong></label>
-          {!commonPeriod && <label className="range-control">De <input type="number" value={range[0]} min={1925} max={range[1] - 1} onChange={(event) => setRange([Number(event.target.value), range[1]])} /> à <input type="number" value={range[1]} min={range[0] + 1} max={2025} onChange={(event) => setRange([range[0], Number(event.target.value)])} /></label>}
-          <div className="mode-toggle"><button aria-pressed={mode === "nominal"} className={mode === "nominal" ? "active" : ""} onClick={() => setPageMode("nominal")}>Nominal</button><button aria-pressed={mode === "real"} className={mode === "real" ? "active" : ""} onClick={() => setPageMode("real")}>Réel</button></div>
-          <span className="correlation-period">{selectedAssets.length} actifs · {periodLabel} · lecture {mode === "nominal" ? "nominale" : "réelle"}</span>
-        </div>
-      </>}
+           {!commonPeriod && <label className="range-control">De <input type="number" value={range[0]} min={1925} max={range[1] - 1} onChange={(event) => setRange([Number(event.target.value), range[1]])} /> à <input type="number" value={range[1]} min={range[0] + 1} max={2025} onChange={(event) => setRange([range[0], Number(event.target.value)])} /></label>}
+           <div className="mode-toggle"><button aria-pressed={mode === "nominal"} className={mode === "nominal" ? "active" : ""} onClick={() => setPageMode("nominal")}>Nominal</button><button aria-pressed={mode === "real"} className={mode === "real" ? "active" : ""} onClick={() => setPageMode("real")}>Réel</button></div>
+           <span className="correlation-period">{selectedAssets.length} actifs · {periodLabel} · lecture {mode === "nominal" ? "nominale" : "réelle"}</span>
+         </div>
+         <PeriodSelector start={range[0]} end={range[1]} onChange={(nextStart, nextEnd) => { setCommonPeriod(false); setRange([nextStart, nextEnd]); }} />
+       </>}
       {embedded && <span className="correlation-period">{selectedAssets.length} actifs · {periodLabel} · lecture {mode === "nominal" ? "nominale" : "réelle"}</span>}
     </section>
 
