@@ -351,6 +351,23 @@ function App() {
     const cagr = mode === "nominal" ? stat?.cagrNominal ?? null : stat?.cagrReal ?? null;
     return { asset, weight: normalizedWeight, contribution: cagr === null ? null : normalizedWeight / 100 * cagr };
   });
+  const normalizedPortfolioWeights = Object.fromEntries(selectedAssets.map((asset) => [asset.id, portfolioWeights[asset.id] > 0 ? portfolioWeights[asset.id] / Object.values(portfolioWeights).reduce((total, current) => total + current, 0) : 0]));
+  const weightedCorrelation = selectedAssets.length > 1 ? (() => {
+    let numerator = 0;
+    let denominator = 0;
+    selectedAssets.forEach((left, leftIndex) => selectedAssets.slice(leftIndex + 1).forEach((right) => {
+      const pairWeight = normalizedPortfolioWeights[left.id] * normalizedPortfolioWeights[right.id];
+      const correlation = correlations[left.id]?.[right.id];
+      if (pairWeight > 0 && correlation !== null && correlation !== undefined) {
+        numerator += pairWeight * correlation;
+        denominator += pairWeight;
+      }
+    }));
+    return denominator > 0 ? numerator / denominator : null;
+  })() : null;
+  const diversificationRatio = portfolio && portfolio.volatility > 0
+    ? selectedAssets.reduce((sum, asset) => sum + normalizedPortfolioWeights[asset.id] * (stats[asset.id]?.volatility ?? 0), 0) / portfolio.volatility
+    : null;
 
   const selectPreset = (presetId: Exclude<PresetId, "custom">) => {
     const preset = presetDefinitions.find((candidate) => candidate.id === presetId);
@@ -531,7 +548,7 @@ function App() {
               {activeTab === "growth" && <ChartCard title={`100 $ investis en ${start}`} subtitle={`Croissance cumulée en termes ${activeLabel}s, avec réinvestissement des rendements disponibles.`} icon={<Activity size={18} />} data={growthData} columns={chartColumns} format="money" legend={<AssetLegend assets={selectedAssets} hiddenAssets={hiddenAssets} onToggle={toggleHiddenAsset} />} metadata={{ unit: "Valeur de 100 $ · échelle logarithmique", source: "Corpus historique consolidé", period: `${start}–${end}`, observations: chartObservationCount }}><ResponsiveContainer width="100%" height={390}><AreaChart data={growthData}><ChartGrid /><XAxis dataKey="year" {...axisProps} /><YAxis scale="log" domain={["auto", "auto"]} {...axisProps} tickFormatter={formatMoney} /><Tooltip content={<ChartTooltip assets={assets} type="money" />} />{crisisMarkers.filter((marker) => marker.year >= start && marker.year <= end).map((marker) => <ReferenceLine key={marker.year} x={marker.year} stroke="#a6b3bb" strokeDasharray="4 4" label={{ value: marker.label, position: "insideTop", fill: "#718290", fontSize: 10 }} />)}{visibleChartAssets.map((asset) => <Area key={asset.id} type="monotone" dataKey={asset.id} stroke={asset.accentColor} fill={asset.accentColor} fillOpacity={0.08} strokeWidth={2.5} connectNulls={false} />)}</AreaChart></ResponsiveContainer></ChartCard>}
               {activeTab === "decades" && <ChartCard title={`TCAM par décennie · ${activeLabel}`} subtitle="Moyenne géométrique des rendements annuels disponibles dans chaque décennie." icon={<CalendarDays size={18} />} data={decadeData} columns={decadeColumns} format="percent" legend={<AssetLegend assets={selectedAssets} hiddenAssets={hiddenAssets} onToggle={toggleHiddenAsset} />} metadata={{ unit: "% annualisé par décennie", source: "Corpus historique consolidé", period: `${start}–${end}`, observations: chartObservationCount }}><ResponsiveContainer width="100%" height={390}><BarChart data={decadeData}><ChartGrid /><XAxis dataKey="decade" {...axisProps} /><YAxis {...axisProps} tickFormatter={(value) => `${value}%`} /><Tooltip content={<ChartTooltip assets={assets} type="percent" />} /><ReferenceLine y={0} stroke="#18324a" />{visibleChartAssets.map((asset) => <Bar key={asset.id} dataKey={asset.id} fill={asset.accentColor} radius={[3, 3, 0, 0]} />)}</BarChart></ResponsiveContainer></ChartCard>}
 
-               {activeTab === "portfolio" && <PortfolioView assets={selectedAssets} data={data} phases={visiblePhases} weights={weights} portfolio={portfolio} equalPortfolio={equalPortfolio} contributions={portfolioContributions} correlations={correlations} mode={mode} presetModified={presetModified} automaticWeights={automaticWeights} automaticCandidateAvailable={automaticCandidate !== null} activePreset={activePreset} onWeightChange={updateWeight} onNormalize={normalizeWeights} />}
+               {activeTab === "portfolio" && <PortfolioView assets={selectedAssets} data={data} phases={visiblePhases} weights={weights} portfolio={portfolio} equalPortfolio={equalPortfolio} contributions={portfolioContributions} correlations={correlations} weightedCorrelation={weightedCorrelation} diversificationRatio={diversificationRatio} mode={mode} presetModified={presetModified} automaticWeights={automaticWeights} automaticCandidateAvailable={automaticCandidate !== null} activePreset={activePreset} onWeightChange={updateWeight} onNormalize={normalizeWeights} />}
               {activeTab === "correlations" && <CorrelationView assets={selectedAssets} data={data} mode={mode} embedded start={start} end={end} />}
 
               {activeTab !== "correlations" && activeTab !== "portfolio" && <HistoricalTable assets={selectedAssets} data={data} phases={visiblePhases} mode={mode} />}
@@ -754,6 +771,8 @@ function PortfolioView({
   equalPortfolio,
   contributions,
   correlations,
+  weightedCorrelation,
+  diversificationRatio,
   mode,
   activePreset,
   presetModified,
@@ -770,6 +789,8 @@ function PortfolioView({
   equalPortfolio: PortfolioStats | null;
   contributions: Array<{ asset: Asset; weight: number; contribution: number | null }>;
   correlations: Record<string, Record<string, number | null>>;
+  weightedCorrelation: number | null;
+  diversificationRatio: number | null;
   mode: Mode;
   activePreset: PresetId;
   presetModified: boolean;
@@ -816,8 +837,10 @@ function PortfolioView({
          <div className="portfolio-kpi featured"><span>Rendement annualisé · {mode === "nominal" ? "nominal" : "réel"}</span><strong>{formatPercent(portfolio.cagr)}</strong><small>Performance moyenne par an, composée.</small></div>
          <Metric label="Volatilité" value={formatPercent(portfolio.volatility)} description="Variation annuelle des rendements." featured />
          <Metric label="Drawdown maximal" value={formatPercent(portfolio.maxDrawdown)} description="Plus forte baisse depuis un sommet." negative featured />
-         <Metric label="Sharpe brut" value={portfolio.sharpe === null ? "n.d." : portfolio.sharpe.toFixed(2)} description="Rendement rapporté au risque." />
-          <Metric label="Années positives" value={`${portfolio.positiveRate.toFixed(0)} %`} description="Part des années au-dessus de 0 %." positive />
+           <Metric label="Sharpe brut" value={portfolio.sharpe === null ? "n.d." : portfolio.sharpe.toFixed(2)} description="< 0 faible · 0–1 moyen · 1–2 bon · > 2 très bon." tone={metricTone(portfolio.sharpe, "sharpe")} />
+           <Metric label="Corrélation pondérée" value={weightedCorrelation === null ? "n.d." : weightedCorrelation.toFixed(2)} description="< 0,2 faible · > 0,7 forte." tone={metricTone(weightedCorrelation, "correlation")} />
+           <Metric label="Ratio de diversification" value={diversificationRatio === null ? "n.d." : diversificationRatio.toFixed(2)} description="1 = aucune · 1,2–1,5 modérée · > 1,5 forte." tone={metricTone(diversificationRatio, "diversification")} />
+           <Metric label="Années positives" value={`${portfolio.positiveRate.toFixed(0)} %`} description="Part des années au-dessus de 0 %." positive />
           <Metric label="Pire année" value={portfolio.worst ? `${portfolio.worst.year} · ${formatPercent(portfolio.worst.return)}` : "n.d."} description="Rendement annuel le plus faible." negative />
           <Metric label="Récupération" value={portfolio.recoveryYears === null ? "n.d." : `${portfolio.recoveryYears} an${portfolio.recoveryYears > 1 ? "s" : ""}`} description="Temps pour retrouver le précédent sommet." />
         </section>
@@ -918,7 +941,14 @@ function Overview({ assets, stats, mode, start, end }: { assets: Asset[]; stats:
   </>;
 }
 
-function Metric({ label, value, description, positive, negative, featured }: { label: string; value: string; description: string; positive?: boolean; negative?: boolean; featured?: boolean }) { return <div className={`metric ${positive ? "positive" : negative ? "negative" : ""} ${featured ? "featured" : ""}`}><span>{label}</span><strong>{value}</strong><small>{description}</small></div>; }
+function metricTone(value: number | null, kind: "sharpe" | "correlation" | "diversification"): "very-negative" | "negative" | "neutral" | "positive" | "very-positive" | undefined {
+  if (value === null || !Number.isFinite(value)) return undefined;
+  if (kind === "sharpe") return value < 0 ? "very-negative" : value < 0.5 ? "negative" : value < 1 ? "neutral" : value < 2 ? "positive" : "very-positive";
+  if (kind === "correlation") return value <= 0.2 ? "very-positive" : value <= 0.5 ? "positive" : value <= 0.7 ? "neutral" : value <= 0.9 ? "negative" : "very-negative";
+  return value < 1.05 ? "very-negative" : value < 1.2 ? "negative" : value < 1.5 ? "neutral" : value < 2 ? "positive" : "very-positive";
+}
+
+function Metric({ label, value, description, positive, negative, featured, tone }: { label: string; value: string; description: string; positive?: boolean; negative?: boolean; featured?: boolean; tone?: "very-negative" | "negative" | "neutral" | "positive" | "very-positive" }) { return <div className={`metric ${positive ? "positive" : negative ? "negative" : ""} ${tone ?? ""} ${featured ? "featured" : ""}`}><span>{label}</span><strong>{value}</strong><small>{description}</small></div>; }
 
 function RankingTable({ assets, stats, mode, best }: { assets: Asset[]; stats: Record<string, ReturnType<typeof computeStats>>; mode: Mode; best: boolean }) { return <div className="ranking-table">{[0, 1, 2, 3, 4].map((index) => <div className="ranking-row" key={index}><span className="rank">0{index + 1}</span>{assets.map((asset) => { const row = (best ? stats[asset.id]?.best5 : stats[asset.id]?.worst5)?.[index]; return <div className="rank-asset" key={asset.id}><span>{asset.name}</span><strong style={{ color: asset.accentColor }}>{row ? `${row.year} · ${formatPercent(returnValue(row, mode))}` : "n.d."}</strong></div>; })}</div>)}</div>; }
 

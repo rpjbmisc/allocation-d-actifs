@@ -186,8 +186,8 @@ export function computePortfolio(
   const mean = returns.reduce((sum, current) => sum + current, 0) / returns.length;
   const volatility = Math.sqrt(returns.reduce((sum, current) => sum + Math.pow(current - mean, 2), 0) / returns.length);
   const cagr = points.length > 1 ? cagrValue(points[0].value / (1 + points[0].return / 100), value, points.length) : null;
-  const recoveryIndex = points.findIndex((point, index) => index > 0 && point.drawdown >= -0.01 && points.slice(0, index).some((candidate) => candidate.drawdown < -0.01));
   const troughIndex = points.reduce((index, point, current) => point.drawdown < points[index].drawdown ? current : index, 0);
+  const recoveryIndex = points.findIndex((point, index) => index > troughIndex && point.drawdown >= -0.01);
   const recoveryYears = troughIndex > 0 && recoveryIndex >= troughIndex ? points[recoveryIndex].year - points[troughIndex].year : null;
 
   return {
