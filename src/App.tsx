@@ -30,6 +30,7 @@ import {
   PortfolioStats,
   returnValue,
   Row,
+  searchPortfolioCandidates,
 } from "./analytics";
 
 type Tab = "overview" | "price" | "returns" | "growth" | "decades" | "portfolio" | "correlations";
@@ -141,6 +142,7 @@ function App() {
   const [assetCategoryFilter, setAssetCategoryFilter] = useState<AssetCategory>("Tous");
   const [hiddenAssets, setHiddenAssets] = useState<string[]>([]);
   const [weights, setWeights] = useState<Record<string, number>>({});
+  const [automaticWeights, setAutomaticWeights] = useState(false);
   const [activePreset, setActivePreset] = useState<PresetId>("custom");
   const [presetDefinitions, setPresetDefinitions] = useState<CandidatePreset[]>([]);
   const [presetModified, setPresetModified] = useState(false);
@@ -208,6 +210,29 @@ function App() {
   const duration = Math.max(0, end - start + 1);
 
   const stats = useMemo(() => Object.fromEntries(selectedAssets.map((asset) => [asset.id, computeStats(data[asset.id], start, end, mode)])), [data, end, mode, selectedAssets, start]);
+
+  const automaticCandidate = useMemo(() => {
+    if (activePreset !== "custom" || selectedAssets.length === 0 || end <= start) return null;
+    return searchPortfolioCandidates(
+      data,
+      selectedAssets.map((asset) => asset.id),
+      start,
+      end,
+      mode,
+      40,
+      5,
+      1,
+    )[0] ?? null;
+  }, [activePreset, data, end, mode, selectedAssets, start]);
+
+  useEffect(() => {
+    if (loading || activePreset !== "custom") return;
+    setWeights((current) => selectedAssets.reduce(
+      (next, asset) => ({ ...next, [asset.id]: automaticCandidate?.weights[asset.id] ?? 0 }),
+      { ...current },
+    ));
+    setAutomaticWeights(Boolean(automaticCandidate));
+  }, [activePreset, automaticCandidate, loading, selectedAssets]);
 
   const years = useMemo(() => {
     const allYears = new Set<number>();
@@ -314,6 +339,7 @@ function App() {
     const preset = presetDefinitions.find((candidate) => candidate.id === presetId);
     if (!preset) return;
     setActivePreset(presetId);
+    setAutomaticWeights(false);
     setPresetModified(false);
     setSelected(Object.keys(preset.weights).filter((id) => preset.weights[id] > 0));
     setWeights((current) => ({ ...current, ...preset.weights }));
@@ -324,6 +350,7 @@ function App() {
 
   const selectCustom = () => {
     setActivePreset("custom");
+    setAutomaticWeights(false);
     setPresetModified(false);
   };
 
@@ -338,11 +365,13 @@ function App() {
   };
 
   const updateWeight = (id: string, value: number) => {
+    setAutomaticWeights(false);
     if (activePreset !== "custom") setPresetModified(true);
     setWeights((current) => ({ ...current, [id]: Math.max(0, Math.min(100, value)) }));
   };
 
   const normalizeWeights = () => {
+    setAutomaticWeights(false);
     if (activePreset !== "custom") setPresetModified(true);
     const total = selectedAssets.reduce((sum, asset) => sum + (weights[asset.id] ?? 0), 0);
     if (total <= 0 && selectedAssets.length > 0) {
@@ -357,6 +386,7 @@ function App() {
     const initialSelection = preferredIds.filter((id) => availableAssets.some((asset) => asset.id === id));
     const fallbackSelection = initialSelection.length ? initialSelection : availableAssets.slice(0, 3).map((asset) => asset.id);
     setActivePreset("custom");
+    setAutomaticWeights(false);
     setPresetModified(false);
     setSelected(fallbackSelection);
     setWeights(Object.fromEntries(assets.map((asset) => [asset.id, fallbackSelection.includes(asset.id) ? 100 / Math.max(1, fallbackSelection.length) : 0])));
@@ -474,7 +504,7 @@ function App() {
               {activeTab === "growth" && <ChartCard title={`100 $ investis en ${start}`} subtitle={`Croissance cumulée en termes ${activeLabel}s, avec réinvestissement des rendements disponibles.`} icon={<Activity size={18} />} data={growthData} columns={chartColumns} format="money" legend={<AssetLegend assets={selectedAssets} hiddenAssets={hiddenAssets} onToggle={toggleHiddenAsset} />} metadata={{ unit: "Valeur de 100 $ · échelle logarithmique", source: "Corpus historique consolidé", period: `${start}–${end}`, observations: chartObservationCount }}><ResponsiveContainer width="100%" height={390}><AreaChart data={growthData}><ChartGrid /><XAxis dataKey="year" {...axisProps} /><YAxis scale="log" domain={["auto", "auto"]} {...axisProps} tickFormatter={formatMoney} /><Tooltip content={<ChartTooltip assets={assets} type="money" />} />{crisisMarkers.filter((marker) => marker.year >= start && marker.year <= end).map((marker) => <ReferenceLine key={marker.year} x={marker.year} stroke="#a6b3bb" strokeDasharray="4 4" label={{ value: marker.label, position: "insideTop", fill: "#718290", fontSize: 10 }} />)}{visibleChartAssets.map((asset) => <Area key={asset.id} type="monotone" dataKey={asset.id} stroke={asset.accentColor} fill={asset.accentColor} fillOpacity={0.08} strokeWidth={2.5} connectNulls={false} />)}</AreaChart></ResponsiveContainer></ChartCard>}
               {activeTab === "decades" && <ChartCard title={`TCAM par décennie · ${activeLabel}`} subtitle="Moyenne géométrique des rendements annuels disponibles dans chaque décennie." icon={<CalendarDays size={18} />} data={decadeData} columns={decadeColumns} format="percent" legend={<AssetLegend assets={selectedAssets} hiddenAssets={hiddenAssets} onToggle={toggleHiddenAsset} />} metadata={{ unit: "% annualisé par décennie", source: "Corpus historique consolidé", period: `${start}–${end}`, observations: chartObservationCount }}><ResponsiveContainer width="100%" height={390}><BarChart data={decadeData}><ChartGrid /><XAxis dataKey="decade" {...axisProps} /><YAxis {...axisProps} tickFormatter={(value) => `${value}%`} /><Tooltip content={<ChartTooltip assets={assets} type="percent" />} /><ReferenceLine y={0} stroke="#18324a" />{visibleChartAssets.map((asset) => <Bar key={asset.id} dataKey={asset.id} fill={asset.accentColor} radius={[3, 3, 0, 0]} />)}</BarChart></ResponsiveContainer></ChartCard>}
 
-              {activeTab === "portfolio" && <PortfolioView assets={selectedAssets} data={data} phases={visiblePhases} weights={weights} portfolio={portfolio} equalPortfolio={equalPortfolio} contributions={portfolioContributions} correlations={correlations} mode={mode} presetModified={presetModified} activePreset={activePreset} onWeightChange={updateWeight} onNormalize={normalizeWeights} />}
+               {activeTab === "portfolio" && <PortfolioView assets={selectedAssets} data={data} phases={visiblePhases} weights={weights} portfolio={portfolio} equalPortfolio={equalPortfolio} contributions={portfolioContributions} correlations={correlations} mode={mode} presetModified={presetModified} automaticWeights={automaticWeights} automaticCandidateAvailable={automaticCandidate !== null} activePreset={activePreset} onWeightChange={updateWeight} onNormalize={normalizeWeights} />}
               {activeTab === "correlations" && <CorrelationView assets={selectedAssets} data={data} mode={mode} embedded start={start} end={end} />}
 
               {activeTab !== "correlations" && activeTab !== "portfolio" && <HistoricalTable assets={selectedAssets} data={data} phases={visiblePhases} mode={mode} />}
@@ -687,6 +717,8 @@ function PortfolioView({
   mode,
   activePreset,
   presetModified,
+  automaticWeights,
+  automaticCandidateAvailable,
   onWeightChange,
   onNormalize,
 }: {
@@ -701,6 +733,8 @@ function PortfolioView({
   mode: Mode;
   activePreset: PresetId;
   presetModified: boolean;
+  automaticWeights: boolean;
+  automaticCandidateAvailable: boolean;
   onWeightChange: (id: string, value: number) => void;
   onNormalize: () => void;
 }) {
@@ -712,7 +746,7 @@ function PortfolioView({
     <section className="portfolio-controls">
       <div className="card-heading compact">
         <div className="heading-icon"><SlidersHorizontal size={17} /></div>
-        <div><h2>Construire une allocation</h2><p>{activePreset === "custom" ? "Les pondérations sont normalisées pour le calcul." : `${presetModified ? "Allocation candidate modifiée" : "Ventilation candidate chargée"}. Les actifs du picker sont verrouillés.`}</p></div>
+        <div><h2>Construire une allocation</h2><p>{activePreset === "custom" ? automaticWeights ? "Proposition automatique : meilleur TCAM historique sous drawdown maximal de 40 %. Tu peux modifier les pondérations." : automaticCandidateAvailable ? "Pondérations personnalisées. Les pondérations sont normalisées pour le calcul." : "Aucune allocation ne respecte un drawdown maximal de 40 % sur cette configuration." : `${presetModified ? "Allocation candidate modifiée" : "Ventilation candidate chargée"}. Les actifs du picker sont verrouillés.`}</p></div>
       </div>
       <div className="weight-list">
         {assets.map((asset) => {

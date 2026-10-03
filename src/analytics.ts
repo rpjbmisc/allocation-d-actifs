@@ -259,11 +259,6 @@ export function searchPortfolioCandidates(
   requiredAssetId?: string,
 ): PortfolioCandidate[] {
   if (!assetIds.length || step <= 0 || 100 % step !== 0) return [];
-  const years = Array.from({ length: end - start + 1 }, (_, index) => start + index);
-  const rowsByAsset = Object.fromEntries(assetIds.map((id) => [
-    id,
-    new Map((data[id] ?? []).map((row) => [row.year, row])),
-  ]));
   const results: PortfolioCandidate[] = [];
 
   const visit = (index: number, remaining: number, weights: Record<string, number>) => {
@@ -272,13 +267,11 @@ export function searchPortfolioCandidates(
       const finalWeight = remaining * step;
       const nextWeights = { ...weights, [id]: finalWeight };
       if (requiredAssetId && nextWeights[requiredAssetId] <= 0) return;
-      const activeIds = assetIds.filter((assetId) => nextWeights[assetId] > 0);
-      const complete = years.every((year) => activeIds.every((assetId) => {
-        const row = rowsByAsset[assetId].get(year);
-        return row !== undefined && returnValue(row, mode) !== null;
-      }));
-      if (!complete) return;
       const stats = computePortfolio(data, nextWeights, start, end, mode);
+      // The first row of a series is often only the starting index and has no return.
+      // Accept that boundary row, but do not optimize a portfolio with a shortened history.
+      const minimumObservations = Math.max(1, end - start);
+      if (!stats || stats.points.length < minimumObservations) return;
       if (!stats || (maxDrawdown !== null && stats.maxDrawdown < -Math.abs(maxDrawdown))) return;
       results.push({ weights: nextWeights, stats });
       if (results.length > limit) results.sort((left, right) => right.stats.cagr! - left.stats.cagr! || left.stats.volatility - right.stats.volatility).splice(limit);
