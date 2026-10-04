@@ -127,6 +127,11 @@ function assetCoversPeriod(rows: Row[] | undefined, start: number, end: number):
   return rows.some((row) => row.year <= start) && rows.some((row) => row.year >= end);
 }
 
+function dataBounds(rows: Row[] | undefined, fallback: [number, number]): [number, number] {
+  const years = rows?.map((row) => row.year).filter(Number.isFinite) ?? [];
+  return years.length ? [Math.min(...years), Math.max(...years)] : fallback;
+}
+
 function readTab(value: string | null): Tab {
   return value && tabIds.has(value as Tab) ? value as Tab : "overview";
 }
@@ -219,8 +224,9 @@ function App() {
   }, [activeTab, commonPeriod, isCorrelationPage, loading, mode, range, selected]);
 
   const selectedAssets = useMemo(() => assets.filter((asset) => selected.includes(asset.id) && data[asset.id]?.length), [assets, data, selected]);
-  const commonStart = selectedAssets.length ? Math.max(...selectedAssets.map((asset) => data[asset.id][0].year)) : 1970;
-  const commonEnd = selectedAssets.length ? Math.min(...selectedAssets.map((asset) => data[asset.id][data[asset.id].length - 1].year)) : 2025;
+  const commonBounds = selectedAssets.map((asset) => dataBounds(data[asset.id], [asset.startYear, asset.endYear]));
+  const commonStart = selectedAssets.length ? Math.max(...commonBounds.map(([start]) => start)) : 1970;
+  const commonEnd = selectedAssets.length ? Math.min(...commonBounds.map(([, end]) => end)) : 2025;
   const effectiveRange: [number, number] = commonPeriod ? [commonStart, commonEnd] : range;
   const [start, end] = effectiveRange;
   const duration = Math.max(0, end - start + 1);
@@ -625,8 +631,9 @@ function CorrelationView({
     params.set("end", String(range[1]));
     window.history.replaceState(null, "", `${window.location.pathname}?${params.toString()}`);
   }, [commonPeriod, embedded, pageMode, range, selectedAssets.length, selectedIds]);
-  const commonStart = selectedAssets.length ? Math.max(...selectedAssets.map((asset) => data[asset.id][0].year)) : range[0];
-  const commonEnd = selectedAssets.length ? Math.min(...selectedAssets.map((asset) => data[asset.id].at(-1)?.year ?? range[1])) : range[1];
+  const commonBounds = selectedAssets.map((asset) => dataBounds(data[asset.id], [asset.startYear, asset.endYear]));
+  const commonStart = selectedAssets.length ? Math.max(...commonBounds.map(([start]) => start)) : range[0];
+  const commonEnd = selectedAssets.length ? Math.min(...commonBounds.map(([, end]) => end)) : range[1];
   const [start, end] = embedded
     ? [embeddedStart ?? commonStart, embeddedEnd ?? commonEnd]
     : commonPeriod ? [commonStart, commonEnd] : range;
