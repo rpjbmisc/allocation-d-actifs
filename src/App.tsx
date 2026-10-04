@@ -376,14 +376,6 @@ function App() {
     setPresetModified(false);
   };
 
-  useEffect(() => {
-    if (!periodRestricted || activePreset !== "custom") return;
-    setSelected((current) => {
-      const next = current.filter((id) => periodEligibleAssets.has(id));
-      return next.length === current.length ? current : next;
-    });
-  }, [activePreset, periodEligibleAssets, periodRestricted]);
-
   const toggleAsset = (id: string) => {
     if (activePreset !== "custom") return;
     setSelected((current) => {
