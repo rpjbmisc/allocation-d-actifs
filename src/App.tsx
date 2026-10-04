@@ -73,6 +73,7 @@ const chartTabs: { id: Tab; label: string }[] = [
 
 const dataUrl = (file: string) => `/data/${encodeURIComponent(file)}`;
 const preferredIds = ["msci_world", "gold", "us_lt_govt_bonds"];
+const MATRIX_ASSETS_PARAM = "matrixAssets";
 const tabIds = new Set<Tab>(["overview", "returns", "growth", "decades", "portfolio", "correlations"]);
 const MAX_SELECTED_ASSETS = 6;
 const assetCategories: AssetCategory[] = ["Tous", "Actions", "Obligations", "Immobilier", "Métaux", "Alternatives"];
@@ -590,7 +591,7 @@ function CorrelationView({
   end?: number;
 }) {
   const correlationParams = !embedded ? new URLSearchParams(window.location.search) : null;
-  const [selectedIds, setSelectedIds] = useState<string[]>(readIds(correlationParams?.get("assets")));
+  const [selectedIds, setSelectedIds] = useState<string[]>(readIds(correlationParams?.get(MATRIX_ASSETS_PARAM)));
   const [range, setRange] = useState<[number, number]>([Number(correlationParams?.get("start")) || 1970, Number(correlationParams?.get("end")) || 2025]);
   const [commonPeriod, setCommonPeriod] = useState(correlationParams?.get("common") === "true");
   const [pageMode, setPageMode] = useState<Mode>(correlationParams?.get("mode") === "real" ? "real" : parentMode);
@@ -618,7 +619,7 @@ function CorrelationView({
   useEffect(() => {
     if (embedded || !selectedAssets.length) return;
     const params = new URLSearchParams(window.location.search);
-    params.set("assets", selectedIds.join(","));
+    params.set(MATRIX_ASSETS_PARAM, selectedIds.join(","));
     params.set("mode", pageMode);
     params.set("common", String(commonPeriod));
     params.set("start", String(range[0]));
