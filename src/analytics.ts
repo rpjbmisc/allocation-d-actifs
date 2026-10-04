@@ -1,4 +1,10 @@
 export type Mode = "nominal" | "real";
+export type Currency = "usd" | "eur";
+
+export interface CurrencyContext {
+  usdPerEur: Record<number, number>;
+  frenchInflation: Record<number, number>;
+}
 
 export interface Asset {
   id: string;
@@ -99,6 +105,28 @@ export function normalizeRows(raw: Record<string, unknown>[]): Row[] {
     }))
     .filter((row) => Number.isFinite(row.year))
     .sort((a, b) => a.year - b.year);
+}
+
+export function localizeRows(rows: Row[], currency: Currency, context: CurrencyContext): Row[] {
+  if (currency === "usd") return rows;
+
+  return rows
+    .filter((row) => row.year >= 1961)
+    .map((row) => {
+      const currentFx = context.usdPerEur[row.year];
+      const previousFx = context.usdPerEur[row.year - 1];
+      if (!Number.isFinite(row.nominal) || !Number.isFinite(currentFx) || !Number.isFinite(previousFx)) {
+        return { ...row, nominal: Number.NaN, real: Number.NaN };
+      }
+
+      const fxReturn = (previousFx / currentFx - 1) * 100;
+      const nominal = (1 + row.nominal / 100) * (1 + fxReturn / 100) * 100 - 100;
+      const inflation = context.frenchInflation[row.year];
+      const real = Number.isFinite(inflation)
+        ? ((1 + nominal / 100) / (1 + inflation / 100) - 1) * 100
+        : Number.NaN;
+      return { ...row, nominal, inflation, real };
+    });
 }
 
 export function returnValue(row: Row, mode: Mode): number | null {
@@ -256,10 +284,14 @@ export function searchPortfolioCandidates(
   maxDrawdown: number | null,
   step = 5,
   limit = 5,
+  objective: "cagr" | "minimumDrawdown" = "cagr",
   requiredAssetId?: string,
 ): PortfolioCandidate[] {
   if (!assetIds.length || step <= 0 || 100 % step !== 0) return [];
   const results: PortfolioCandidate[] = [];
+  const compareCandidates = (left: PortfolioCandidate, right: PortfolioCandidate) => objective === "minimumDrawdown"
+    ? right.stats.maxDrawdown - left.stats.maxDrawdown || right.stats.cagr! - left.stats.cagr! || left.stats.volatility - right.stats.volatility
+    : right.stats.cagr! - left.stats.cagr! || left.stats.volatility - right.stats.volatility;
 
   const visit = (index: number, remaining: number, weights: Record<string, number>) => {
     if (index === assetIds.length - 1) {
@@ -274,7 +306,7 @@ export function searchPortfolioCandidates(
       if (!stats || stats.points.length < minimumObservations) return;
       if (!stats || (maxDrawdown !== null && stats.maxDrawdown < -Math.abs(maxDrawdown))) return;
       results.push({ weights: nextWeights, stats });
-      if (results.length > limit) results.sort((left, right) => right.stats.cagr! - left.stats.cagr! || left.stats.volatility - right.stats.volatility).splice(limit);
+      if (results.length > limit) results.sort(compareCandidates).splice(limit);
       return;
     }
 
@@ -284,7 +316,7 @@ export function searchPortfolioCandidates(
   };
 
   visit(0, 100 / step, {});
-  return results.sort((left, right) => right.stats.cagr! - left.stats.cagr! || left.stats.volatility - right.stats.volatility);
+  return results.sort(compareCandidates);
 }
 
 export function searchPortfolioAcrossWindows(

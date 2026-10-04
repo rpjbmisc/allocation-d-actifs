@@ -1,0 +1,17 @@
+{
+  "file": "assets_returns_eur_1961_2025.csv",
+  "postEuroFile": "assets_returns_eur_1999_2025.csv",
+  "referenceCurrency": "EUR",
+  "sourceCurrency": "USD",
+  "period": "1961-2025",
+  "frequency": "annual",
+  "exchangeRateQuote": "USD per EUR",
+  "formula": {
+    "fxReturnUsdToEur": "previous USD_per_EUR / current USD_per_EUR - 1",
+    "assetReturnEur": "(1 + assetReturnUsd) * (1 + fxReturnUsdToEur) - 1"
+  },
+  "coverage": "The historical derived file covers 1961-2025, limited by the available euro-equivalent FX history. The shorter 1999-2025 file remains available for the post-euro period.",
+  "hedging": "unhedged",
+  "inflation": "Not applied; use french_cpi_dec_dec_1960_2025.csv separately for French real returns.",
+  "caveat": "This is a mechanical translation of USD-denominated series into EUR. It does not model the underlying geographic currency exposure of multinational companies. The pre-1999 FX history is expressed in euro-equivalent terms by the OECD series."
+}

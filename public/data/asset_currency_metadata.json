@@ -1,0 +1,88 @@
+{
+  "defaultSourceCurrency": "USD",
+  "defaultInflationSource": "US_CPI",
+  "assets": {
+    "sp500": {
+      "currency": "USD",
+      "priceField": "Price",
+      "nominalReturnField": "Nominal_Return",
+      "realReturnField": "Real_Return",
+      "currencyEvidence": "series context and US CPI column"
+    },
+    "gold": {
+      "currency": "USD",
+      "priceField": "Gold_Price_USD",
+      "nominalReturnField": "Nominal_Return_Pct",
+      "realReturnField": "Real_Return_Pct",
+      "currencyEvidence": "explicit USD field name"
+    },
+    "bitcoin": {
+      "currency": "USD",
+      "priceField": "Price",
+      "nominalReturnField": "Nominal_Return",
+      "realReturnField": "Real_Return",
+      "currencyEvidence": "series context and US CPI column"
+    },
+    "msci_world": {
+      "currency": "USD",
+      "priceField": "Price",
+      "nominalReturnField": "Nominal_Return",
+      "realReturnField": "Real_Return",
+      "currencyEvidence": "series context and US CPI column"
+    },
+    "msci_em": {
+      "currency": "USD",
+      "priceField": "Price",
+      "nominalReturnField": "Nominal_Return",
+      "realReturnField": "Real_Return",
+      "currencyEvidence": "series context and US CPI column"
+    },
+    "reit_us": {
+      "currency": "USD",
+      "priceField": "Price",
+      "nominalReturnField": "Nominal_Return",
+      "realReturnField": "Real_Return",
+      "currencyEvidence": "US series name and US CPI column"
+    },
+    "russell2000": {
+      "currency": "USD",
+      "priceField": "Price",
+      "nominalReturnField": "Nominal_Return",
+      "realReturnField": "Real_Return",
+      "currencyEvidence": "US series name and US CPI column"
+    },
+    "tbills_us": {
+      "currency": "USD",
+      "priceField": "Price",
+      "nominalReturnField": "Nominal_Return",
+      "realReturnField": "Real_Return",
+      "currencyEvidence": "US series name and US CPI column"
+    },
+    "us_total_market": {
+      "currency": "USD",
+      "priceField": "Price",
+      "nominalReturnField": "Nominal_Return",
+      "realReturnField": "Real_Return",
+      "currencyEvidence": "US series name and US CPI column"
+    },
+    "highyield_us": {
+      "currency": "USD",
+      "priceField": "Price",
+      "nominalReturnField": "Nominal_Return",
+      "realReturnField": "Real_Return",
+      "currencyEvidence": "US series name and US CPI column"
+    },
+    "us_lt_govt_bonds": {
+      "currency": "USD",
+      "priceField": "Price",
+      "nominalReturnField": "Nominal_Return",
+      "realReturnField": "Real_Return",
+      "currencyEvidence": "US series name and US CPI column"
+    }
+  },
+  "caveats": [
+    "The existing real return columns are based on US CPI and must not be reused for a French real return calculation.",
+    "The metadata records the currency used for conversion; it does not claim that every index has identical underlying economic currency exposure.",
+    "Return series total-return treatment should be verified against the original source methodology before presenting a final label."
+  ]
+}

@@ -18,6 +18,8 @@ import {
 import { Activity, AlertTriangle, ArrowDownRight, ArrowUpRight, BarChart3, CalendarDays, CircleHelp, Download, EyeOff, RotateCcw, Search, SlidersHorizontal } from "lucide-react";
 import {
   Asset,
+  Currency,
+  CurrencyContext,
   computeStats,
   computePortfolio,
   computeCorrelationDetails,
@@ -27,6 +29,7 @@ import {
   formatPercent,
   Mode,
   normalizeRows,
+  localizeRows,
   PortfolioStats,
   returnValue,
   Row,
@@ -151,10 +154,12 @@ function PeriodSelector({ start, end, onChange }: { start: number; end: number; 
 function App() {
   const isCorrelationPage = window.location.pathname.replace(/\/+$/, "") === "/correlations";
   const [assets, setAssets] = useState<Asset[]>(fallbackAssets);
-  const [data, setData] = useState<Dataset>({});
+  const [rawData, setRawData] = useState<Dataset>({});
+  const [currencyContext, setCurrencyContext] = useState<CurrencyContext>({ usdPerEur: {}, frenchInflation: {} });
   const initialParams = new URLSearchParams(window.location.search);
   const [selected, setSelected] = useState<string[]>(readIds(initialParams.get("assets")));
   const [mode, setMode] = useState<Mode>(initialParams.get("mode") === "real" ? "real" : "nominal");
+  const [currency, setCurrency] = useState<Currency>(initialParams.get("currency") === "usd" ? "usd" : "eur");
   const [range, setRange] = useState<[number, number]>([Number(initialParams.get("start")) || 1970, Number(initialParams.get("end")) || 2025]);
   const [commonPeriod, setCommonPeriod] = useState(initialParams.get("common") !== "false");
   const [activeTab, setActiveTab] = useState<Tab>(readTab(initialParams.get("tab")));
@@ -169,21 +174,32 @@ function App() {
   const [presetModified, setPresetModified] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const data = useMemo(
+    () => Object.fromEntries(Object.entries(rawData).map(([id, rows]) => [id, localizeRows(rows, currency, currencyContext)])),
+    [currency, currencyContext, rawData],
+  );
 
   useEffect(() => {
     let cancelled = false;
     async function load() {
       try {
-        const [indexResponse, presetsResponse] = await Promise.all([
+        const [indexResponse, presetsResponse, fxResponse, cpiResponse] = await Promise.all([
           fetch("/data/assets_index.json"),
           fetch("/data/candidate_presets.json"),
+          fetch("/data/fx_usd_per_eur_historical_1960_2025.csv"),
+          fetch("/data/french_cpi_dec_dec_1960_2025.csv"),
         ]);
         if (!indexResponse.ok) throw new Error("Le registre des actifs est introuvable.");
         if (!presetsResponse.ok) throw new Error("Les allocations candidates sont introuvables.");
+        if (!fxResponse.ok || !cpiResponse.ok) throw new Error("Les séries de change et d'inflation sont introuvables.");
         const [registry, presets] = await Promise.all([
           indexResponse.json() as Promise<Asset[]>,
           presetsResponse.json() as Promise<CandidatePreset[]>,
         ]);
+        const [fxCsv, cpiCsv] = await Promise.all([fxResponse.text(), cpiResponse.text()]);
+        const fxRows = Papa.parse<Record<string, unknown>>(fxCsv, { header: true, dynamicTyping: true, skipEmptyLines: true }).data;
+        const cpiRows = Papa.parse<Record<string, unknown>>(cpiCsv, { header: true, dynamicTyping: true, skipEmptyLines: true }).data;
+        const annual = (rows: Record<string, unknown>[], valueKey: string) => Object.fromEntries(rows.map((row) => [Number(row.Year), Number(row[valueKey])]).filter(([year, value]) => Number.isFinite(year) && Number.isFinite(value)));
         const loaded = await Promise.all(
           registry.map(async (asset) => {
             const response = await fetch(dataUrl(asset.csvFile));
@@ -196,7 +212,8 @@ function App() {
         if (cancelled) return;
         setAssets(registry);
         setPresetDefinitions(presets);
-        setData(Object.fromEntries(loaded));
+        setRawData(Object.fromEntries(loaded));
+        setCurrencyContext({ usdPerEur: annual(fxRows, "USD_per_EUR"), frenchInflation: annual(cpiRows, "Inflation_Dec_Dec_Pct") });
         const sharedSelection = selected.filter((id) => registry.some((asset) => asset.id === id));
         const initialSelection = sharedSelection.length ? sharedSelection : preferredIds.filter((id) => registry.some((asset) => asset.id === id));
         setSelected(initialSelection);
@@ -217,11 +234,12 @@ function App() {
     params.set("tab", activeTab);
     params.set("assets", selected.join(","));
     params.set("mode", mode);
+    params.set("currency", currency);
     params.set("common", String(commonPeriod));
     params.set("start", String(range[0]));
     params.set("end", String(range[1]));
     window.history.replaceState(null, "", `${window.location.pathname}?${params.toString()}`);
-  }, [activeTab, commonPeriod, isCorrelationPage, loading, mode, range, selected]);
+  }, [activeTab, commonPeriod, currency, isCorrelationPage, loading, mode, range, selected]);
 
   const selectedAssets = useMemo(() => assets.filter((asset) => selected.includes(asset.id) && data[asset.id]?.length), [assets, data, selected]);
   const commonBounds = selectedAssets.map((asset) => dataBounds(data[asset.id], [asset.startYear, asset.endYear]));
@@ -233,9 +251,9 @@ function App() {
 
   const stats = useMemo(() => Object.fromEntries(selectedAssets.map((asset) => [asset.id, computeStats(data[asset.id], start, end, mode)])), [data, end, mode, selectedAssets, start]);
 
-  const automaticCandidate = useMemo(() => {
-    if (activePreset !== "custom" || selectedAssets.length === 0 || end <= start) return null;
-    return searchPortfolioCandidates(
+  const automaticProposal = useMemo(() => {
+    if (activePreset !== "custom" || selectedAssets.length === 0 || end <= start) return { candidate: null, meetsConstraint: false };
+    const candidate = searchPortfolioCandidates(
       data,
       selectedAssets.map((asset) => asset.id),
       start,
@@ -245,7 +263,22 @@ function App() {
       5,
       1,
     )[0] ?? null;
+    if (candidate) return { candidate, meetsConstraint: true };
+
+    const minimumDrawdownCandidate = searchPortfolioCandidates(
+      data,
+      selectedAssets.map((asset) => asset.id),
+      start,
+      end,
+      mode,
+      null,
+      5,
+      1,
+      "minimumDrawdown",
+    )[0] ?? null;
+    return { candidate: minimumDrawdownCandidate, meetsConstraint: false };
   }, [activePreset, data, end, mode, selectedAssets, start]);
+  const automaticCandidate = automaticProposal.candidate;
 
   useEffect(() => {
     if (loading || activePreset !== "custom") return;
@@ -420,6 +453,7 @@ function App() {
     setWeights(Object.fromEntries(assets.map((asset) => [asset.id, fallbackSelection.includes(asset.id) ? 100 / Math.max(1, fallbackSelection.length) : 0])));
     setCommonPeriod(true);
     setRange([1970, 2025]);
+    setCurrency("eur");
     setMode("nominal");
     setActiveTab("overview");
     setHiddenAssets([]);
@@ -463,7 +497,8 @@ function App() {
                <div className="context-bar">
                  <div className="context-selection"><span className="section-index">Analyse active</span><div className="context-assets">{selectedAssets.length ? selectedAssets.map((asset) => <span key={asset.id} className="context-asset" style={{ "--asset-color": asset.accentColor } as React.CSSProperties}><i />{asset.name}</span>) : <span className="context-empty">Aucun actif sélectionné</span>}</div></div>
                  <div className="context-detail"><span>Période</span><strong>{selectedCount ? `${start}–${end}` : "—"}</strong></div>
-                 <div className="context-detail"><span>Lecture</span><strong>{mode === "nominal" ? "Nominal" : "Réel"}</strong></div>
+                  <div className="context-detail"><span>Devise</span><strong>{currency === "eur" ? "EUR non couvert" : "USD"}</strong></div>
+                  <div className="context-detail"><span>Lecture</span><strong>{mode === "nominal" ? "Nominal" : "Réel"}</strong></div>
                  <div className="context-actions"><button className="context-edit" onClick={() => setConfigurationOpen((open) => !open)}>{configurationOpen ? "Fermer" : "Modifier"}</button><button className="reset-button" onClick={resetConfiguration} title="Réinitialiser la configuration"><RotateCcw size={14} /> Réinitialiser</button></div>
                </div>
                {commonPeriod && periodGap >= 5 && <div className="context-warning"><AlertTriangle size={15} /><span>La période commune est limitée à <strong>{commonStart}–{commonEnd}</strong> par {limitingAssets.map((asset) => asset.name).join(", ")}.</span><button onClick={() => setConfigurationOpen(true)}>Voir pourquoi</button></div>}
@@ -507,11 +542,16 @@ function App() {
                     <p className="period-explanation">{commonPeriod ? selectedCount ? `La période s'ajuste automatiquement aux années disponibles pour les ${selectedCount} actifs sélectionnés. Elle sera recalculée à chaque changement.` : "Sélectionne au moins un actif pour calculer la période commune." : "Chaque actif est analysé sur la période saisie, lorsque ses données sont disponibles. Les actifs dont les données CSV ne couvrent pas toute la plage sont désactivés."}</p>
                  </section>
 
-                 <section className="configuration-step">
-                   <div className="step-heading"><span className="step-number">03</span><div><h3>Lecture</h3><p>Choisis l'effet de l'inflation sur les rendements.</p></div><strong>{mode === "nominal" ? "Nominal" : "Réel"}</strong></div>
-                   <div className="mode-toggle"><button className={mode === "nominal" ? "active" : ""} onClick={() => setMode("nominal")}>Nominal</button><button className={mode === "real" ? "active" : ""} onClick={() => setMode("real")}>Réel</button></div>
-                   <p className="period-explanation">Nominal conserve les montants courants ; réel retire l'effet de l'inflation.</p>
-                 </section>
+                  <section className="configuration-step">
+                    <div className="step-heading"><span className="step-number">03</span><div><h3>Lecture</h3><p>Choisis l'effet de l'inflation sur les rendements.</p></div><strong>{mode === "nominal" ? "Nominal" : "Réel"}</strong></div>
+                    <div className="mode-toggle"><button className={mode === "nominal" ? "active" : ""} onClick={() => setMode("nominal")}>Nominal</button><button className={mode === "real" ? "active" : ""} onClick={() => setMode("real")}>Réel</button></div>
+                    <p className="period-explanation">Nominal conserve les montants courants ; réel retire l'effet de l'inflation.</p>
+                  </section>
+                  <section className="configuration-step">
+                    <div className="step-heading"><span className="step-number">04</span><div><h3>Devise de référence</h3><p>Le mode EUR convertit les rendements USD sans couverture de change.</p></div><strong>{currency === "eur" ? "EUR" : "USD"}</strong></div>
+                    <div className="mode-toggle"><button className={currency === "usd" ? "active" : ""} onClick={() => setCurrency("usd")}>USD historique</button><button className={currency === "eur" ? "active" : ""} onClick={() => setCurrency("eur")}>EUR non couvert</button></div>
+                    <p className="period-explanation">En EUR, la série commence en 1961 et utilise le taux USD/EUR historique puis le taux BCE à partir de 1999.</p>
+                  </section>
                </div>
                {selectedCount === 0 && <div className="configuration-message empty"><CircleHelp size={16} /> Sélectionne au moins un actif pour commencer l'analyse.</div>}
                </div>}
@@ -520,7 +560,7 @@ function App() {
              {selectedCount > 0 && <>
              <section className="signal-strip">
               <div><span className="strip-label">Fenêtre analysée</span><strong>{start} <span>→</span> {end}</strong><small>{duration} années</small></div>
-              <div><span className="strip-label">Lecture courante</span><strong>{mode === "nominal" ? "Rendements nominaux" : "Rendements après inflation"}</strong><small>Dividendes réinvestis quand disponibles</small></div>
+               <div><span className="strip-label">Lecture courante</span><strong>{currency === "eur" ? "EUR non couvert" : "USD"} · {mode === "nominal" ? "Nominaux" : "Après inflation"}</strong><small>Dividendes réinvestis quand disponibles</small></div>
                <div><span className="strip-label">Actifs actifs</span><strong>{selectedCount}</strong><small>{activePreset === "custom" ? `Maximum ${MAX_SELECTED_ASSETS} séries` : "Ventilation de la candidate"}</small></div>
              </section>
 
@@ -533,7 +573,7 @@ function App() {
               {activeTab === "growth" && <ChartCard title={`100 $ investis en ${start}`} subtitle={`Croissance cumulée en termes ${activeLabel}s, avec réinvestissement des rendements disponibles.`} icon={<Activity size={18} />} data={growthData} columns={chartColumns} format="money" legend={<AssetLegend assets={selectedAssets} hiddenAssets={hiddenAssets} onToggle={toggleHiddenAsset} />} metadata={{ unit: "Valeur de 100 $ · échelle logarithmique", source: "Corpus historique consolidé", period: `${start}–${end}`, observations: chartObservationCount }}><ResponsiveContainer width="100%" height={390}><AreaChart data={growthData}><ChartGrid /><XAxis dataKey="year" {...axisProps} /><YAxis scale="log" domain={["auto", "auto"]} {...axisProps} tickFormatter={formatMoney} /><Tooltip content={<ChartTooltip assets={assets} type="money" />} />{crisisMarkers.filter((marker) => marker.year >= start && marker.year <= end).map((marker) => <ReferenceLine key={marker.year} x={marker.year} stroke="#a6b3bb" strokeDasharray="4 4" label={{ value: marker.label, position: "insideTop", fill: "#718290", fontSize: 10 }} />)}{visibleChartAssets.map((asset) => <Area key={asset.id} type="monotone" dataKey={asset.id} stroke={asset.accentColor} fill={asset.accentColor} fillOpacity={0.08} strokeWidth={2.5} connectNulls={false} />)}</AreaChart></ResponsiveContainer></ChartCard>}
               {activeTab === "decades" && <ChartCard title={`TCAM par décennie · ${activeLabel}`} subtitle="Moyenne géométrique des rendements annuels disponibles dans chaque décennie." icon={<CalendarDays size={18} />} data={decadeData} columns={decadeColumns} format="percent" legend={<AssetLegend assets={selectedAssets} hiddenAssets={hiddenAssets} onToggle={toggleHiddenAsset} />} metadata={{ unit: "% annualisé par décennie", source: "Corpus historique consolidé", period: `${start}–${end}`, observations: chartObservationCount }}><ResponsiveContainer width="100%" height={390}><BarChart data={decadeData}><ChartGrid /><XAxis dataKey="decade" {...axisProps} /><YAxis {...axisProps} tickFormatter={(value) => `${value}%`} /><Tooltip content={<ChartTooltip assets={assets} type="percent" />} /><ReferenceLine y={0} stroke="#18324a" />{visibleChartAssets.map((asset) => <Bar key={asset.id} dataKey={asset.id} fill={asset.accentColor} radius={[3, 3, 0, 0]} />)}</BarChart></ResponsiveContainer></ChartCard>}
 
-               {activeTab === "portfolio" && <PortfolioView assets={selectedAssets} data={data} phases={visiblePhases} weights={weights} portfolio={portfolio} equalPortfolio={equalPortfolio} contributions={portfolioContributions} correlations={correlations} weightedCorrelation={weightedCorrelation} diversificationRatio={diversificationRatio} mode={mode} presetModified={presetModified} automaticWeights={automaticWeights} automaticCandidateAvailable={automaticCandidate !== null} activePreset={activePreset} onWeightChange={updateWeight} onNormalize={normalizeWeights} />}
+               {activeTab === "portfolio" && <PortfolioView assets={selectedAssets} data={data} phases={visiblePhases} weights={weights} portfolio={portfolio} equalPortfolio={equalPortfolio} contributions={portfolioContributions} correlations={correlations} weightedCorrelation={weightedCorrelation} diversificationRatio={diversificationRatio} mode={mode} presetModified={presetModified} automaticWeights={automaticWeights} automaticCandidateAvailable={automaticCandidate !== null} automaticCandidateMeetsConstraint={automaticProposal.meetsConstraint} activePreset={activePreset} onWeightChange={updateWeight} onNormalize={normalizeWeights} />}
               {activeTab === "correlations" && <CorrelationView assets={selectedAssets} data={data} mode={mode} embedded start={start} end={end} />}
 
               {activeTab !== "correlations" && activeTab !== "portfolio" && <HistoricalTable assets={selectedAssets} data={data} phases={visiblePhases} mode={mode} />}
@@ -541,7 +581,7 @@ function App() {
            </>
         )}
 
-        <footer><span>Sources consolidées : Federal Reserve · MSCI · FTSE NAREIT · Bloomberg · CoinGecko</span><span>Analyse exploratoire · USD · 1925–2025</span></footer>
+         <footer><span>Sources consolidées : Federal Reserve · MSCI · FTSE NAREIT · Bloomberg · CoinGecko</span><span>Analyse exploratoire · {currency === "eur" ? "EUR non couvert · 1961–2025" : "USD · 1925–2025"}</span></footer>
       </div>
     </main>
   );
@@ -767,6 +807,7 @@ function PortfolioView({
   presetModified,
   automaticWeights,
   automaticCandidateAvailable,
+  automaticCandidateMeetsConstraint,
   onWeightChange,
   onNormalize,
 }: {
@@ -785,6 +826,7 @@ function PortfolioView({
   presetModified: boolean;
   automaticWeights: boolean;
   automaticCandidateAvailable: boolean;
+  automaticCandidateMeetsConstraint: boolean;
   onWeightChange: (id: string, value: number) => void;
   onNormalize: () => void;
 }) {
@@ -796,7 +838,7 @@ function PortfolioView({
     <section className="portfolio-controls">
       <div className="card-heading compact">
         <div className="heading-icon"><SlidersHorizontal size={17} /></div>
-        <div><h2>Construire une allocation</h2><p>{activePreset === "custom" ? automaticWeights ? "Proposition automatique : meilleur TCAM historique sous drawdown maximal de 40 %. Tu peux modifier les pondérations." : automaticCandidateAvailable ? "Pondérations personnalisées. Les pondérations sont normalisées pour le calcul." : "Aucune allocation ne respecte un drawdown maximal de 40 % sur cette configuration." : `${presetModified ? "Allocation candidate modifiée" : "Ventilation candidate chargée"}. Les actifs du picker sont verrouillés.`}</p></div>
+        <div><h2>Construire une allocation</h2><p>{activePreset === "custom" ? automaticWeights ? automaticCandidateMeetsConstraint ? "Proposition automatique : meilleur TCAM historique sous drawdown maximal de 40 %. Tu peux modifier les pondérations." : `Aucune allocation ne respecte le drawdown maximal de 40 %. Proposition de repli : pondération au drawdown historique le plus faible (${formatPercent(portfolio?.maxDrawdown)}).` : automaticCandidateAvailable ? "Pondérations personnalisées. Les pondérations sont normalisées pour le calcul." : "Aucune allocation historique ne peut être calculée sur cette configuration." : `${presetModified ? "Allocation candidate modifiée" : "Ventilation candidate chargée"}. Les actifs du picker sont verrouillés.`}</p></div>
       </div>
       <div className="weight-list">
         {assets.map((asset) => {

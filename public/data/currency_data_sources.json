@@ -1,0 +1,34 @@
+{
+  "referenceCurrency": "EUR",
+  "period": "1960-2025",
+  "exchangeRate": {
+    "file": "fx_usd_per_eur_year_end_1998_2025.csv",
+    "quote": "USD per EUR",
+    "frequency": "annual year-end",
+    "annualObservation": "last available ECB reference rate in December",
+    "source": "ECB EXR.D.USD.EUR.SP00.A from 1999; OECD CCUSSP01FRM650N euro-equivalent history before 1999",
+    "sourceUrl": "https://data-api.ecb.europa.eu/service/data/EXR/D.USD.EUR.SP00.A",
+    "historicalSource": "OECD CCUSSP01FRM650N",
+    "historicalSourceUrl": "https://fred.stlouisfed.org/series/CCUSSP01FRM650N",
+    "historicalCoverage": "1960-1998",
+    "historicalConvention": "The OECD series expresses the legacy French-currency history as an euro-equivalent exchange rate, avoiding a discontinuity from French francs to euros.",
+    "francSeriesFile": "fx_french_franc_per_usd_historical_1960_1998.csv",
+    "francSeriesSource": "FRED EXFRUS from 1971; derived using the fixed 1 EUR = 6.55957 FRF conversion before 1971",
+    "francSeriesUrl": "https://fred.stlouisfed.org/series/EXFRUS",
+    "no1998Proxy": true
+  },
+  "inflation": {
+    "file": "french_cpi_dec_dec_1960_2025.csv",
+    "index": "French CPI, all households, all items",
+    "source": "OECD CPALTT01FRM657N for 1960-1998; INSEE series 001759970 from 1999",
+    "sourceUrl": "https://api.insee.fr/series/BDM/V1/data/SERIES_BDM/001759970",
+    "historicalSourceUrl": "https://fred.stlouisfed.org/series/CPALTT01FRM657N",
+    "annualInflation": "December-to-December",
+    "historicalMethod": "Monthly OECD rates compounded over January-December"
+  },
+  "retrieved": "2026-10-04",
+  "notes": [
+    "These files are data-only preparation; application code does not consume them yet.",
+    "The pre-1999 history is an euro-equivalent reconstruction based on the OECD series, with a separate FRF/USD file for traceability."
+  ]
+}
