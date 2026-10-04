@@ -43,6 +43,16 @@ type ChartRow = Record<string, number | string | null>;
 type ChartColumn = { key: string; label: string };
 type AssetCategory = "Tous" | "Actions" | "Obligations" | "Immobilier" | "Métaux" | "Alternatives";
 type ChartMetadata = { unit: string; source: string; period: string; observations: number };
+type CurrencyComparisonPoint = {
+  year: number;
+  usdValue: number;
+  usdReturn: number;
+  usdDrawdown: number;
+  currentReturn: number;
+  currentDrawdown: number;
+  fxReturn: number | null;
+};
+type CurrencyComparison = { points: CurrencyComparisonPoint[]; usd: PortfolioStats };
 
 interface CandidatePreset {
   id: Exclude<PresetId, "custom">;
@@ -74,7 +84,8 @@ const chartTabs: { id: Tab; label: string }[] = [
   { id: "decades", label: "Décennies" },
 ]; 
 
-const dataUrl = (file: string) => `/data/${encodeURIComponent(file)}`;
+const baseUrl = import.meta.env.BASE_URL;
+const dataUrl = (file: string) => `${baseUrl}data/${encodeURIComponent(file)}`;
 const preferredIds = ["msci_world", "gold", "us_lt_govt_bonds"];
 const MATRIX_ASSETS_PARAM = "matrixAssets";
 const tabIds = new Set<Tab>(["overview", "returns", "growth", "decades", "portfolio", "correlations"]);
@@ -152,7 +163,7 @@ function PeriodSelector({ start, end, onChange }: { start: number; end: number; 
 }
 
 function App() {
-  const isCorrelationPage = window.location.pathname.replace(/\/+$/, "") === "/correlations";
+  const isCorrelationPage = window.location.pathname.replace(/\/+$/, "") === `${baseUrl}correlations`.replace(/\/+$/, "");
   const [assets, setAssets] = useState<Asset[]>(fallbackAssets);
   const [rawData, setRawData] = useState<Dataset>({});
   const [currencyContext, setCurrencyContext] = useState<CurrencyContext>({ usdPerEur: {}, frenchInflation: {} });
@@ -184,10 +195,10 @@ function App() {
     async function load() {
       try {
         const [indexResponse, presetsResponse, fxResponse, cpiResponse] = await Promise.all([
-          fetch("/data/assets_index.json"),
-          fetch("/data/candidate_presets.json"),
-          fetch("/data/fx_usd_per_eur_historical_1960_2025.csv"),
-          fetch("/data/french_cpi_dec_dec_1960_2025.csv"),
+          fetch(`${baseUrl}data/assets_index.json`),
+          fetch(`${baseUrl}data/candidate_presets.json`),
+          fetch(`${baseUrl}data/fx_usd_per_eur_historical_1960_2025.csv`),
+          fetch(`${baseUrl}data/french_cpi_dec_dec_1960_2025.csv`),
         ]);
         if (!indexResponse.ok) throw new Error("Le registre des actifs est introuvable.");
         if (!presetsResponse.ok) throw new Error("Les allocations candidates sont introuvables.");
@@ -348,6 +359,27 @@ function App() {
 
   const portfolioWeights = Object.fromEntries(selectedAssets.map((asset) => [asset.id, weights[asset.id] ?? 0]));
   const portfolio = computePortfolio(data, portfolioWeights, start, end, mode);
+  const usdPortfolio = currency === "eur" ? computePortfolio(rawData, portfolioWeights, start, end, mode) : null;
+  const currencyComparison: CurrencyComparison | null = currency === "eur" && portfolio && usdPortfolio
+    ? {
+        usd: usdPortfolio,
+        points: portfolio.points.flatMap((point) => {
+          const usdPoint = usdPortfolio.points.find((candidate) => candidate.year === point.year);
+          if (!usdPoint) return [];
+          const currentFx = currencyContext.usdPerEur[point.year];
+          const previousFx = currencyContext.usdPerEur[point.year - 1];
+          return [{
+            year: point.year,
+            usdValue: usdPoint.value,
+            usdReturn: usdPoint.return,
+            usdDrawdown: usdPoint.drawdown,
+            currentReturn: point.return,
+            currentDrawdown: point.drawdown,
+            fxReturn: Number.isFinite(currentFx) && Number.isFinite(previousFx) ? (previousFx / currentFx - 1) * 100 : null,
+          }];
+        }),
+      }
+    : null;
   const equalWeights = Object.fromEntries(selectedAssets.map((asset) => [asset.id, 100 / Math.max(1, selectedAssets.length)]));
   const equalPortfolio = computePortfolio(data, equalWeights, start, end, mode);
   const correlations = computeCorrelationMatrix(data, selectedAssets.map((asset) => asset.id), start, end, mode);
@@ -482,8 +514,8 @@ function App() {
         </header>
 
         <nav className="page-navigation" aria-label="Navigation principale">
-          <a className={!isCorrelationPage ? "active" : ""} aria-current={!isCorrelationPage ? "page" : undefined} href="/">Analyse des actifs</a>
-          <a className={isCorrelationPage ? "active" : ""} aria-current={isCorrelationPage ? "page" : undefined} href="/correlations">Matrice globale</a>
+          <a className={!isCorrelationPage ? "active" : ""} aria-current={!isCorrelationPage ? "page" : undefined} href={baseUrl}>Analyse des actifs</a>
+          <a className={isCorrelationPage ? "active" : ""} aria-current={isCorrelationPage ? "page" : undefined} href={`${baseUrl}correlations`}>Matrice globale</a>
         </nav>
 
         {loading && <div className="loading-panel"><Activity size={18} /> Chargement du corpus historique...</div>}
@@ -573,7 +605,7 @@ function App() {
               {activeTab === "growth" && <ChartCard title={`100 $ investis en ${start}`} subtitle={`Croissance cumulée en termes ${activeLabel}s, avec réinvestissement des rendements disponibles.`} icon={<Activity size={18} />} data={growthData} columns={chartColumns} format="money" legend={<AssetLegend assets={selectedAssets} hiddenAssets={hiddenAssets} onToggle={toggleHiddenAsset} />} metadata={{ unit: "Valeur de 100 $ · échelle logarithmique", source: "Corpus historique consolidé", period: `${start}–${end}`, observations: chartObservationCount }}><ResponsiveContainer width="100%" height={390}><AreaChart data={growthData}><ChartGrid /><XAxis dataKey="year" {...axisProps} /><YAxis scale="log" domain={["auto", "auto"]} {...axisProps} tickFormatter={formatMoney} /><Tooltip content={<ChartTooltip assets={assets} type="money" />} />{crisisMarkers.filter((marker) => marker.year >= start && marker.year <= end).map((marker) => <ReferenceLine key={marker.year} x={marker.year} stroke="#a6b3bb" strokeDasharray="4 4" label={{ value: marker.label, position: "insideTop", fill: "#718290", fontSize: 10 }} />)}{visibleChartAssets.map((asset) => <Area key={asset.id} type="monotone" dataKey={asset.id} stroke={asset.accentColor} fill={asset.accentColor} fillOpacity={0.08} strokeWidth={2.5} connectNulls={false} />)}</AreaChart></ResponsiveContainer></ChartCard>}
               {activeTab === "decades" && <ChartCard title={`TCAM par décennie · ${activeLabel}`} subtitle="Moyenne géométrique des rendements annuels disponibles dans chaque décennie." icon={<CalendarDays size={18} />} data={decadeData} columns={decadeColumns} format="percent" legend={<AssetLegend assets={selectedAssets} hiddenAssets={hiddenAssets} onToggle={toggleHiddenAsset} />} metadata={{ unit: "% annualisé par décennie", source: "Corpus historique consolidé", period: `${start}–${end}`, observations: chartObservationCount }}><ResponsiveContainer width="100%" height={390}><BarChart data={decadeData}><ChartGrid /><XAxis dataKey="decade" {...axisProps} /><YAxis {...axisProps} tickFormatter={(value) => `${value}%`} /><Tooltip content={<ChartTooltip assets={assets} type="percent" />} /><ReferenceLine y={0} stroke="#18324a" />{visibleChartAssets.map((asset) => <Bar key={asset.id} dataKey={asset.id} fill={asset.accentColor} radius={[3, 3, 0, 0]} />)}</BarChart></ResponsiveContainer></ChartCard>}
 
-               {activeTab === "portfolio" && <PortfolioView assets={selectedAssets} data={data} phases={visiblePhases} weights={weights} portfolio={portfolio} equalPortfolio={equalPortfolio} contributions={portfolioContributions} correlations={correlations} weightedCorrelation={weightedCorrelation} diversificationRatio={diversificationRatio} mode={mode} presetModified={presetModified} automaticWeights={automaticWeights} automaticCandidateAvailable={automaticCandidate !== null} automaticCandidateMeetsConstraint={automaticProposal.meetsConstraint} activePreset={activePreset} onWeightChange={updateWeight} onNormalize={normalizeWeights} />}
+                {activeTab === "portfolio" && <PortfolioView assets={selectedAssets} data={data} phases={visiblePhases} weights={weights} portfolio={portfolio} equalPortfolio={equalPortfolio} currencyComparison={currencyComparison} contributions={portfolioContributions} correlations={correlations} weightedCorrelation={weightedCorrelation} diversificationRatio={diversificationRatio} mode={mode} presetModified={presetModified} automaticWeights={automaticWeights} automaticCandidateAvailable={automaticCandidate !== null} automaticCandidateMeetsConstraint={automaticProposal.meetsConstraint} activePreset={activePreset} onWeightChange={updateWeight} onNormalize={normalizeWeights} />}
               {activeTab === "correlations" && <CorrelationView assets={selectedAssets} data={data} mode={mode} embedded start={start} end={end} />}
 
               {activeTab !== "correlations" && activeTab !== "portfolio" && <HistoricalTable assets={selectedAssets} data={data} phases={visiblePhases} mode={mode} />}
@@ -798,6 +830,7 @@ function PortfolioView({
   weights,
   portfolio,
   equalPortfolio,
+  currencyComparison,
   contributions,
   correlations,
   weightedCorrelation,
@@ -817,6 +850,7 @@ function PortfolioView({
   weights: Record<string, number>;
   portfolio: PortfolioStats | null;
   equalPortfolio: PortfolioStats | null;
+  currencyComparison: CurrencyComparison | null;
   contributions: Array<{ asset: Asset; weight: number; contribution: number | null }>;
   correlations: Record<string, Record<string, number | null>>;
   weightedCorrelation: number | null;
@@ -833,6 +867,12 @@ function PortfolioView({
   const totalWeight = assets.reduce((sum, asset) => sum + (weights[asset.id] ?? 0), 0);
   const normalizedWeights = Object.fromEntries(assets.map((asset) => [asset.id, totalWeight > 0 ? (weights[asset.id] ?? 0) / totalWeight * 100 : 0]));
   const portfolioData = portfolio?.points ?? [];
+  const drawdownData = currencyComparison
+    ? portfolioData.map((point) => ({ ...point, ...(currencyComparison.points.find((comparisonPoint) => comparisonPoint.year === point.year) ?? {}) }))
+    : portfolioData;
+  const trajectoryData = currencyComparison
+    ? portfolioData.map((point) => ({ ...point, usdValue: currencyComparison.points.find((comparisonPoint) => comparisonPoint.year === point.year)?.usdValue ?? null }))
+    : portfolioData;
 
   return <div className="portfolio-layout">
     <section className="portfolio-controls">
@@ -874,16 +914,17 @@ function PortfolioView({
            <Metric label="Années positives" value={`${portfolio.positiveRate.toFixed(0)} %`} description="Part des années au-dessus de 0 %." positive />
           <Metric label="Pire année" value={portfolio.worst ? `${portfolio.worst.year} · ${formatPercent(portfolio.worst.return)}` : "n.d."} description="Rendement annuel le plus faible." negative />
           <Metric label="Récupération" value={portfolio.recoveryYears === null ? "n.d." : `${portfolio.recoveryYears} an${portfolio.recoveryYears > 1 ? "s" : ""}`} description="Temps pour retrouver le précédent sommet." />
-        </section>
-        <PortfolioComparison portfolio={portfolio} equalPortfolio={equalPortfolio} mode={mode} />
-        <section className="chart-card portfolio-chart">
-          <div className="card-heading compact"><div className="heading-icon"><Activity size={17} /></div><div><h2>Trajectoire de l'allocation</h2><p>Valeur de 100 unités investies au début de la période.</p></div></div>
-          <ResponsiveContainer width="100%" height={330}><LineChart data={portfolioData}><ChartGrid /><XAxis dataKey="year" {...axisProps} /><YAxis scale="log" domain={["auto", "auto"]} {...axisProps} tickFormatter={formatMoney} /><Tooltip content={<PortfolioTooltip />} /><Line type="monotone" dataKey="value" name="Valeur" stroke="#e76f51" strokeWidth={2.5} dot={false} /></LineChart></ResponsiveContainer><ChartMeta unit="Valeur de 100 unités · échelle logarithmique" source="Rendements annuels consolidés" period={`${portfolioData[0]?.year ?? "—"}–${portfolioData.at(-1)?.year ?? "—"}`} observations={portfolioData.length} />
-        </section>
-        <ContributionChart contributions={contributions} mode={mode} />
-        <section className="chart-card drawdown-chart">
-         <div className="card-heading compact"><div className="heading-icon cool"><ArrowDownRight size={17} /></div><div><h2>Drawdown dans le temps</h2><p>Écart entre la valeur du portefeuille et son plus-haut historique.</p></div></div>
-         <ResponsiveContainer width="100%" height={260}><AreaChart data={portfolioData}><ChartGrid /><XAxis dataKey="year" {...axisProps} /><YAxis {...axisProps} tickFormatter={(value) => `${value}%`} /><Tooltip content={<DrawdownTooltip />} /><ReferenceLine y={0} stroke="#18324a" /><Area type="monotone" dataKey="drawdown" name="Drawdown" stroke="#cf5b55" fill="#cf5b55" fillOpacity={0.14} /></AreaChart></ResponsiveContainer><ChartMeta unit="Écart au plus-haut · %" source="Simulation du portefeuille" period={`${portfolioData[0]?.year ?? "—"}–${portfolioData.at(-1)?.year ?? "—"}`} observations={portfolioData.length} />
+         </section>
+         <PortfolioComparison portfolio={portfolio} equalPortfolio={equalPortfolio} mode={mode} />
+         {currencyComparison && <CurrencyEffectCard portfolio={portfolio} comparison={currencyComparison} />}
+         <section className="chart-card portfolio-chart">
+           <div className="card-heading compact"><div className="heading-icon"><Activity size={17} /></div><div><h2>Trajectoire de l'allocation</h2><p>Valeur de 100 unités investies au début de la période.</p></div></div>
+           <ResponsiveContainer width="100%" height={330}><LineChart data={trajectoryData}><ChartGrid /><XAxis dataKey="year" {...axisProps} /><YAxis scale="log" domain={["auto", "auto"]} {...axisProps} tickFormatter={formatMoney} /><Tooltip content={<PortfolioTooltip />} /><Line type="monotone" dataKey="value" name={currencyComparison ? "Valeur EUR" : "Valeur"} stroke="#e76f51" strokeWidth={2.5} dot={false} />{currencyComparison && <Line type="monotone" dataKey="usdValue" name="Valeur USD" stroke="#5e82a2" strokeWidth={2} dot={false} />}</LineChart></ResponsiveContainer><ChartMeta unit="Valeur de 100 unités · échelle logarithmique" source="Rendements annuels consolidés" period={`${portfolioData[0]?.year ?? "—"}–${portfolioData.at(-1)?.year ?? "—"}`} observations={portfolioData.length} />
+         </section>
+         <ContributionChart contributions={contributions} mode={mode} />
+         <section className="chart-card drawdown-chart">
+          <div className="card-heading compact"><div className="heading-icon cool"><ArrowDownRight size={17} /></div><div><h2>Drawdown dans le temps</h2><p>Écart entre la valeur du portefeuille et son plus-haut historique.</p></div></div>
+          <ResponsiveContainer width="100%" height={260}><AreaChart data={drawdownData}><ChartGrid /><XAxis dataKey="year" {...axisProps} /><YAxis {...axisProps} tickFormatter={(value) => `${value}%`} /><Tooltip content={<DrawdownTooltip hasCurrencyComparison={Boolean(currencyComparison)} />} /><ReferenceLine y={0} stroke="#18324a" /><Area type="monotone" dataKey="drawdown" name={currencyComparison ? "Drawdown EUR" : "Drawdown"} stroke="#cf5b55" fill="#cf5b55" fillOpacity={0.14} />{currencyComparison && <Line type="monotone" dataKey="usdDrawdown" name="Drawdown USD" stroke="#5e82a2" strokeWidth={2} dot={false} />}</AreaChart></ResponsiveContainer><ChartMeta unit="Écart au plus-haut · %" source="Simulation du portefeuille" period={`${portfolioData[0]?.year ?? "—"}–${portfolioData.at(-1)?.year ?? "—"}`} observations={portfolioData.length} />
        </section>
        <HistoricalTable assets={assets} data={data} phases={phases} mode={mode} />
        <section className="table-card correlation-card">
@@ -910,6 +951,19 @@ function PortfolioComparison({ portfolio, equalPortfolio, mode }: { portfolio: P
   </section>;
 }
 
+function CurrencyEffectCard({ portfolio, comparison }: { portfolio: PortfolioStats; comparison: CurrencyComparison }) {
+  const delta = portfolio.maxDrawdown - comparison.usd.maxDrawdown;
+  const effect = delta < 0 ? "Le change a aggravé le drawdown" : delta > 0 ? "Le change a amorti le drawdown" : "Le change n'a pas modifié le drawdown";
+  return <section className="portfolio-comparison currency-effect-card">
+    <div className="card-heading compact"><div className="heading-icon cool"><ArrowDownRight size={17} /></div><div><h2>Effet du change sur le drawdown</h2><p>Comparaison avec le même portefeuille conservé en USD.</p></div></div>
+    <div className="comparison-grid">
+      <div className="comparison-card"><span>Référence USD</span><strong>{formatPercent(comparison.usd.maxDrawdown)}</strong><small>Drawdown maximal sans conversion EUR.</small></div>
+      <div className="comparison-card active"><span>EUR non couvert</span><strong>{formatPercent(portfolio.maxDrawdown)}</strong><small>Lecture courante du portefeuille.</small></div>
+      <div className="comparison-delta"><span>Écart lié à la devise</span><strong className={delta < 0 ? "negative" : "positive"}>{formatPercent(delta)}</strong><small>{effect}.</small></div>
+    </div>
+  </section>;
+}
+
 function ContributionChart({ contributions, mode }: { contributions: Array<{ asset: Asset; weight: number; contribution: number | null }>; mode: Mode }) {
   const sortedContributions = [...contributions].sort((left, right) => (right.contribution ?? -Infinity) - (left.contribution ?? -Infinity));
   const available = sortedContributions.filter((entry) => entry.contribution !== null);
@@ -927,14 +981,17 @@ function ChartMeta({ unit, source, period, observations }: ChartMetadata) {
   return <div className="chart-metadata"><span>Unité <b>{unit}</b></span><span>Source <b>{source}</b></span><span>Période <b>{period}</b></span><span>Observations <b>{observations}</b></span></div>;
 }
 
-function PortfolioTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ value?: number | null }>; label?: string | number }) {
+function PortfolioTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ name?: string; value?: number | null }>; label?: string | number }) {
   if (!active || !payload?.length) return null;
-  return <div className="chart-tooltip"><strong>{label}</strong><div><span>Valeur</span><b>{formatNumber(payload[0].value, 1)}</b></div></div>;
+  return <div className="chart-tooltip"><strong>{label}</strong>{payload.map((entry) => <div key={entry.name}><span>{entry.name ?? "Valeur"}</span><b>{formatNumber(entry.value, 1)}</b></div>)}</div>;
 }
 
-function DrawdownTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ value?: number | null }>; label?: string | number }) {
+function DrawdownTooltip({ active, payload, label, hasCurrencyComparison }: { active?: boolean; payload?: Array<{ name?: string; value?: number | null; dataKey?: string; payload?: CurrencyComparisonPoint & { drawdown: number } }>; label?: string | number; hasCurrencyComparison?: boolean }) {
   if (!active || !payload?.length) return null;
-  return <div className="chart-tooltip"><strong>{label}</strong><div><span>Drawdown</span><b>{formatPercent(payload[0].value)}</b></div></div>;
+  const point = payload[0].payload;
+  if (!hasCurrencyComparison || point?.usdDrawdown === undefined || point?.usdDrawdown === null) return <div className="chart-tooltip"><strong>{label}</strong><div><span>Drawdown</span><b>{formatPercent(payload[0].value)}</b></div></div>;
+  const drawdownGap = point.currentDrawdown - point.usdDrawdown;
+  return <div className="chart-tooltip"><strong>{label}</strong><div><span>Drawdown EUR</span><b>{formatPercent(point.currentDrawdown)}</b></div><div><span>Drawdown USD</span><b>{formatPercent(point.usdDrawdown)}</b></div><div><span>Écart de drawdown</span><b>{formatPercent(drawdownGap)}</b></div><div><span>Rendement EUR</span><b>{formatPercent(point.currentReturn)}</b></div><div><span>Rendement USD</span><b>{formatPercent(point.usdReturn)}</b></div><div><span>Change USD/EUR</span><b>{formatPercent(point.fxReturn)}</b></div></div>;
 }
 
 function ChartTooltip({ active, payload, label, assets, type }: { active?: boolean; payload?: Array<{ dataKey?: string; value?: number | null }>; label?: string | number; assets: Asset[]; type: "percent" | "money" | "number" }) {

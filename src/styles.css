@@ -174,4 +174,7 @@ button:disabled, input:disabled { cursor: not-allowed; opacity: .45; }
 /* Keep the overview focused on at most three assets per row. */
 .kpi-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 @media (max-width: 980px) { .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+.comparison-delta strong.negative { color: #cf5b55; }
+.comparison-delta strong.positive { color: #258b78; }
 @media (max-width: 760px) { .kpi-grid { grid-template-columns: 1fr; } }
