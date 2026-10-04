@@ -33,7 +33,7 @@ import {
   searchPortfolioCandidates,
 } from "./analytics";
 
-type Tab = "overview" | "price" | "returns" | "growth" | "decades" | "portfolio" | "correlations";
+type Tab = "overview" | "returns" | "growth" | "decades" | "portfolio" | "correlations";
 type Dataset = Record<string, Row[]>;
 type PresetId = "custom" | "pure" | "constrained" | "robust" | "bitcoin";
 type ChartRow = Record<string, number | string | null>;
@@ -67,14 +67,14 @@ const historicalPhases: HistoricalPhase[] = [
 const chartTabs: { id: Tab; label: string }[] = [
   { id: "overview", label: "Vue d'ensemble" },
   { id: "growth", label: "100 $ investis" },
-  { id: "price", label: "Niveaux" },
   { id: "returns", label: "Rendements" },
   { id: "decades", label: "Décennies" },
 ]; 
 
 const dataUrl = (file: string) => `/data/${encodeURIComponent(file)}`;
 const preferredIds = ["msci_world", "gold", "us_lt_govt_bonds"];
-const tabIds = new Set<Tab>(["overview", "price", "returns", "growth", "decades", "portfolio", "correlations"]);
+const tabIds = new Set<Tab>(["overview", "returns", "growth", "decades", "portfolio", "correlations"]);
+const MAX_SELECTED_ASSETS = 6;
 const assetCategories: AssetCategory[] = ["Tous", "Actions", "Obligations", "Immobilier", "Métaux", "Alternatives"];
 const crisisMarkers = [
   { year: 1929, label: "1929" },
@@ -264,22 +264,6 @@ function App() {
     return point;
   }), [data, mode, selectedAssets, years]);
 
-  const priceData = useMemo(() => {
-    const lastCpi = Object.fromEntries(selectedAssets.map((asset) => {
-      const row = data[asset.id].filter((candidate) => candidate.year >= start && candidate.year <= end && Number.isFinite(candidate.cpi)).at(-1);
-      return [asset.id, row?.cpi ?? 100];
-    }));
-    return years.map((year) => {
-      const point: Record<string, number | null> = { year };
-      selectedAssets.forEach((asset) => {
-        const row = data[asset.id].find((candidate) => candidate.year === year);
-        if (!row || !Number.isFinite(row.price)) point[asset.id] = null;
-        else point[asset.id] = mode === "real" && Number.isFinite(row.cpi) ? row.price / row.cpi * lastCpi[asset.id] : row.price;
-      });
-      return point;
-    });
-  }, [data, end, mode, selectedAssets, start, years]);
-
   const growthData = useMemo(() => {
     const values = Object.fromEntries(selectedAssets.map((asset) => [asset.id, 100]));
     return [{ year: start - 1, ...values }, ...years.map((year) => {
@@ -334,7 +318,6 @@ function App() {
     return matchesCategory && matchesSearch;
   });
   const chartObservationCount = selectedAssets.reduce((sum, asset) => sum + data[asset.id].filter((row) => row.year >= start && row.year <= end && returnValue(row, mode) !== null).length, 0);
-  const priceObservationCount = selectedAssets.reduce((sum, asset) => sum + data[asset.id].filter((row) => row.year >= start && row.year <= end && Number.isFinite(row.price)).length, 0);
   const periodGap = selectedAssets.length ? commonStart - Math.min(...selectedAssets.map((asset) => asset.startYear)) : 0;
   const limitingAssets = selectedAssets.filter((asset) => asset.startYear === commonStart);
   const decisionStats = selectedAssets.map((asset) => {
@@ -400,7 +383,7 @@ function App() {
     if (activePreset !== "custom") return;
     setSelected((current) => {
       if (current.includes(id)) return current.length > 1 ? current.filter((item) => item !== id) : current;
-      if (current.length >= 4) return current;
+      if (current.length >= MAX_SELECTED_ASSETS) return current;
       setWeights((previous) => ({ ...previous, [id]: 0 }));
       return [...current, id];
     });
@@ -482,12 +465,12 @@ function App() {
                </div>
                {commonPeriod && periodGap >= 5 && <div className="context-warning"><AlertTriangle size={15} /><span>La période commune est limitée à <strong>{commonStart}–{commonEnd}</strong> par {limitingAssets.map((asset) => asset.name).join(", ")}.</span><button onClick={() => setConfigurationOpen(true)}>Voir pourquoi</button></div>}
                {configurationOpen && <div className="configuration-editor">
-               <div className="control-heading"><div><div className="section-index">Configuration</div><h2>Préparer l'analyse</h2></div><div className="control-heading-actions"><span className="selection-count">{activePreset === "custom" ? `${selectedCount}/4 sélectionnés` : `${presetDefinitions.find((preset) => preset.id === activePreset)?.label ?? "Candidate"}${presetModified ? " · modifiée" : ""}`}</span></div></div>
+                <div className="control-heading"><div><div className="section-index">Configuration</div><h2>Préparer l'analyse</h2></div><div className="control-heading-actions"><span className="selection-count">{activePreset === "custom" ? `${selectedCount}/${MAX_SELECTED_ASSETS} sélectionnés` : `${presetDefinitions.find((preset) => preset.id === activePreset)?.label ?? "Candidate"}${presetModified ? " · modifiée" : ""}`}</span></div></div>
                <div className="configuration-steps">
                   <section className="configuration-step">
-                    <div className="step-heading"><span className="step-number">01</span><div><h3>Actifs</h3><p>Choisis jusqu'à quatre séries à comparer.</p></div><strong>{selectedCount}/4</strong></div>
+                     <div className="step-heading"><span className="step-number">01</span><div><h3>Actifs</h3><p>Choisis jusqu'à six séries à comparer.</p></div><strong>{selectedCount}/{MAX_SELECTED_ASSETS}</strong></div>
                     <div className="candidate-grid">
-                      <button className={`candidate-card custom ${activePreset === "custom" ? "selected" : ""}`} onClick={selectCustom}><div className="candidate-card-heading"><strong>À la carte</strong><span>Libre</span></div><p>Construire une sélection et une allocation personnalisées.</p><div className="candidate-card-footer">Jusqu'à 4 actifs</div></button>
+                       <button className={`candidate-card custom ${activePreset === "custom" ? "selected" : ""}`} onClick={selectCustom}><div className="candidate-card-heading"><strong>À la carte</strong><span>Libre</span></div><p>Construire une sélection et une allocation personnalisées.</p><div className="candidate-card-footer">Jusqu'à {MAX_SELECTED_ASSETS} actifs</div></button>
                       {presetDefinitions.map((preset) => <button key={preset.id} className={`candidate-card ${activePreset === preset.id ? "selected" : ""}`} onClick={() => selectPreset(preset.id)}><div className="candidate-card-heading"><strong>{preset.label}</strong><span>Risque {candidateRisk(preset.id)}</span></div><p>{preset.description}</p><div className="candidate-allocation">{Object.entries(preset.weights).filter(([, weight]) => weight > 0).map(([id, weight]) => { const asset = assets.find((candidate) => candidate.id === id); return <span key={id} style={{ width: `${weight}%`, background: asset?.accentColor ?? "#9aa8b0" }} title={`${asset?.name ?? id}: ${weight} %`} />; })}</div><div className="candidate-card-footer">{preset.start}–{preset.end} · {Object.values(preset.weights).filter((weight) => weight > 0).length} actifs</div></button>)}
                     </div>
                     <p className="preset-description">{activePreset === "custom" ? "Sélectionne les actifs à comparer et construis ta propre allocation." : `${presetDefinitions.find((preset) => preset.id === activePreset)?.description ?? "Allocation candidate calculée sur les données historiques."}${presetModified ? " Les pondérations ont été modifiées." : ""}`}</p>
@@ -500,7 +483,7 @@ function App() {
                          const isSelected = selected.includes(asset.id);
                          const hasData = Boolean(data[asset.id]?.length);
                          const availableForPeriod = !periodRestricted || periodEligibleAssets.has(asset.id);
-                         return <button key={asset.id} className={`asset-chip ${isSelected ? "selected" : ""} ${!hasData || !availableForPeriod ? "unavailable" : ""}`} style={{ "--asset-color": asset.accentColor } as React.CSSProperties} onClick={() => toggleAsset(asset.id)} disabled={!hasData || (periodRestricted && !availableForPeriod) || activePreset !== "custom" || (!isSelected && selected.length >= 4)} title={!hasData ? "Données indisponibles" : !availableForPeriod ? `Indice non disponible sur ${range[0]}–${range[1]}` : undefined} aria-pressed={isSelected}>
+                          return <button key={asset.id} className={`asset-chip ${isSelected ? "selected" : ""} ${!hasData || !availableForPeriod ? "unavailable" : ""}`} style={{ "--asset-color": asset.accentColor } as React.CSSProperties} onClick={() => toggleAsset(asset.id)} disabled={!hasData || (periodRestricted && !availableForPeriod) || activePreset !== "custom" || (!isSelected && selected.length >= MAX_SELECTED_ASSETS)} title={!hasData ? "Données indisponibles" : !availableForPeriod ? `Indice non disponible sur ${range[0]}–${range[1]}` : undefined} aria-pressed={isSelected}>
                            <span className="chip-dot" /> <span>{asset.name}</span><small>{asset.startYear}–{asset.endYear}</small>{!hasData && <small>indisponible</small>}{hasData && !availableForPeriod && <small>hors période</small>}
                          </button>;
                       })}
@@ -535,7 +518,7 @@ function App() {
              <section className="signal-strip">
               <div><span className="strip-label">Fenêtre analysée</span><strong>{start} <span>→</span> {end}</strong><small>{duration} années</small></div>
               <div><span className="strip-label">Lecture courante</span><strong>{mode === "nominal" ? "Rendements nominaux" : "Rendements après inflation"}</strong><small>Dividendes réinvestis quand disponibles</small></div>
-              <div><span className="strip-label">Actifs actifs</span><strong>{selectedCount}</strong><small>{activePreset === "custom" ? "Maximum quatre séries" : "Ventilation de la candidate"}</small></div>
+               <div><span className="strip-label">Actifs actifs</span><strong>{selectedCount}</strong><small>{activePreset === "custom" ? `Maximum ${MAX_SELECTED_ASSETS} séries` : "Ventilation de la candidate"}</small></div>
              </section>
 
              <DecisionSummary bestAsset={bestAsset} lowestRiskAsset={lowestRiskAsset} worstDrawdownAsset={worstDrawdownAsset} mode={mode} />
@@ -543,7 +526,6 @@ function App() {
              <nav className="tabs" aria-label="Vues d'analyse" role="tablist">{chartTabs.map((tab) => <button key={tab.id} role="tab" aria-selected={activeTab === tab.id} className={activeTab === tab.id ? "active" : ""} onClick={() => setActiveTab(tab.id)}>{tab.label}</button>)}<button role="tab" aria-selected={activeTab === "portfolio"} className={activeTab === "portfolio" ? "active" : ""} onClick={() => setActiveTab("portfolio")}>Portefeuille</button><button role="tab" aria-selected={activeTab === "correlations"} className={activeTab === "correlations" ? "active" : ""} onClick={() => setActiveTab("correlations")}>Corrélations de la sélection</button></nav>
 
             {activeTab === "overview" && <Overview assets={selectedAssets} stats={stats} mode={mode} start={start} end={end} />}
-             {activeTab === "price" && <ChartCard title={`Niveaux de prix ${mode === "real" ? "réels" : "nominaux"}`} subtitle="Unités propres à chaque actif ; utilisez la croissance cumulée pour comparer les trajectoires." icon={<SlidersHorizontal size={18} />} data={priceData} columns={chartColumns} format="number" legend={<AssetLegend assets={selectedAssets} hiddenAssets={hiddenAssets} onToggle={toggleHiddenAsset} />} metadata={{ unit: "Unité propre à chaque actif · échelle logarithmique", source: "Corpus historique consolidé", period: `${start}–${end}`, observations: priceObservationCount }}><ResponsiveContainer width="100%" height={390}><LineChart data={priceData}><ChartGrid /><XAxis dataKey="year" {...axisProps} /><YAxis scale="log" domain={["auto", "auto"]} {...axisProps} tickFormatter={(value) => value >= 1000 ? `${Math.round(value / 1000)}k` : value} /><Tooltip content={<ChartTooltip assets={assets} type="number" />} />{crisisMarkers.filter((marker) => marker.year >= start && marker.year <= end).map((marker) => <ReferenceLine key={marker.year} x={marker.year} stroke="#a6b3bb" strokeDasharray="4 4" label={{ value: marker.label, position: "insideTop", fill: "#718290", fontSize: 10 }} />)}{visibleChartAssets.map((asset) => <Line key={asset.id} type="monotone" dataKey={asset.id} stroke={asset.accentColor} strokeWidth={2.5} dot={false} connectNulls={false} />)}</LineChart></ResponsiveContainer></ChartCard>}
               {activeTab === "returns" && <ChartCard title={`Rendements annuels ${activeLabel}s`} subtitle="Les années positives et négatives sont affichées côte à côte pour faire ressortir les régimes de marché." icon={<BarChart3 size={18} />} data={annualData} columns={chartColumns} format="percent" legend={<AssetLegend assets={selectedAssets} hiddenAssets={hiddenAssets} onToggle={toggleHiddenAsset} />} metadata={{ unit: "% par an", source: "Corpus historique consolidé", period: `${start}–${end}`, observations: chartObservationCount }}><ResponsiveContainer width="100%" height={390}><BarChart data={annualData}><ChartGrid /><XAxis dataKey="year" {...axisProps} /><YAxis {...axisProps} tickFormatter={(value) => `${value}%`} /><Tooltip content={<ChartTooltip assets={assets} type="percent" />} /><ReferenceLine y={0} stroke="#18324a" />{crisisMarkers.filter((marker) => marker.year >= start && marker.year <= end).map((marker) => <ReferenceLine key={marker.year} x={marker.year} stroke="#a6b3bb" strokeDasharray="4 4" label={{ value: marker.label, position: "insideTop", fill: "#718290", fontSize: 10 }} />)}{visibleChartAssets.map((asset) => <Bar key={asset.id} dataKey={asset.id} fill={asset.accentColor} radius={[3, 3, 0, 0]} />)}</BarChart></ResponsiveContainer></ChartCard>}
               {activeTab === "growth" && <ChartCard title={`100 $ investis en ${start}`} subtitle={`Croissance cumulée en termes ${activeLabel}s, avec réinvestissement des rendements disponibles.`} icon={<Activity size={18} />} data={growthData} columns={chartColumns} format="money" legend={<AssetLegend assets={selectedAssets} hiddenAssets={hiddenAssets} onToggle={toggleHiddenAsset} />} metadata={{ unit: "Valeur de 100 $ · échelle logarithmique", source: "Corpus historique consolidé", period: `${start}–${end}`, observations: chartObservationCount }}><ResponsiveContainer width="100%" height={390}><AreaChart data={growthData}><ChartGrid /><XAxis dataKey="year" {...axisProps} /><YAxis scale="log" domain={["auto", "auto"]} {...axisProps} tickFormatter={formatMoney} /><Tooltip content={<ChartTooltip assets={assets} type="money" />} />{crisisMarkers.filter((marker) => marker.year >= start && marker.year <= end).map((marker) => <ReferenceLine key={marker.year} x={marker.year} stroke="#a6b3bb" strokeDasharray="4 4" label={{ value: marker.label, position: "insideTop", fill: "#718290", fontSize: 10 }} />)}{visibleChartAssets.map((asset) => <Area key={asset.id} type="monotone" dataKey={asset.id} stroke={asset.accentColor} fill={asset.accentColor} fillOpacity={0.08} strokeWidth={2.5} connectNulls={false} />)}</AreaChart></ResponsiveContainer></ChartCard>}
               {activeTab === "decades" && <ChartCard title={`TCAM par décennie · ${activeLabel}`} subtitle="Moyenne géométrique des rendements annuels disponibles dans chaque décennie." icon={<CalendarDays size={18} />} data={decadeData} columns={decadeColumns} format="percent" legend={<AssetLegend assets={selectedAssets} hiddenAssets={hiddenAssets} onToggle={toggleHiddenAsset} />} metadata={{ unit: "% annualisé par décennie", source: "Corpus historique consolidé", period: `${start}–${end}`, observations: chartObservationCount }}><ResponsiveContainer width="100%" height={390}><BarChart data={decadeData}><ChartGrid /><XAxis dataKey="decade" {...axisProps} /><YAxis {...axisProps} tickFormatter={(value) => `${value}%`} /><Tooltip content={<ChartTooltip assets={assets} type="percent" />} /><ReferenceLine y={0} stroke="#18324a" />{visibleChartAssets.map((asset) => <Bar key={asset.id} dataKey={asset.id} fill={asset.accentColor} radius={[3, 3, 0, 0]} />)}</BarChart></ResponsiveContainer></ChartCard>}

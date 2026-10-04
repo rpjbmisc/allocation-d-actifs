@@ -170,3 +170,8 @@ button:disabled, input:disabled { cursor: not-allowed; opacity: .45; }
 .contribution-row { grid-template-columns: minmax(180px, 1fr) minmax(100px, 1.3fr) 135px; }
 @media (max-width: 760px) { .contribution-row { grid-template-columns: 1fr 135px; } }
 .metric.very-negative strong { color: #9b2226; }.metric.negative strong { color: #cf5b55; }.metric.neutral strong { color: #d97706; }.metric.positive strong { color: #61a88f; }.metric.very-positive strong { color: #258b78; }
+
+/* Keep the overview focused on at most three assets per row. */
+.kpi-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (max-width: 980px) { .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 760px) { .kpi-grid { grid-template-columns: 1fr; } }
