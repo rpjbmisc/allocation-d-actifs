@@ -243,8 +243,11 @@ function App() {
 
   useEffect(() => {
     if (loading || activePreset !== "custom") return;
+    const fallbackWeights = selectedAssets.length
+      ? Object.fromEntries(selectedAssets.map((asset) => [asset.id, 100 / selectedAssets.length]))
+      : {};
     setWeights((current) => selectedAssets.reduce(
-      (next, asset) => ({ ...next, [asset.id]: automaticCandidate?.weights[asset.id] ?? 0 }),
+      (next, asset) => ({ ...next, [asset.id]: automaticCandidate?.weights[asset.id] ?? fallbackWeights[asset.id] ?? 0 }),
       { ...current },
     ));
     setAutomaticWeights(Boolean(automaticCandidate));
