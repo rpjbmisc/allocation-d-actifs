@@ -326,6 +326,7 @@ function App() {
     return stat ? { asset, stat, drawdown: maxDrawdown(data[asset.id], start, end, mode) } : null;
   }).filter((entry): entry is { asset: Asset; stat: NonNullable<typeof stats[string]>; drawdown: number | null } => Boolean(entry));
   const bestAsset = [...decisionStats].sort((left, right) => (mode === "nominal" ? right.stat.cagrNominal ?? -Infinity : right.stat.cagrReal ?? -Infinity) - (mode === "nominal" ? left.stat.cagrNominal ?? -Infinity : left.stat.cagrReal ?? -Infinity))[0];
+  const worstReturnAsset = [...decisionStats].sort((left, right) => (mode === "nominal" ? left.stat.cagrNominal ?? Infinity : left.stat.cagrReal ?? Infinity) - (mode === "nominal" ? right.stat.cagrNominal ?? Infinity : right.stat.cagrReal ?? Infinity))[0];
   const lowestRiskAsset = [...decisionStats].sort((left, right) => left.stat.volatility - right.stat.volatility)[0];
   const worstDrawdownAsset = [...decisionStats].sort((left, right) => (left.drawdown ?? 0) - (right.drawdown ?? 0))[0];
   const portfolioContributions = selectedAssets.map((asset) => {
@@ -522,7 +523,7 @@ function App() {
                <div><span className="strip-label">Actifs actifs</span><strong>{selectedCount}</strong><small>{activePreset === "custom" ? `Maximum ${MAX_SELECTED_ASSETS} séries` : "Ventilation de la candidate"}</small></div>
              </section>
 
-             <DecisionSummary bestAsset={bestAsset} lowestRiskAsset={lowestRiskAsset} worstDrawdownAsset={worstDrawdownAsset} mode={mode} />
+              <DecisionSummary bestAsset={bestAsset} worstReturnAsset={worstReturnAsset} lowestRiskAsset={lowestRiskAsset} worstDrawdownAsset={worstDrawdownAsset} mode={mode} />
 
              <nav className="tabs" aria-label="Vues d'analyse" role="tablist">{chartTabs.map((tab) => <button key={tab.id} role="tab" aria-selected={activeTab === tab.id} className={activeTab === tab.id ? "active" : ""} onClick={() => setActiveTab(tab.id)}>{tab.label}</button>)}<button role="tab" aria-selected={activeTab === "portfolio"} className={activeTab === "portfolio" ? "active" : ""} onClick={() => setActiveTab("portfolio")}>Portefeuille</button><button role="tab" aria-selected={activeTab === "correlations"} className={activeTab === "correlations" ? "active" : ""} onClick={() => setActiveTab("correlations")}>Corrélations de la sélection</button></nav>
 
@@ -551,19 +552,22 @@ function ChartGrid() { return <CartesianGrid stroke="#e4e9ee" strokeDasharray="2
 
 function DecisionSummary({
   bestAsset,
+  worstReturnAsset,
   lowestRiskAsset,
   worstDrawdownAsset,
   mode,
 }: {
   bestAsset?: { asset: Asset; stat: NonNullable<ReturnType<typeof computeStats>>; drawdown: number | null };
+  worstReturnAsset?: { asset: Asset; stat: NonNullable<ReturnType<typeof computeStats>>; drawdown: number | null };
   lowestRiskAsset?: { asset: Asset; stat: NonNullable<ReturnType<typeof computeStats>>; drawdown: number | null };
   worstDrawdownAsset?: { asset: Asset; stat: NonNullable<ReturnType<typeof computeStats>>; drawdown: number | null };
   mode: Mode;
 }) {
   const cagr = (entry?: typeof bestAsset) => entry ? mode === "nominal" ? entry.stat.cagrNominal : entry.stat.cagrReal : null;
   return <section className="decision-summary" aria-label="Résumé décisionnel">
-    <div className="decision-card positive"><span>Meilleur rendement</span><strong>{bestAsset?.asset.name ?? "n.d."}</strong><small>{bestAsset ? formatPercent(cagr(bestAsset)) : "Données insuffisantes"}</small></div>
-    <div className="decision-card neutral"><span>Risque le plus faible</span><strong>{lowestRiskAsset?.asset.name ?? "n.d."}</strong><small>{lowestRiskAsset ? `Volatilité ${formatPercent(lowestRiskAsset.stat.volatility)}` : "Données insuffisantes"}</small></div>
+     <div className="decision-card positive"><span>Meilleur rendement</span><strong>{bestAsset?.asset.name ?? "n.d."}</strong><small>{bestAsset ? formatPercent(cagr(bestAsset)) : "Données insuffisantes"}</small></div>
+     <div className="decision-card negative"><span>Pire rendement</span><strong>{worstReturnAsset?.asset.name ?? "n.d."}</strong><small>{worstReturnAsset ? formatPercent(cagr(worstReturnAsset)) : "Données insuffisantes"}</small></div>
+     <div className="decision-card neutral"><span>Risque le plus faible</span><strong>{lowestRiskAsset?.asset.name ?? "n.d."}</strong><small>{lowestRiskAsset ? `Volatilité ${formatPercent(lowestRiskAsset.stat.volatility)}` : "Données insuffisantes"}</small></div>
     <div className="decision-card negative"><span>Pire drawdown</span><strong>{worstDrawdownAsset?.asset.name ?? "n.d."}</strong><small>{worstDrawdownAsset?.drawdown !== null && worstDrawdownAsset?.drawdown !== undefined ? formatPercent(worstDrawdownAsset.drawdown) : "Données insuffisantes"}</small></div>
   </section>;
 }
