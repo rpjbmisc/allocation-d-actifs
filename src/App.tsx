@@ -34,6 +34,7 @@ import {
   returnValue,
   Row,
   searchPortfolioCandidates,
+  volatility,
 } from "./analytics";
 
 type Tab = "overview" | "returns" | "growth" | "decades" | "portfolio" | "correlations";
@@ -411,10 +412,19 @@ function App() {
     return { asset, weight: normalizedWeight, contribution: cagr === null ? null : normalizedWeight / 100 * cagr };
   });
   const normalizedPortfolioWeights = Object.fromEntries(selectedAssets.map((asset) => [asset.id, portfolioWeights[asset.id] > 0 ? portfolioWeights[asset.id] / Object.values(portfolioWeights).reduce((total, current) => total + current, 0) : 0]));
+  const portfolioYears = portfolio?.points.map((point) => point.year) ?? [];
+  const portfolioAssetVolatilities = Object.fromEntries(selectedAssets.map((asset) => [
+    asset.id,
+    volatility(portfolioYears.flatMap((year) => {
+      const row = data[asset.id].find((candidate) => candidate.year === year);
+      const value = row ? returnValue(row, mode) : null;
+      return value === null ? [] : [value];
+    })),
+  ]));
   const weightedCorrelation = selectedAssets.length > 1 ? (() => {
     let numerator = 0;
     let denominator = 0;
-    selectedAssets.forEach((left, leftIndex) => selectedAssets.slice(leftIndex + 1).forEach((right) => {
+    selectedAssets.forEach((left) => selectedAssets.forEach((right) => {
       const pairWeight = normalizedPortfolioWeights[left.id] * normalizedPortfolioWeights[right.id];
       const correlation = correlations[left.id]?.[right.id];
       if (pairWeight > 0 && correlation !== null && correlation !== undefined) {
@@ -425,7 +435,7 @@ function App() {
     return denominator > 0 ? numerator / denominator : null;
   })() : null;
   const diversificationRatio = portfolio && portfolio.volatility > 0
-    ? selectedAssets.reduce((sum, asset) => sum + normalizedPortfolioWeights[asset.id] * (stats[asset.id]?.volatility ?? 0), 0) / portfolio.volatility
+    ? selectedAssets.reduce((sum, asset) => sum + normalizedPortfolioWeights[asset.id] * portfolioAssetVolatilities[asset.id], 0) / portfolio.volatility
     : null;
 
   const selectPreset = (presetId: Exclude<PresetId, "custom">) => {

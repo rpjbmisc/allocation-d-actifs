@@ -140,6 +140,12 @@ function geometricMean(values: number[]): number | null {
   return (Math.pow(product, 1 / values.length) - 1) * 100;
 }
 
+export function volatility(values: number[]): number {
+  if (!values.length) return 0;
+  const mean = values.reduce((sum, value) => sum + value, 0) / values.length;
+  return Math.sqrt(values.reduce((sum, value) => sum + Math.pow(value - mean, 2), 0) / values.length);
+}
+
 export function cagr(start: number, end: number, years: number): number | null {
   if (!(start > 0) || !(end > 0) || years <= 0) return null;
   return (Math.pow(end / start, 1 / years) - 1) * 100;
@@ -152,15 +158,14 @@ export function computeStats(rows: Row[], start: number, end: number, mode: Mode
   const values = range.filter((row) => returnValue(row, mode) !== null);
   if (!values.length) return null;
 
-  const mean = values.reduce((sum, row) => sum + (returnValue(row, mode) as number), 0) / values.length;
-  const volatility = Math.sqrt(values.reduce((sum, row) => sum + Math.pow((returnValue(row, mode) as number) - mean, 2), 0) / values.length);
+  const volatilityValue = volatility(values.map((row) => returnValue(row, mode) as number));
   const sorted = [...values].sort((a, b) => (returnValue(b, mode) as number) - (returnValue(a, mode) as number));
 
   return {
     count: values.length,
     cagrNominal: geometricMean(nominal),
     cagrReal: geometricMean(real),
-    volatility,
+    volatility: volatilityValue,
     positiveRate: values.filter((row) => (returnValue(row, mode) as number) > 0).length / values.length * 100,
     best: sorted[0] ?? null,
     worst: sorted[sorted.length - 1] ?? null,
@@ -212,7 +217,7 @@ export function computePortfolio(
 
   const returns = points.map((point) => point.return);
   const mean = returns.reduce((sum, current) => sum + current, 0) / returns.length;
-  const volatility = Math.sqrt(returns.reduce((sum, current) => sum + Math.pow(current - mean, 2), 0) / returns.length);
+  const volatilityValue = volatility(returns);
   const cagr = points.length > 1 ? cagrValue(points[0].value / (1 + points[0].return / 100), value, points.length) : null;
   const troughIndex = points.reduce((index, point, current) => point.drawdown < points[index].drawdown ? current : index, 0);
   const recoveryIndex = points.findIndex((point, index) => index > troughIndex && point.drawdown >= -0.01);
@@ -222,8 +227,8 @@ export function computePortfolio(
     points,
     count: points.length,
     cagr,
-    volatility,
-    sharpe: volatility > 0 ? mean / volatility : null,
+    volatility: volatilityValue,
+    sharpe: volatilityValue > 0 ? mean / volatilityValue : null,
     positiveRate: returns.filter((current) => current > 0).length / returns.length * 100,
     best: points.reduce((best, point) => !best || point.return > best.return ? point : best, null as PortfolioPoint | null),
     worst: points.reduce((worst, point) => !worst || point.return < worst.return ? point : worst, null as PortfolioPoint | null),
