@@ -2,7 +2,7 @@
   {
     "id": "sp500",
     "name": "Actions US (S&P 500)",
-    "csvFile": "CAGR_s&p500_ntr.csv",
+    "csvFile": "CAGR_sp500_ntr.csv",
     "accentColor": "#2563eb",
     "headingClass": "text-blue-700",
     "kpiNomClass": "text-blue-600",
