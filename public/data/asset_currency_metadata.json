@@ -1,88 +1,116 @@
 {
   "defaultSourceCurrency": "USD",
-  "defaultInflationSource": "US_CPI",
+  "defaultInflationSource": "French_CPI",
+  "schema": {
+    "levelField": "Series_Level",
+    "annualReturnField": "Annual_Return_Pct",
+    "realReturnField": null,
+    "returnUnit": "percent",
+    "firstObservationHasNoReturn": true
+  },
   "assets": {
     "sp500": {
       "currency": "USD",
-      "priceField": "Price",
-      "nominalReturnField": "Nominal_Return",
-      "realReturnField": "Real_Return",
-      "currencyEvidence": "series context and US CPI column"
+      "levelType": "index_level",
+      "returnType": "net_total_return",
+      "returnStatus": "estimated_proxy_until_2014_official_published_from_2015",
+      "currencyEvidence": "US equity index series"
     },
     "gold": {
       "currency": "USD",
-      "priceField": "Gold_Price_USD",
-      "nominalReturnField": "Nominal_Return_Pct",
-      "realReturnField": "Real_Return_Pct",
-      "currencyEvidence": "explicit USD field name"
+      "levelType": "price",
+      "returnType": "price_return",
+      "currencyEvidence": "explicit USD gold price series"
     },
     "bitcoin": {
       "currency": "USD",
-      "priceField": "Price",
-      "nominalReturnField": "Nominal_Return",
-      "realReturnField": "Real_Return",
-      "currencyEvidence": "series context and US CPI column"
+      "levelType": "price",
+      "returnType": "price_return",
+      "currencyEvidence": "USD/BTC price series"
     },
     "msci_world": {
       "currency": "USD",
-      "priceField": "Price",
-      "nominalReturnField": "Nominal_Return",
-      "realReturnField": "Real_Return",
-      "currencyEvidence": "series context and US CPI column"
+      "levelType": "index_level",
+      "returnType": "net_total_return",
+      "currencyEvidence": "MSCI USD index series"
+    },
+    "msci_world_ex_usa": {
+      "currency": "USD",
+      "levelType": "index_level",
+      "returnType": "net_total_return",
+      "currencyEvidence": "MSCI World ex USA net total return series"
+    },
+    "msci_world_small_cap_value": {
+      "currency": "USD",
+      "levelType": "index_level",
+      "returnType": "net_total_return",
+      "currencyEvidence": "MSCI USD factor index series"
+    },
+    "msci_world_value": {
+      "currency": "USD",
+      "levelType": "index_level",
+      "returnType": "net_total_return",
+      "currencyEvidence": "MSCI USD factor index series"
     },
     "msci_em": {
       "currency": "USD",
-      "priceField": "Price",
-      "nominalReturnField": "Nominal_Return",
-      "realReturnField": "Real_Return",
-      "currencyEvidence": "series context and US CPI column"
+      "levelType": "index_level",
+      "returnType": "net_total_return",
+      "currencyEvidence": "MSCI USD index series"
+    },
+    "global_infrastructure": {
+      "currency": "USD",
+      "levelType": "index_level",
+      "returnType": "net_total_return",
+      "currencyEvidence": "global infrastructure USD index series"
     },
     "reit_us": {
       "currency": "USD",
-      "priceField": "Price",
-      "nominalReturnField": "Nominal_Return",
-      "realReturnField": "Real_Return",
-      "currencyEvidence": "US series name and US CPI column"
+      "levelType": "index_level",
+      "returnType": "total_return",
+      "currencyEvidence": "US REIT total return series"
     },
     "russell2000": {
       "currency": "USD",
-      "priceField": "Price",
-      "nominalReturnField": "Nominal_Return",
-      "realReturnField": "Real_Return",
-      "currencyEvidence": "US series name and US CPI column"
+      "levelType": "index_level",
+      "returnType": "total_return",
+      "currencyEvidence": "Russell 2000 total return series"
     },
     "tbills_us": {
       "currency": "USD",
-      "priceField": "Price",
-      "nominalReturnField": "Nominal_Return",
-      "realReturnField": "Real_Return",
-      "currencyEvidence": "US series name and US CPI column"
+      "levelType": "index_level",
+      "returnType": "total_return",
+      "currencyEvidence": "US Treasury bill reinvestment series"
     },
     "us_total_market": {
       "currency": "USD",
-      "priceField": "Price",
-      "nominalReturnField": "Nominal_Return",
-      "realReturnField": "Real_Return",
-      "currencyEvidence": "US series name and US CPI column"
+      "levelType": "index_level",
+      "returnType": "total_return",
+      "currencyEvidence": "US total market total return series"
     },
     "highyield_us": {
       "currency": "USD",
-      "priceField": "Price",
-      "nominalReturnField": "Nominal_Return",
-      "realReturnField": "Real_Return",
-      "currencyEvidence": "US series name and US CPI column"
+      "levelType": "index_level",
+      "returnType": "total_return",
+      "currencyEvidence": "ICE BofA US High Yield total return series"
     },
     "us_lt_govt_bonds": {
       "currency": "USD",
-      "priceField": "Price",
-      "nominalReturnField": "Nominal_Return",
-      "realReturnField": "Real_Return",
-      "currencyEvidence": "US series name and US CPI column"
+      "levelType": "index_level",
+      "returnType": "total_return",
+      "currencyEvidence": "US long-term government bond reinvestment series"
+    },
+    "us_corp_bonds_ig": {
+      "currency": "USD",
+      "levelType": "index_level",
+      "returnType": "total_return",
+      "currencyEvidence": "US investment-grade corporate bond reinvestment series"
     }
   },
   "caveats": [
-    "The existing real return columns are based on US CPI and must not be reused for a French real return calculation.",
-    "The metadata records the currency used for conversion; it does not claim that every index has identical underlying economic currency exposure.",
-    "Return series total-return treatment should be verified against the original source methodology before presenting a final label."
+    "Real returns are calculated by the application from USD annual returns, the unhedged USD/EUR return and French CPI; they are not stored in the individual CSV files.",
+    "The currency metadata records the conversion currency; it does not claim that every index has identical underlying economic currency exposure.",
+    "The S&P 500 NTR series uses an estimated proxy before 2015 and published observations from 2015 onward.",
+    "The MSCI World ex USA series starts in 1995 and uses net total return observations."
   ]
 }

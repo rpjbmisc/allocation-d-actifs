@@ -2,7 +2,7 @@
   "referenceCurrency": "EUR",
   "period": "1960-2025",
   "exchangeRate": {
-    "file": "fx_usd_per_eur_year_end_1998_2025.csv",
+    "file": "fx_usd_per_eur_historical_1960_2025.csv",
     "quote": "USD per EUR",
     "frequency": "annual year-end",
     "annualObservation": "last available ECB reference rate in December",
@@ -28,7 +28,7 @@
   },
   "retrieved": "2026-10-04",
   "notes": [
-    "These files are data-only preparation; application code does not consume them yet.",
+    "The application loads the historical USD/EUR file and French CPI file directly to calculate unhedged EUR and French real returns.",
     "The pre-1999 history is an euro-equivalent reconstruction based on the OECD series, with a separate FRF/USD file for traceability."
   ]
 }

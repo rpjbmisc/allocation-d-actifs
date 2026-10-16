@@ -73,16 +73,17 @@ export interface CorrelationCell {
 
 const aliases = {
   year: ["Year", "year"],
-  price: ["Price", "Gold_Price_USD", "Price_Index", "TR_Index", "TotalReturn_Index", "Total_Return_Index", "Gross_TR_Index", "GrossTR_Index_Start", "Close", "Value"],
+  price: ["Series_Level", "Index", "Price", "Gold_Price_USD", "Price_Index", "TR_Index", "TotalReturn_Index", "Total_Return_Index", "Gross_TR_Index", "GrossTR_Index_Start", "Close", "Value"],
   cpi: ["CPI", "CPI_U"],
-  nominal: ["Nominal_Return", "Nominal_Return_Pct", "Total_Return", "Gross_Total_Return", "GrossTR_Return", "Total_Return_Nominal"],
+  nominal: ["Annual_Return_Pct", "Evolution (percent)", "Nominal_Return", "Nominal_Return_Pct", "Total_Return", "Gross_Total_Return", "GrossTR_Return", "Total_Return_Nominal"],
   inflation: ["Inflation", "Inflation_Pct"],
   real: ["Real_Return", "Real_Return_Pct", "Real_Total_Return", "Real_Return_Gross", "Total_Return_Real"],
 } as const;
 
 const toNumber = (value: unknown): number => {
   if (value === null || value === undefined || value === "") return Number.NaN;
-  const parsed = typeof value === "number" ? value : Number(value);
+  const normalized = typeof value === "string" ? value.trim().replace(/\s/g, "").replace(",", ".") : value;
+  const parsed = typeof normalized === "number" ? normalized : Number(normalized);
   return Number.isFinite(parsed) ? parsed : Number.NaN;
 };
 
@@ -108,18 +109,17 @@ export function normalizeRows(raw: Record<string, unknown>[]): Row[] {
 }
 
 export function localizeRows(rows: Row[], currency: Currency, context: CurrencyContext): Row[] {
-  if (currency === "usd") return rows;
-
   return rows
-    .filter((row) => row.year >= 1961)
+    .filter((row) => currency === "usd" || row.year >= 1961)
     .map((row) => {
       const currentFx = context.usdPerEur[row.year];
       const previousFx = context.usdPerEur[row.year - 1];
-      if (!Number.isFinite(row.nominal) || !Number.isFinite(currentFx) || !Number.isFinite(previousFx)) {
+      const canConvertToEur = currency === "usd" || (Number.isFinite(currentFx) && Number.isFinite(previousFx));
+      if (!Number.isFinite(row.nominal) || !canConvertToEur) {
         return { ...row, nominal: Number.NaN, real: Number.NaN };
       }
 
-      const fxReturn = (previousFx / currentFx - 1) * 100;
+      const fxReturn = currency === "eur" ? (previousFx / currentFx - 1) * 100 : 0;
       const nominal = (1 + row.nominal / 100) * (1 + fxReturn / 100) * 100 - 100;
       const inflation = context.frenchInflation[row.year];
       const real = Number.isFinite(inflation)

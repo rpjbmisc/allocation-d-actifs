@@ -15,11 +15,11 @@ Puis ouvrir l'URL affichée par Vite, généralement `http://localhost:5173`.
 
 - `src/` : application React, calculs statistiques et simulation de portefeuille.
 - `UX_AUDIT.md` : audit UX, décisions prises et feuille de route par sessions.
-- `public/data/` : registre et séries CSV utilisées par l'interface.
+- `public/data/` : registre, séries CSV et sources de change/inflation utilisées par l'interface.
 - `MultiAssetComparison.tsx` : version Dust originale conservée comme référence.
 - `Bourse/`, `Immobilier/`, `SCPI/`, `Suivi_Epargne.xlsx` : documents personnels conservés localement et exclus du dépôt Git.
 
-Le tableau de bord charge les actifs déclarés dans `public/data/assets_index.json`. Les fichiers CSV enrichis sont conservés dans le corpus, mais ne sont pas affichés tant qu'ils ne sont pas ajoutés au registre des actifs.
+Le tableau de bord charge les actifs déclarés dans `public/data/assets_index.json`. Les séries individuelles utilisent le schéma commun `Year,Series_Level,Annual_Return_Pct`. Les rendements réels sont calculés à la volée à partir des rendements USD, du taux USD/EUR historique et de l'inflation française.
 
 L'onglet `Portefeuille` permet de tester une allocation pondérée sur la période commune sélectionnée. En mode `À la carte`, il propose automatiquement l'allocation au meilleur TCAM historique sous drawdown maximal de 40 %, avec des pondérations testées par pas de 5 %. La proposition est recalculée lorsque les actifs, la période ou la lecture changent, puis reste modifiable manuellement. L'onglet affiche aussi la volatilité, le drawdown maximal, un Sharpe brut, la trajectoire de 100 unités investies, les pires années, le drawdown année par année et les corrélations entre actifs. La simulation utilise les rendements annuels et un rééquilibrage annuel implicite.
 

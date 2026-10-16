@@ -101,7 +101,7 @@ const crisisMarkers = [
 ];
 
 function assetCategory(id: string): AssetCategory {
-  if (["sp500", "msci_world", "msci_em", "russell2000", "us_total_market"].includes(id)) return "Actions";
+  if (["sp500", "msci_world", "msci_world_ex_usa", "msci_world_small_cap_value", "msci_world_value", "msci_em", "russell2000", "us_total_market", "global_infrastructure"].includes(id)) return "Actions";
   if (["tbills_us", "us_lt_govt_bonds", "highyield_us"].includes(id)) return "Obligations";
   if (id === "reit_us") return "Immobilier";
   if (id === "gold") return "Métaux";
@@ -189,6 +189,10 @@ function App() {
   const data = useMemo(
     () => Object.fromEntries(Object.entries(rawData).map(([id, rows]) => [id, localizeRows(rows, currency, currencyContext)])),
     [currency, currencyContext, rawData],
+  );
+  const usdData = useMemo(
+    () => Object.fromEntries(Object.entries(rawData).map(([id, rows]) => [id, localizeRows(rows, "usd", currencyContext)])),
+    [currencyContext, rawData],
   );
 
   useEffect(() => {
@@ -360,7 +364,7 @@ function App() {
 
   const portfolioWeights = Object.fromEntries(selectedAssets.map((asset) => [asset.id, weights[asset.id] ?? 0]));
   const portfolio = computePortfolio(data, portfolioWeights, start, end, mode);
-  const usdPortfolio = currency === "eur" ? computePortfolio(rawData, portfolioWeights, start, end, mode) : null;
+  const usdPortfolio = currency === "eur" ? computePortfolio(usdData, portfolioWeights, start, end, mode) : null;
   const currencyComparison: CurrencyComparison | null = currency === "eur" && portfolio && usdPortfolio
     ? {
         usd: usdPortfolio,

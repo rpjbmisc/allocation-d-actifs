@@ -2,17 +2,17 @@
   {
     "id": "sp500",
     "name": "Actions US (S&P 500)",
-    "csvFile": "sp500_annual_returns_1926_2025.csv",
+    "csvFile": "CAGR_s&p500_ntr.csv",
     "accentColor": "#2563eb",
     "headingClass": "text-blue-700",
     "kpiNomClass": "text-blue-600",
-    "startYear": 1926,
+    "startYear": 1925,
     "endYear": 2025
   },
   {
     "id": "gold",
     "name": "Or",
-    "csvFile": "gold_annual_returns_1925_2025.csv",
+    "csvFile": "CAGR_gold_price.csv",
     "accentColor": "#B45309",
     "headingClass": "text-amber-700",
     "kpiNomClass": "text-amber-600",
@@ -22,7 +22,7 @@
   {
     "id": "bitcoin",
     "name": "Bitcoin",
-    "csvFile": "bitcoin_annual_returns_2013_2025.csv",
+    "csvFile": "CAGR_bitcoin_price.csv",
     "accentColor": "#EA580C",
     "headingClass": "text-orange-700",
     "kpiNomClass": "text-orange-600",
@@ -32,7 +32,7 @@
   {
     "id": "msci_world",
     "name": "MSCI World",
-    "csvFile": "msci_world_annual_returns_1969_2025.csv",
+    "csvFile": "CAGR_msci-world_ntr.csv",
     "accentColor": "#7C3AED",
     "headingClass": "text-purple-700",
     "kpiNomClass": "text-purple-600",
@@ -40,9 +40,39 @@
     "endYear": 2025
   },
   {
+    "id": "msci_world_ex_usa",
+    "name": "MSCI World ex USA",
+    "csvFile": "CAGR_msci-world-ex-usa.csv",
+    "accentColor": "#0F766E",
+    "headingClass": "text-teal-700",
+    "kpiNomClass": "text-teal-600",
+    "startYear": 1995,
+    "endYear": 2025
+  },
+  {
+    "id": "msci_world_small_cap_value",
+    "name": "MSCI World Small Cap Value",
+    "csvFile": "CAGR_msci-world-small-cap-value_ntr.csv",
+    "accentColor": "#9333EA",
+    "headingClass": "text-purple-700",
+    "kpiNomClass": "text-purple-600",
+    "startYear": 1994,
+    "endYear": 2025
+  },
+  {
+    "id": "msci_world_value",
+    "name": "MSCI World Value",
+    "csvFile": "CAGR_msci-world-value_ntr.csv",
+    "accentColor": "#DB2777",
+    "headingClass": "text-pink-700",
+    "kpiNomClass": "text-pink-600",
+    "startYear": 1996,
+    "endYear": 2025
+  },
+  {
     "id": "msci_em",
     "name": "MSCI Emerging Markets",
-    "csvFile": "msci_em_annual_returns_1988_2025.csv",
+    "csvFile": "CAGR_msci-em_ntr.csv",
     "accentColor": "#E11D48",
     "headingClass": "text-red-700",
     "kpiNomClass": "text-red-600",
@@ -50,19 +80,29 @@
     "endYear": 2025
   },
   {
+    "id": "global_infrastructure",
+    "name": "Infrastructure globale",
+    "csvFile": "CAGR_global-infrastructure_ntr.csv",
+    "accentColor": "#0F766E",
+    "headingClass": "text-teal-700",
+    "kpiNomClass": "text-teal-600",
+    "startYear": 2011,
+    "endYear": 2025
+  },
+  {
     "id": "reit_us",
     "name": "Immobilier US (REIT)",
-    "csvFile": "reit_us_annual_returns_1972_2025.csv",
+    "csvFile": "CAGR_reit_us_tr.csv",
     "accentColor": "#0891B2",
     "headingClass": "text-emerald-700",
     "kpiNomClass": "text-emerald-600",
-    "startYear": 1972,
+    "startYear": 1971,
     "endYear": 2025
   },
   {
     "id": "russell2000",
     "name": "Small Caps US (Russell 2000)",
-    "csvFile": "russell2000_annual_returns_1978_2025.csv",
+    "csvFile": "CAGR_russell-2000_tr.csv",
     "accentColor": "#65A30D",
     "headingClass": "text-green-700",
     "kpiNomClass": "text-green-600",
@@ -72,27 +112,27 @@
   {
     "id": "tbills_us",
     "name": "Cash / T-Bills US",
-    "csvFile": "tbills_us_annual_returns_1926_2025.csv",
+    "csvFile": "CAGR_tbills_us_tr.csv",
     "accentColor": "#0F766E",
     "headingClass": "text-cyan-700",
     "kpiNomClass": "text-cyan-600",
-    "startYear": 1926,
+    "startYear": 1925,
     "endYear": 2025
   },
   {
     "id": "us_total_market",
     "name": "Marché Total US",
-    "csvFile": "us_total_market_annual_returns_1926_2025.csv",
+    "csvFile": "CAGR_us-total-market_tr.csv",
     "accentColor": "#4338CA",
     "headingClass": "text-blue-900",
     "kpiNomClass": "text-blue-800",
-    "startYear": 1926,
+    "startYear": 1925,
     "endYear": 2025
   },
   {
     "id": "highyield_us",
     "name": "High Yield US (ICE BofA US High Yield)",
-    "csvFile": "highyield_us_annual_returns_1986_2025.csv",
+    "csvFile": "CAGR_highyield_us_tr.csv",
     "accentColor": "#C026D3",
     "headingClass": "text-pink-700",
     "kpiNomClass": "text-pink-600",
@@ -102,11 +142,11 @@
   {
     "id": "us_lt_govt_bonds",
     "name": "Obligations d'État US (long terme)",
-    "csvFile": "us_lt_govt_bonds_annual_returns_1926_2025.csv",
+    "csvFile": "CAGR_us-lt-govt-bonds_tr.csv",
     "accentColor": "#475569",
     "headingClass": "text-violet-700",
     "kpiNomClass": "text-violet-600",
-    "startYear": 1926,
+    "startYear": 1925,
     "endYear": 2025
   }
 ]
