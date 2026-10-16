@@ -90,7 +90,7 @@ const dataUrl = (file: string) => `${baseUrl}data/${encodeURIComponent(file)}`;
 const preferredIds = ["msci_world", "gold", "us_lt_govt_bonds"];
 const MATRIX_ASSETS_PARAM = "matrixAssets";
 const tabIds = new Set<Tab>(["overview", "returns", "growth", "decades", "portfolio", "correlations"]);
-const MAX_SELECTED_ASSETS = 6;
+const MAX_SELECTED_ASSETS = 10;
 const assetCategories: AssetCategory[] = ["Tous", "Actions", "Obligations", "Immobilier", "Métaux", "Alternatives"];
 const crisisMarkers = [
   { year: 1929, label: "1929" },
@@ -266,6 +266,8 @@ function App() {
   const duration = Math.max(0, end - start + 1);
 
   const stats = useMemo(() => Object.fromEntries(selectedAssets.map((asset) => [asset.id, computeStats(data[asset.id], start, end, mode)])), [data, end, mode, selectedAssets, start]);
+  // The search space grows exponentially, so use a coarser grid for larger selections.
+  const automaticSearchStep = selectedAssets.length >= 7 ? 20 : selectedAssets.length >= 5 ? 10 : 5;
 
   const automaticProposal = useMemo(() => {
     if (activePreset !== "custom" || selectedAssets.length === 0 || end <= start) return { candidate: null, meetsConstraint: false };
@@ -276,7 +278,7 @@ function App() {
       end,
       mode,
       40,
-      5,
+      automaticSearchStep,
       1,
     )[0] ?? null;
     if (candidate) return { candidate, meetsConstraint: true };
@@ -288,12 +290,12 @@ function App() {
       end,
       mode,
       null,
-      5,
+      automaticSearchStep,
       1,
       "minimumDrawdown",
     )[0] ?? null;
     return { candidate: minimumDrawdownCandidate, meetsConstraint: false };
-  }, [activePreset, data, end, mode, selectedAssets, start]);
+  }, [activePreset, automaticSearchStep, data, end, mode, selectedAssets, start]);
   const automaticCandidate = automaticProposal.candidate;
 
   useEffect(() => {
@@ -362,9 +364,9 @@ function App() {
 
   const visiblePhases = historicalPhases.filter((phase) => phase.start >= start && phase.end <= end);
 
-  const portfolioWeights = Object.fromEntries(selectedAssets.map((asset) => [asset.id, weights[asset.id] ?? 0]));
-  const portfolio = computePortfolio(data, portfolioWeights, start, end, mode);
-  const usdPortfolio = currency === "eur" ? computePortfolio(usdData, portfolioWeights, start, end, mode) : null;
+  const portfolioWeights = useMemo(() => Object.fromEntries(selectedAssets.map((asset) => [asset.id, weights[asset.id] ?? 0])), [selectedAssets, weights]);
+  const portfolio = useMemo(() => computePortfolio(data, portfolioWeights, start, end, mode), [data, end, mode, portfolioWeights, start]);
+  const usdPortfolio = useMemo(() => currency === "eur" ? computePortfolio(usdData, portfolioWeights, start, end, mode) : null, [currency, end, mode, portfolioWeights, start, usdData]);
   const currencyComparison: CurrencyComparison | null = currency === "eur" && portfolio && usdPortfolio
     ? {
         usd: usdPortfolio,
@@ -385,9 +387,9 @@ function App() {
         }),
       }
     : null;
-  const equalWeights = Object.fromEntries(selectedAssets.map((asset) => [asset.id, 100 / Math.max(1, selectedAssets.length)]));
-  const equalPortfolio = computePortfolio(data, equalWeights, start, end, mode);
-  const correlations = computeCorrelationMatrix(data, selectedAssets.map((asset) => asset.id), start, end, mode);
+  const equalWeights = useMemo(() => Object.fromEntries(selectedAssets.map((asset) => [asset.id, 100 / Math.max(1, selectedAssets.length)])), [selectedAssets]);
+  const equalPortfolio = useMemo(() => computePortfolio(data, equalWeights, start, end, mode), [data, end, equalWeights, mode, start]);
+  const correlations = useMemo(() => computeCorrelationMatrix(data, selectedAssets.map((asset) => asset.id), start, end, mode), [data, end, mode, selectedAssets, start]);
   const availableAssets = assets.filter((asset) => data[asset.id]?.length);
   const periodRestricted = !commonPeriod;
   const periodEligibleAssets = useMemo(() => new Set(assets.filter((asset) => assetCoversPeriod(data[asset.id], range[0], range[1])).map((asset) => asset.id)), [assets, data, range]);
@@ -552,7 +554,7 @@ function App() {
                 <div className="control-heading"><div><div className="section-index">Configuration</div><h2>Préparer l'analyse</h2></div><div className="control-heading-actions"><span className="selection-count">{activePreset === "custom" ? `${selectedCount}/${MAX_SELECTED_ASSETS} sélectionnés` : `${presetDefinitions.find((preset) => preset.id === activePreset)?.label ?? "Candidate"}${presetModified ? " · modifiée" : ""}`}</span></div></div>
                <div className="configuration-steps">
                   <section className="configuration-step">
-                     <div className="step-heading"><span className="step-number">01</span><div><h3>Actifs</h3><p>Choisis jusqu'à six séries à comparer.</p></div><strong>{selectedCount}/{MAX_SELECTED_ASSETS}</strong></div>
+                     <div className="step-heading"><span className="step-number">01</span><div><h3>Actifs</h3><p>Choisis jusqu'à dix séries à comparer.</p></div><strong>{selectedCount}/{MAX_SELECTED_ASSETS}</strong></div>
                     <div className="candidate-grid">
                        <button className={`candidate-card custom ${activePreset === "custom" ? "selected" : ""}`} onClick={selectCustom}><div className="candidate-card-heading"><strong>À la carte</strong><span>Libre</span></div><p>Construire une sélection et une allocation personnalisées.</p><div className="candidate-card-footer">Jusqu'à {MAX_SELECTED_ASSETS} actifs</div></button>
                       {presetDefinitions.map((preset) => <button key={preset.id} className={`candidate-card ${activePreset === preset.id ? "selected" : ""}`} onClick={() => selectPreset(preset.id)}><div className="candidate-card-heading"><strong>{preset.label}</strong><span>Risque {candidateRisk(preset.id)}</span></div><p>{preset.description}</p><div className="candidate-allocation">{Object.entries(preset.weights).filter(([, weight]) => weight > 0).map(([id, weight]) => { const asset = assets.find((candidate) => candidate.id === id); return <span key={id} style={{ width: `${weight}%`, background: asset?.accentColor ?? "#9aa8b0" }} title={`${asset?.name ?? id}: ${weight} %`} />; })}</div><div className="candidate-card-footer">{preset.start}–{preset.end} · {Object.values(preset.weights).filter((weight) => weight > 0).length} actifs</div></button>)}
