@@ -169,6 +169,17 @@ button:disabled, input:disabled { cursor: not-allowed; opacity: .45; }
 @media (max-width: 760px) { .context-bar { position: static; grid-template-columns: 1fr 1fr; gap: 12px; }.context-selection { grid-column: 1 / -1; }.context-actions { grid-column: 1 / -1; justify-content: stretch; }.context-actions button { flex: 1; justify-content: center; }.decision-summary { grid-template-columns: 1fr; }.decision-card strong { white-space: normal; }.asset-picker-toolbar { align-items: stretch; flex-direction: column; }.asset-search { min-width: 0; }.asset-categories { overflow-x: auto; flex-wrap: nowrap; }.asset-categories button { flex: 0 0 auto; }.comparison-grid { grid-template-columns: 1fr; }.contribution-row { grid-template-columns: 1fr 70px; }.contribution-track { grid-column: 1 / -1; grid-row: 2; }.candidate-card p { min-height: 0; } }
 .contribution-row { grid-template-columns: minmax(180px, 1fr) minmax(100px, 1.3fr) 135px; }
 @media (max-width: 760px) { .contribution-row { grid-template-columns: 1fr 135px; } }
+.optimization-profiles { margin: 0 0 16px; padding: 12px; border: 1px solid #dfe6ea; background: #f8fafb; }
+.optimization-profiles-heading { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; margin-bottom: 9px; }
+.optimization-profiles-heading span { color: #17324a; font-size: 11px; font-weight: 600; }
+.optimization-profiles-heading small { color: #718290; font-size: 9px; }
+.optimization-profile-list { display: grid; gap: 5px; }
+.optimization-profile { display: flex; justify-content: space-between; align-items: center; gap: 10px; border: 1px solid #d5dfe4; background: #fff; color: #536b7a; padding: 8px 9px; text-align: left; }
+.optimization-profile strong { color: #17324a; font-size: 11px; }
+.optimization-profile span { color: #718290; font-size: 9px; text-align: right; }
+.optimization-profile.active { border-color: #e76f51; box-shadow: inset 0 0 0 1px #e76f51; background: #fffaf7; }
+.optimization-profile:hover:not(:disabled) { border-color: #17324a; }
+.optimization-profile-note { margin: 9px 0 0; color: #856a43; font-size: 10px; line-height: 1.4; }
 .metric.very-negative strong { color: #9b2226; }.metric.negative strong { color: #cf5b55; }.metric.neutral strong { color: #d97706; }.metric.positive strong { color: #61a88f; }.metric.very-positive strong { color: #258b78; }
 
 /* Keep the overview focused on at most three assets per row. */

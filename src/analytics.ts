@@ -59,6 +59,17 @@ export interface PortfolioStats {
 export interface PortfolioCandidate {
   weights: Record<string, number>;
   stats: PortfolioStats;
+  weightedCorrelation?: number | null;
+  diversificationRatio?: number | null;
+}
+
+export type PortfolioOptimizationProfile = "return" | "moderateDiversification" | "strongDiversification";
+
+export interface PortfolioOptimizationResults {
+  returnCandidate: PortfolioCandidate | null;
+  minimumDrawdownCandidate: PortfolioCandidate | null;
+  moderateDiversificationCandidate: PortfolioCandidate | null;
+  strongDiversificationCandidate: PortfolioCandidate | null;
 }
 
 export interface PortfolioWindow {
@@ -278,6 +289,143 @@ export function computeCorrelationDetails(
       observations: sharedYears.length,
     }];
   }))]));
+}
+
+export function computeDiversificationMetrics(
+  data: Record<string, Row[]>,
+  assetIds: string[],
+  weights: Record<string, number>,
+  portfolio: PortfolioStats | null,
+  start: number,
+  end: number,
+  mode: Mode,
+  correlations: Record<string, Record<string, number | null>> = computeCorrelationMatrix(data, assetIds, start, end, mode),
+  valueSeries?: Record<string, Map<number, number>>,
+): { weightedCorrelation: number | null; diversificationRatio: number | null } {
+  const totalWeight = assetIds.reduce((sum, id) => sum + Math.max(0, weights[id] ?? 0), 0);
+  if (totalWeight <= 0) return { weightedCorrelation: null, diversificationRatio: null };
+
+  const normalizedWeights = Object.fromEntries(assetIds.map((id) => [id, Math.max(0, weights[id] ?? 0) / totalWeight]));
+  let correlationNumerator = 0;
+  let correlationDenominator = 0;
+  assetIds.forEach((leftId) => assetIds.forEach((rightId) => {
+    const pairWeight = normalizedWeights[leftId] * normalizedWeights[rightId];
+    const correlation = correlations[leftId]?.[rightId];
+    if (pairWeight > 0 && correlation !== null && correlation !== undefined) {
+      correlationNumerator += pairWeight * correlation;
+      correlationDenominator += pairWeight;
+    }
+  }));
+  const weightedCorrelation = assetIds.length > 1 && correlationDenominator > 0
+    ? correlationNumerator / correlationDenominator
+    : null;
+
+  if (!portfolio || portfolio.volatility <= 0) {
+    return {
+      weightedCorrelation,
+      diversificationRatio: null,
+    };
+  }
+
+  const portfolioYears = portfolio.points.map((point) => point.year);
+  const indexedSeries = valueSeries ?? Object.fromEntries(assetIds.map((id) => [
+    id,
+    new Map((data[id] ?? [])
+      .filter((row) => row.year >= start && row.year <= end)
+      .flatMap((row) => {
+        const value = returnValue(row, mode);
+        return value === null ? [] : [[row.year, value] as [number, number]];
+      })),
+  ]));
+  const weightedVolatility = assetIds.reduce((sum, id) => {
+    const values = portfolioYears.flatMap((year) => {
+      const value = indexedSeries[id]?.get(year);
+      return value === undefined ? [] : [value];
+    });
+    return sum + normalizedWeights[id] * volatility(values);
+  }, 0);
+
+  return {
+    weightedCorrelation,
+    diversificationRatio: weightedVolatility / portfolio.volatility,
+  };
+}
+
+export function searchPortfolioOptimizationProfiles(
+  data: Record<string, Row[]>,
+  assetIds: string[],
+  start: number,
+  end: number,
+  mode: Mode,
+  maxDrawdown: number,
+  step = 5,
+): PortfolioOptimizationResults {
+  const emptyResults: PortfolioOptimizationResults = {
+    returnCandidate: null,
+    minimumDrawdownCandidate: null,
+    moderateDiversificationCandidate: null,
+    strongDiversificationCandidate: null,
+  };
+  if (!assetIds.length || step <= 0 || 100 % step !== 0) return emptyResults;
+
+  const correlations = computeCorrelationMatrix(data, assetIds, start, end, mode);
+  const valueSeries = Object.fromEntries(assetIds.map((id) => [
+    id,
+    new Map((data[id] ?? [])
+      .filter((row) => row.year >= start && row.year <= end)
+      .flatMap((row) => {
+        const value = returnValue(row, mode);
+        return value === null ? [] : [[row.year, value] as [number, number]];
+      })),
+  ]));
+  const results = { ...emptyResults };
+  const minimumObservations = Math.max(1, end - start);
+
+  const isBetterReturn = (candidate: PortfolioCandidate, current: PortfolioCandidate | null): boolean => {
+    if (!current) return true;
+    return (candidate.stats.cagr ?? -Infinity) > (current.stats.cagr ?? -Infinity)
+      || ((candidate.stats.cagr ?? -Infinity) === (current.stats.cagr ?? -Infinity) && candidate.stats.volatility < current.stats.volatility);
+  };
+  const isBetterDrawdown = (candidate: PortfolioCandidate, current: PortfolioCandidate | null): boolean => {
+    if (!current) return true;
+    return candidate.stats.maxDrawdown > current.stats.maxDrawdown
+      || (candidate.stats.maxDrawdown === current.stats.maxDrawdown && isBetterReturn(candidate, current));
+  };
+
+  const visit = (index: number, remaining: number, weights: Record<string, number>) => {
+    if (index === assetIds.length - 1) {
+      const nextWeights = { ...weights, [assetIds[index]]: remaining * step };
+      const stats = computePortfolio(data, nextWeights, start, end, mode);
+      // The first row can be a starting index without a return; reject shortened histories.
+      if (!stats || stats.points.length < minimumObservations || stats.cagr === null) return;
+      const baseCandidate: PortfolioCandidate = { weights: nextWeights, stats };
+
+      if (isBetterDrawdown(baseCandidate, results.minimumDrawdownCandidate)) results.minimumDrawdownCandidate = baseCandidate;
+      if (stats.maxDrawdown < -Math.abs(maxDrawdown)) return;
+      const metrics = computeDiversificationMetrics(data, assetIds, nextWeights, stats, start, end, mode, correlations, valueSeries);
+      const candidate: PortfolioCandidate = { ...baseCandidate, ...metrics };
+      if (isBetterReturn(candidate, results.returnCandidate)) results.returnCandidate = candidate;
+
+      const { weightedCorrelation: correlation, diversificationRatio: diversification } = metrics;
+      if (correlation === null || diversification === null) return;
+      if (correlation >= 0.2 && correlation <= 0.7 && diversification >= 1.2 && diversification <= 1.5
+        && isBetterReturn(candidate, results.moderateDiversificationCandidate)) {
+        results.moderateDiversificationCandidate = candidate;
+      }
+      if (correlation < 0.2 && diversification > 1.5
+        && isBetterReturn(candidate, results.strongDiversificationCandidate)) {
+        results.strongDiversificationCandidate = candidate;
+      }
+      return;
+    }
+
+    for (let units = 0; units <= remaining; units += 1) {
+      visit(index + 1, remaining - units, { ...weights, [assetIds[index]]: units * step });
+    }
+  };
+
+  visit(0, 100 / step, {});
+  return results;
 }
 
 export function searchPortfolioCandidates(
