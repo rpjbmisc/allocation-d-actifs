@@ -11,6 +11,11 @@ npm run dev
 
 Puis ouvrir l'URL affichée par Vite, généralement `http://localhost:5173`.
 
+## Documentation du projet
+
+- [Feuille de route et critères de recette](docs/ROADMAP.md) — phases 0 à 6, décisions fonctionnelles et reprise du travail.
+- [Architecture et conventions financières](docs/ARCHITECTURE.md) — état des lieux, moteur cible, hypothèses, risques et stratégie de tests.
+
 ## Contenu
 
 - `src/` : application React, calculs statistiques et simulation de portefeuille.
