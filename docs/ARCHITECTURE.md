@@ -1,6 +1,6 @@
 # Architecture — Allocation d'actifs
 
-> **Document technique vivant** · État des lieux au 18 octobre 2026, mis à jour pour la livraison de phase 2 (en attente de revue/fusion).
+> **Document technique vivant** · État des lieux au 18 octobre 2026, mis à jour pour la livraison de phase 3 (en attente de revue/fusion).
 >
 > Les sections « **Existant** » décrivent le code actuel. Les sections « **Cible** » sont des propositions de refactoring, **pas des fonctionnalités déjà implémentées**.
 >
@@ -29,6 +29,7 @@ Objectifs secondaires : reproductibilité, testabilité, performance acceptable 
 | `src/data/load.ts` | Chargement JSON/CSV, validation des séries et des bornes du registre. |
 | `src/optimization/interface.ts` / `growth.ts` | Contrat commun d'optimisation et stratégie Croissance historique, indépendants de React et du réseau. |
 | `src/optimization/search.ts` | Fonctions de recherche historiques conservées pour compatibilité ; le profil de production délègue désormais à `growth`. |
+| `src/validation/walkForward.ts` | Fenêtres chronologiques, exécution hors échantillon et comparaison des allocations de phase 3. |
 | `src/styles.css` | Styles de l'interface. |
 | `public/data/assets_index.json` | Registre des séries d'actifs disponibles avec bornes temporelles. |
 | `public/data/CAGR_*.csv` | Séries annuelles (`Year,Series_Level,Annual_Return_Pct`). |
@@ -87,7 +88,7 @@ src/
     goal.ts                      # objectif patrimonial (phase 5)
     search.ts                    # solveur/grille ou alternative, testable
   validation/
-    walkForward.ts               # découpes temporelles, exécution OOS, baselines
+    walkForward.ts               # découpes temporelles, exécution OOS, baselines (phase 3)
   scenarios/
     generator.ts                 # scénarios conjoints, graine, hypothèses
     assumptions.ts               # paramètres de croissance/inflation/incertitude
@@ -173,7 +174,7 @@ Conserver :
 
 ### Croissance — `growth`
 
-- **Phase 2 livrée sur cette branche** : `optimize` maximise le CAGR historique **sur la fenêtre d'apprentissage uniquement**, sous contraintes paramétrables.
+- **Phase 2 livrée dans `main`** : `optimize` maximise le CAGR historique **sur la fenêtre d'apprentissage uniquement**, sous contraintes paramétrables.
 - Le contrat retourne des poids en fractions, un score, les statistiques du portefeuille, le nombre d'évaluations et des diagnostics ; une recherche sans solution retourne `weights: null` et `feasible: false`.
 - Les contraintes appliquées sont long-only, somme à 1, poids minimal éventuel, plafonds individuels, drawdown maximal observé aux clôtures annuelles et volatilité annuelle optionnelle.
 - La recherche est une grille bornée : pas de 5 % jusqu'à 4 actifs, 10 % de 5 à 6 actifs et 20 % au-delà dans l'interface, avec un budget maximal de 100 000 évaluations. Le résultat est donc optimal sur cette grille, pas sur le simplexe continu.
@@ -207,7 +208,15 @@ Conserver :
 5. Répéter avec une nouvelle coupure et agréger les **rendements annuels hors échantillon chronologiquement** en une trajectoire composée.
 6. Confronter aux benchmarks et à la version Personnalisée à poids fixes ; rapporter métriques, nombre de fenêtres, périodes, hypothèses et données manquantes.
 
-Première proposition : **apprentissage expansif**, test de **5 ans** sans chevauchement, apprentissage minimal par défaut de **20 ans** lorsque possible. Ces valeurs sont **à valider**, et le moteur doit permettre de les modifier. Pas de faux test lorsque Bitcoin ou une série récente réduit trop l'historique commun.
+La première implémentation retient un **apprentissage expansif**, un test de **5 ans** sans chevauchement et un apprentissage minimal par défaut de **20 ans** lorsque possible. Ces valeurs sont modifiables dans l'interface. Il n'y a pas de faux test lorsque Bitcoin ou une série récente réduit trop l'historique commun.
+
+### 6.1.1 Implémentation livrée en phase 3
+
+`src/validation/walkForward.ts` construit d'abord l'intersection des rendements annuels effectivement disponibles pour l'univers, la devise et le mode de lecture. Cette intersection est découpée en séquences contiguës ; chaque séquence doit contenir l'apprentissage et le test complets. Les fenêtres commencent avec 20 ans d'apprentissage puis avancent par blocs de 5 ans : l'apprentissage de la fenêtre suivante inclut les tests précédents. Les dates de test ne se recouvrent donc pas.
+
+Pour chaque fenêtre, `optimize("growth", ...)` reçoit uniquement la période d'apprentissage. Les pondérations retournées sont ensuite passées sans modification à `computePortfolio` sur la période de test. Les références équipondérée, Personnalisée et MSCI World utilisent les mêmes fenêtres ; la Personnalisée conserve les poids choisis aujourd'hui et n'est jamais réoptimisée. Les rendements OOS sont concaténés dans l'ordre chronologique puis composés par `summarizePortfolioReturns`. Un trou, une fenêtre invalide ou une suite de tests non contiguë rend le score global indisponible.
+
+Le résultat expose également le nombre de fenêtres valides, une rotation moyenne des poids et une stabilité descriptive des poids de Croissance. Cette dernière est un diagnostic, pas une note de qualité. Une seule fenêtre ou moins de quatre fenêtres déclenche une incertitude qualitative dans l'interface.
 
 ### 6.2 Particularités fondamentales
 
@@ -238,7 +247,9 @@ Tout plafond sur exposition « US », « actions », « crédit », etc. doit ê
 
 ## 8. Stratégie de tests (phase 1 et suite)
 
-Vitest est installé en phase 1. Les tests financiers, de données et de contrôles UI sont livrés ; les cas walk-forward/scénarios ci-dessous restent à ajouter dans leurs phases respectives :
+Vitest est installé en phase 1. Les tests financiers, de données, de contrôles UI
+et de walk-forward sont livrés ; les cas de scénarios et d'objectif patrimonial
+restent à ajouter dans leurs phases respectives :
 
 - **Tests de conformité des données** : années triées, doublons, niveaux sans rendement, trous, non-finies, métadonnées discordantes.
 - **Calculs à la main** : CAGR composé, drawdown de fin d'année, volatilité, rééquilibrage, effet d'une année à −50 % suivie de +100 %.
@@ -246,7 +257,7 @@ Vitest est installé en phase 1. Les tests financiers, de données et de contrô
 - **Diversification** : deux actifs indépendants 50/50 vs 90/10, corrélation hors diagonale, variance avec diagonale, ratio de diversification.
 - **Contraintes** : somme 100 %, long-only, plafond par actif, aucun candidat faisable, cas avec un seul actif.
 - **Optimisation** : solutions connues sur petit univers, déterminisme, effet de la granularité.
-- **Walk-forward** : données futures volontairement modifiées **sans effet sur les poids antérieurs** ; dates de test strictement après dates de train ; composition du CAGR OOS ; trous / périodes insuffisantes.
+- **Walk-forward** : données futures volontairement modifiées **sans effet sur les poids antérieurs** ; dates de test strictement après dates de train ; fenêtres de test non chevauchantes ; composition du CAGR OOS ; trous / périodes insuffisantes.
 - **Scénarios et objectif** : graine fixe, trajectoires connues, versements déterministes, objectif nominal/réel, probabilité dans [0, 1].
 - **Non-régression UI** : les contrôles existants et la modification manuelle des pondérations continuent de fonctionner.
 
@@ -273,7 +284,7 @@ Pour chaque PR : publier les commandes exécutées et leurs résultats ; ne pas 
   que le ratio affiché reste « rendement brut / volatilité ».
 - Forme exacte des scénarios, pondération des futurs possibles, objectifs de Robustesse.
 - Méthode de simulation patrimoniale, convention des versements et traitement des frais.
-- Fenêtres walk-forward par défaut et politique si insuffisance de données.
+- Extension à l'apprentissage roulant et politique plus fine de sélection des fenêtres si l'historique comporte plusieurs séquences séparées.
 - Sources, dates et qualité des informations de composition économique.
 
 ### Politique de maintenance
@@ -299,10 +310,11 @@ Lire `README.md`, `docs/ROADMAP.md`, `docs/ARCHITECTURE.md` puis les fichiers co
 ## 11. Fondations livrées en phase 1
 
 Cette section décrit les fondations intégrées dans `main` via la PR #2.
-L'arborescence de §3 reste une cible pour les phases futures : aucun faux moteur
-walk-forward, scénario ou objectif patrimonial n'est créé ici. La simulation de
-portefeuille actuelle est dans `domain/portfolio.ts` ; l'optimiseur Croissance
-est décrit en §12 et les fonctions de recherche historiques restent dans
+À la livraison des fondations de phase 1, aucun faux moteur walk-forward, scénario
+ou objectif patrimonial n'était créé. La phase 3 ajoute désormais le moteur décrit
+en §6 ; les scénarios et l'objectif patrimonial restent futurs. La simulation de
+portefeuille est dans `domain/portfolio.ts` ; l'optimiseur Croissance est décrit
+en §12 et les fonctions de recherche historiques restent dans
 `optimization/search.ts`.
 
 ### Contrat appliqué et hypothèses
@@ -380,11 +392,12 @@ tolérance flottante près ; les CSV/JSON historiques ne sont pas modifiés.
 6. La trajectoire d'un actif dont la première ligne est un niveau sans rendement
    commence à 100 sur cette année initiale, pas artificiellement une année avant.
 
-Les profils Robustesse/Objectif, la validation walk-forward et les simulations
-prospectives ne sont pas implémentés par les phases livrées. La phase 2 remplace
-les anciens profils de diversification à seuils par un profil Croissance sous
-contraintes configurables ; corrélation et ratio de diversification restent des
-diagnostics sans catégories normatives.
+Les profils Robustesse/Objectif et les simulations prospectives ne sont pas
+implémentés par les phases livrées. La phase 2 remplace les anciens profils de
+diversification à seuils par un profil Croissance sous contraintes configurables ;
+la phase 3 ajoute la validation walk-forward et la comparaison, tandis que
+corrélation et ratio de diversification restent des diagnostics sans catégories
+normatives.
 
 ### Vérification reproductible
 
@@ -395,11 +408,13 @@ inflation), l'audit des 15 séries et les références historiques. React Testin
 Library/jsdom vérifie l'édition nombre/curseur, le recalcul, la normalisation et
 la navigation entre Portefeuille et Corrélations. Les tests de phase 2 couvrent
 également un optimum connu, le plafond de poids, les budgets de drawdown/volatilité,
-l'infaisabilité et le budget d'évaluations. Il ne remplace pas une recette visuelle
+l'infaisabilité et le budget d'évaluations. Les tests de phase 3 vérifient les
+fenêtres expansives, l'absence de fuite temporelle, la composition OOS et les
+historiques troués. Il ne remplace pas une recette visuelle
 complète. Le workflow `validate.yml` applique tests et build aux PR.
 L'avertissement Vite sur le bundle > 500 kB reste non bloquant et préexistant.
 
-## 12. Optimisation Croissance livrée sur cette branche
+## 12. Optimisation Croissance livrée dans `main`
 
 ### Contrat et unités
 

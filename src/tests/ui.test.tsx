@@ -54,3 +54,16 @@ it("shows an explicit load error if a historical series is unavailable", async (
   render(<App />);
   expect(await screen.findByText(/Données introuvables/)).toBeTruthy();
 });
+
+it("exposes comparison and walk-forward spaces without removing manual construction", async () => {
+  const user = userEvent.setup();
+  render(<App />);
+  await screen.findByRole("spinbutton", { name: "Poids saisi pour MSCI World" });
+
+  await user.click(screen.getByRole("tab", { name: "Comparaison" }));
+  expect(screen.getByText("Comparer les allocations")).toBeTruthy();
+  await user.click(screen.getByRole("tab", { name: "Validation" }));
+  expect(screen.getByText("Validation walk-forward")).toBeTruthy();
+  expect(screen.getByRole("spinbutton", { name: "Années d'apprentissage" })).toBeTruthy();
+  expect(screen.getByText("Résultats hors échantillon")).toBeTruthy();
+});

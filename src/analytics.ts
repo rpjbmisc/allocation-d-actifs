@@ -11,3 +11,4 @@ export * from "./optimization/interface";
 export * from "./format";
 
 export * from "./domain/series";
+export * from "./validation/walkForward";

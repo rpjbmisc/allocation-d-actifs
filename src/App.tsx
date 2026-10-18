@@ -44,9 +44,13 @@ import {
   OptimizationResult,
   returnValue,
   Row,
+  runWalkForward,
+  WalkForwardResult,
+  WalkForwardSettings,
 } from "./analytics";
 
 type Tab = "overview" | "returns" | "growth" | "decades" | "portfolio" | "correlations";
+type PortfolioSpace = "construction" | "comparison" | "validation";
 type Dataset = Record<string, Row[]>;
 type PresetId = "custom" | "pure" | "constrained" | "robust" | "bitcoin";
 type ChartRow = Record<string, number | string | null>;
@@ -118,6 +122,11 @@ const defaultGrowthConstraints: GrowthConstraintSettings = {
   maxAnnualVolatilityPct: null,
   maxWeightPct: 100,
 };
+const defaultValidationSettings: WalkForwardSettings = {
+  minTrainYears: 20,
+  testYears: 5,
+  expanding: true,
+};
 
 function assetCategory(id: string): AssetCategory {
   if (["sp500", "msci_world", "msci_world_ex_usa", "msci_world_small_cap_value", "msci_world_value", "msci_em", "russell2000", "us_total_market", "global_infrastructure"].includes(id)) return "Actions";
@@ -176,6 +185,7 @@ function App() {
   const [automaticWeights, setAutomaticWeights] = useState(false);
   const [optimizationProfile, setOptimizationProfile] = useState<PortfolioOptimizationProfile>("growth");
   const [growthConstraints, setGrowthConstraints] = useState<GrowthConstraintSettings>(defaultGrowthConstraints);
+  const [validationSettings, setValidationSettings] = useState<WalkForwardSettings>(defaultValidationSettings);
   const [activePreset, setActivePreset] = useState<PresetId>("custom");
   const [presetDefinitions, setPresetDefinitions] = useState<CandidatePreset[]>([]);
   const [presetModified, setPresetModified] = useState(false);
@@ -331,6 +341,31 @@ function App() {
     : null;
   const equalWeights = useMemo(() => Object.fromEntries(selectedAssets.map((asset) => [asset.id, 100 / Math.max(1, selectedAssets.length)])), [selectedAssets]);
   const equalPortfolio = useMemo(() => computePortfolio(data, equalWeights, start, end, mode), [data, end, equalWeights, mode, start]);
+  const benchmarkPortfolio = useMemo(
+    () => data.msci_world ? computePortfolio(data, { msci_world: 100 }, start, end, mode) : null,
+    [data, end, mode, start],
+  );
+  const walkForward = useMemo<WalkForwardResult>(() => {
+    const assetIds = selectedAssets.map((asset) => asset.id);
+    return runWalkForward({
+      data,
+      assetIds,
+      periodStart: start,
+      periodEnd: end,
+      returnMode: mode,
+      customWeights: portfolioWeights,
+      settings: validationSettings,
+      benchmarkAssetId: data.msci_world ? "msci_world" : null,
+      constraints: {
+        longOnly: true,
+        maxWeightByAsset: Object.fromEntries(assetIds.map((id) => [id, growthConstraints.maxWeightPct / 100])),
+        maxAnnualCloseDrawdownPct: growthConstraints.maxAnnualCloseDrawdownPct,
+        maxAnnualVolatilityPct: growthConstraints.maxAnnualVolatilityPct,
+        gridStepPct: automaticSearchStep,
+        maxEvaluations: 100_000,
+      },
+    });
+  }, [automaticSearchStep, data, end, growthConstraints, mode, portfolioWeights, selectedAssets, start, validationSettings]);
   const correlations = useMemo(() => computeCorrelationMatrix(data, selectedAssets.map((asset) => asset.id), start, end, mode), [data, end, mode, selectedAssets, start]);
   const availableAssets = assets.filter((asset) => data[asset.id]?.length);
   const periodRestricted = !commonPeriod;
@@ -571,10 +606,14 @@ function App() {
                     optimizationProfile={optimizationProfile}
                     growthConstraints={growthConstraints}
                     growthOptimization={optimizationResult}
+                    benchmarkPortfolio={benchmarkPortfolio}
+                    walkForward={walkForward}
+                    validationSettings={validationSettings}
                     onWeightChange={updateWeight}
                     onNormalize={normalizeWeights}
                     onOptimizationProfileChange={applyOptimizationProfile}
                     onGrowthConstraintsChange={(next) => setGrowthConstraints((current) => ({ ...current, ...next }))}
+                    onValidationSettingsChange={(next) => setValidationSettings((current) => ({ ...current, ...next }))}
                   />}
               {activeTab === "correlations" && <CorrelationView assets={selectedAssets} data={data} mode={mode} embedded start={start} end={end} />}
 
@@ -820,10 +859,14 @@ function PortfolioView({
   optimizationProfile,
   growthConstraints,
   growthOptimization,
+  benchmarkPortfolio,
+  walkForward,
+  validationSettings,
   onWeightChange,
   onNormalize,
   onOptimizationProfileChange,
   onGrowthConstraintsChange,
+  onValidationSettingsChange,
 }: {
   assets: Asset[];
   data: Dataset;
@@ -843,11 +886,16 @@ function PortfolioView({
   optimizationProfile: PortfolioOptimizationProfile;
   growthConstraints: GrowthConstraintSettings;
   growthOptimization: OptimizationResult;
+  benchmarkPortfolio: PortfolioStats | null;
+  walkForward: WalkForwardResult;
+  validationSettings: WalkForwardSettings;
   onWeightChange: (id: string, value: number) => void;
   onNormalize: () => void;
   onOptimizationProfileChange: (profile: PortfolioOptimizationProfile) => void;
   onGrowthConstraintsChange: (next: Partial<GrowthConstraintSettings>) => void;
+  onValidationSettingsChange: (next: Partial<WalkForwardSettings>) => void;
 }) {
+  const [space, setSpace] = useState<PortfolioSpace>("construction");
   const totalWeight = assets.reduce((sum, asset) => sum + (weights[asset.id] ?? 0), 0);
   const fractions = normalizeAllocationWeights(Object.fromEntries(assets.map(asset => [asset.id, weights[asset.id] ?? 0])));
   const normalizedWeights = Object.fromEntries(assets.map(asset => [asset.id, (fractions?.[asset.id] ?? 0) * 100]));
@@ -862,7 +910,13 @@ function PortfolioView({
     { id: "growth", label: "Croissance", shortDescription: growthOptimization.feasible ? "TCAM maximal · contraintes respectées" : "Aucune solution faisable" },
   ];
 
-  return <div className="portfolio-layout">
+  return <div className="portfolio-view">
+    <nav className="portfolio-spaces" aria-label="Espaces du portefeuille" role="tablist">
+      {([[
+        "construction", "Construction",
+      ], ["comparison", "Comparaison"], ["validation", "Validation"]] as Array<[PortfolioSpace, string]>).map(([id, label]) => <button key={id} role="tab" aria-selected={space === id} className={space === id ? "active" : ""} onClick={() => setSpace(id)}>{label}</button>)}
+    </nav>
+    {space === "construction" && <div className="portfolio-layout">
     <section className="portfolio-controls">
       <div className="card-heading compact">
         <div className="heading-icon"><SlidersHorizontal size={17} /></div>
@@ -939,6 +993,9 @@ function PortfolioView({
         <div className="table-scroll"><table><thead><tr><th>Année</th><th>Rendement</th><th>Valeur cumulée</th><th>Drawdown</th></tr></thead><tbody>{[...portfolioData].sort((a, b) => a.return - b.return).slice(0, 5).map((point) => <tr key={point.year}><td>{point.year}</td><td className={point.return >= 0 ? "positive" : "negative"}>{formatPercent(point.return)}</td><td>{formatNumber(point.value, 1)}</td><td className="negative">{formatPercent(point.drawdown)}</td></tr>)}</tbody></table></div>
       </section>
     </> : <div className="error-panel portfolio-empty">Données insuffisantes ou incohérentes : vérifie les pondérations et les rendements de chaque année de la période. Aucun rendement manquant n’est remplacé par zéro.</div>}
+    </div>}
+    {space === "comparison" && <PortfolioComparisonDashboard assets={assets} weights={weights} portfolio={portfolio} equalPortfolio={equalPortfolio} benchmarkPortfolio={benchmarkPortfolio} growthOptimization={growthOptimization} mode={mode} />}
+    {space === "validation" && <WalkForwardView assets={assets} result={walkForward} settings={validationSettings} onSettingsChange={onValidationSettingsChange} />}
   </div>;
 }
 
@@ -952,6 +1009,104 @@ function PortfolioComparison({ portfolio, equalPortfolio, mode }: { portfolio: P
       <div className="comparison-delta"><span>Écart de rendement annualisé</span><strong>{delta(portfolio.cagr, equalPortfolio?.cagr ?? null)}</strong><small>Lecture {mode === "nominal" ? "nominale" : "réelle"}</small></div>
     </div>
   </section>;
+}
+
+function allocationLabel(assets: Asset[], weights: Record<string, number> | null): string {
+  if (!weights) return "n.d.";
+  const normalized = normalizeAllocationWeights(weights);
+  if (!normalized) return "n.d.";
+  const entries = assets
+    .map(asset => ({ asset, weight: (normalized[asset.id] ?? 0) * 100 }))
+    .filter(entry => entry.weight > 0)
+    .sort((left, right) => right.weight - left.weight);
+  return entries.length ? entries.map(entry => `${entry.asset.name} ${entry.weight.toFixed(0)} %`).join(" · ") : "n.d.";
+}
+
+function PortfolioComparisonDashboard({
+  assets,
+  weights,
+  portfolio,
+  equalPortfolio,
+  benchmarkPortfolio,
+  growthOptimization,
+  mode,
+}: {
+  assets: Asset[];
+  weights: Record<string, number>;
+  portfolio: PortfolioStats | null;
+  equalPortfolio: PortfolioStats | null;
+  benchmarkPortfolio: PortfolioStats | null;
+  growthOptimization: OptimizationResult;
+  mode: Mode;
+}) {
+  const rows: Array<{ label: string; type: string; weights: Record<string, number> | null; stats: PortfolioStats | null; note?: string }> = [
+    { label: "Croissance", type: "Automatique · in-sample", weights: growthOptimization.weights, stats: growthOptimization.stats, note: "Optimisée sur toute la période affichée." },
+    { label: "Personnalisée", type: "Poids fixes · in-sample", weights, stats: portfolio, note: "Pondérations modifiables dans Construction." },
+    { label: "Équipondérée", type: "Référence · in-sample", weights: Object.fromEntries(assets.map(asset => [asset.id, 1])), stats: equalPortfolio },
+    { label: "MSCI World", type: "Benchmark · in-sample", weights: { msci_world: 1 }, stats: benchmarkPortfolio, note: benchmarkPortfolio ? "Série indépendante si disponible." : "Non comparable sur cette période." },
+    { label: "Robustesse", type: "Automatique", weights: null, stats: null, note: "Disponible en phase 4." },
+    { label: "Objectif patrimonial", type: "Automatique", weights: null, stats: null, note: "Disponible en phase 5." },
+  ];
+
+  return <div className="portfolio-space-content">
+    <section className="table-card comparison-dashboard">
+      <div className="card-heading compact"><div className="heading-icon warm"><BarChart3 size={17} /></div><div><h2>Comparer les allocations</h2><p>Résultats historiques sur la même période, devise, lecture et règles de rééquilibrage. Le hors échantillon est séparé dans Validation.</p></div></div>
+      <div className="table-scroll"><table><thead><tr><th>Allocation</th><th>Nature</th><th>TCAM</th><th>Volatilité</th><th>Drawdown annuel</th><th>Pondérations</th></tr></thead><tbody>{rows.map(row => <tr key={row.label}><td>{row.label}</td><td>{row.type}{row.note && <small className="table-note">{row.note}</small>}</td><td>{formatPercent(row.stats?.cagr)}</td><td>{formatPercent(row.stats?.volatility)}</td><td>{formatPercent(row.stats?.maxDrawdown)}</td><td>{row.label === "MSCI World" ? row.stats ? "100 % MSCI World" : "n.d." : allocationLabel(assets, row.weights)}</td></tr>)}</tbody></table></div>
+    </section>
+    <section className="insight-card comparison-reading">
+      <div className="card-heading compact"><div className="heading-icon cool"><CircleHelp size={17} /></div><div><h2>Lire cette comparaison</h2><p>Une bonne performance historique ne constitue pas une prévision.</p></div></div>
+      <p>Les lignes in-sample décrivent les rendements observés sur la période complète. La validation walk-forward gèle les poids à chaque date de décision et mesure uniquement les années qui suivent, avec un CAGR composé hors échantillon. Les coûts, la fiscalité et les drawdowns intra-annuels ne sont pas modélisés.</p>
+      {mode === "real" && <p className="method-note">La lecture réelle retire l'inflation française selon la convention documentée ; elle reste distincte d'un objectif nominal.</p>}
+    </section>
+  </div>;
+}
+
+function walkForwardWeights(assets: Asset[], weights: Record<string, number> | null): string {
+  if (!weights) return "Échec";
+  const entries = assets.map(asset => ({ asset, weight: (weights[asset.id] ?? 0) * 100 })).filter(entry => entry.weight > 0).sort((left, right) => right.weight - left.weight);
+  return entries.length ? entries.slice(0, 3).map(entry => `${entry.asset.name} ${entry.weight.toFixed(0)} %`).join(" · ") : "0 %";
+}
+
+function WalkForwardView({
+  assets,
+  result,
+  settings,
+  onSettingsChange,
+}: {
+  assets: Asset[];
+  result: WalkForwardResult;
+  settings: WalkForwardSettings;
+  onSettingsChange: (next: Partial<WalkForwardSettings>) => void;
+}) {
+  return <div className="validation-layout">
+    <section className="validation-controls-card">
+      <div className="card-heading compact"><div className="heading-icon cool"><CalendarDays size={17} /></div><div><h2>Validation walk-forward</h2><p>Les allocations sont apprises avant chaque test, puis gelées sur des rendements annuels hors échantillon.</p></div></div>
+      <div className="validation-controls">
+        <label>Apprentissage minimal <input aria-label="Années d'apprentissage" type="number" min="1" max="100" step="1" value={settings.minTrainYears} onChange={event => onSettingsChange({ minTrainYears: Math.max(1, Number(event.target.value) || 1) })} /> <span>ans</span></label>
+        <label>Test par fenêtre <input aria-label="Années de test" type="number" min="1" max="30" step="1" value={settings.testYears} onChange={event => onSettingsChange({ testYears: Math.max(1, Number(event.target.value) || 1) })} /> <span>ans</span></label>
+        <label className="validation-expanding"><input type="checkbox" checked={settings.expanding} disabled readOnly /> Apprentissage expansif</label>
+      </div>
+      <p className="method-note">Fenêtres de test non chevauchantes · rééquilibrage annuel vers les poids cibles · aucune donnée de test utilisée pour l'optimisation. L'apprentissage roulant sera ajouté ultérieurement.</p>
+    </section>
+
+    <section className="validation-summary-card">
+      <div className="validation-summary-heading"><strong>{result.windows.length}</strong><span>fenêtre{result.windows.length > 1 ? "s" : ""} testée{result.windows.length > 1 ? "s" : ""}</span><small>incertitude {result.uncertainty}</small></div>
+      {result.windows.length === 0 && <div className="configuration-message warning"><AlertTriangle size={16} /> Validation indisponible / insuffisante : il faut au moins une période complète d'apprentissage et de test.</div>}
+      {result.diagnostics.map(diagnostic => <p className="optimization-profile-note" key={diagnostic}>{diagnostic}</p>)}
+      {result.strategies.filter(strategy => !strategy.feasible).flatMap(strategy => strategy.diagnostics.map(diagnostic => <p className="optimization-profile-note" key={`${strategy.id}-${diagnostic}`}>{strategy.label} : {diagnostic}</p>))}
+    </section>
+
+    <section className="table-card validation-results-card">
+      <div className="card-heading compact"><div className="heading-icon"><Activity size={17} /></div><div><h2>Résultats hors échantillon</h2><p>Le TCAM est composé sur les seules années de test ; il ne s'agit pas d'une moyenne de TCAM par fenêtre.</p></div></div>
+      <div className="table-scroll"><table><thead><tr><th>Allocation</th><th>TCAM OOS</th><th>Volatilité</th><th>Drawdown annuel</th><th>Fenêtres valides</th><th>Stabilité des poids</th></tr></thead><tbody>{result.strategies.map(strategy => <tr key={strategy.id}><td>{strategy.label}</td><td>{strategy.feasible ? formatPercent(strategy.stats?.cagr) : "n.d."}</td><td>{strategy.feasible ? formatPercent(strategy.stats?.volatility) : "n.d."}</td><td>{strategy.feasible ? formatPercent(strategy.stats?.maxDrawdown) : "n.d."}</td><td>{strategy.validWindowCount} / {strategy.plannedWindowCount}</td><td>{strategy.weightStabilityPct === null ? "n.d." : `${strategy.weightStabilityPct.toFixed(0)} %`} {strategy.averageTurnoverPct !== null && <small className="table-note">Rotation moy. {strategy.averageTurnoverPct.toFixed(1)} pts</small>}</td></tr>)}</tbody></table></div>
+      <p className="method-note">Personnalisée signifie ici les poids choisis aujourd'hui, appliqués rétrospectivement. Ce test ne prétend pas représenter une sélection historiquement disponible.</p>
+    </section>
+
+    {result.windows.length > 0 && <section className="table-card validation-windows-card">
+      <div className="card-heading compact"><div className="heading-icon warm"><SlidersHorizontal size={17} /></div><div><h2>Fenêtres et décisions</h2><p>Les poids de Croissance visibles dans chaque ligne proviennent uniquement de la période d'apprentissage correspondante.</p></div></div>
+      <div className="table-scroll"><table><thead><tr><th>Fenêtre</th><th>Apprentissage</th><th>Test</th><th>Poids Croissance</th><th>Score d'apprentissage</th></tr></thead><tbody>{result.windows.map(window => { const growth = result.strategies.find(strategy => strategy.id === "growth")?.windows[window.index]; return <tr key={window.index}><td>{String(window.index + 1).padStart(2, "0")}</td><td>{window.trainStart}–{window.trainEnd}</td><td>{window.testStart}–{window.testEnd}</td><td>{walkForwardWeights(assets, growth?.weights ?? null)}</td><td>{growth?.score === null || growth?.score === undefined ? "n.d." : formatPercent(growth.score)}</td></tr>; })}</tbody></table></div>
+    </section>}
+  </div>;
 }
 
 function CurrencyEffectCard({ portfolio, comparison }: { portfolio: PortfolioStats; comparison: CurrencyComparison }) {

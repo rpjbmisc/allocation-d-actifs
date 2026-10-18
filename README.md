@@ -26,7 +26,9 @@ Puis ouvrir l'URL affichée par Vite, généralement `http://localhost:5173`.
 
 Le tableau de bord charge les actifs déclarés dans `public/data/assets_index.json`. Les séries individuelles utilisent le schéma commun `Year,Series_Level,Annual_Return_Pct`. Les rendements réels sont calculés à la volée à partir des rendements USD, du taux USD/EUR historique et de l'inflation française.
 
-L'onglet `Portefeuille` permet de tester une allocation pondérée sur la période commune sélectionnée. En mode `À la carte`, il propose automatiquement l'allocation au meilleur TCAM historique sous drawdown maximal de 40 %, avec des pondérations testées par pas de 5 %. La proposition est recalculée lorsque les actifs, la période ou la lecture changent, puis reste modifiable manuellement. L'onglet affiche aussi la volatilité, le drawdown maximal, un Sharpe brut, la trajectoire de 100 unités investies, les pires années, le drawdown année par année et les corrélations entre actifs. La simulation utilise les rendements annuels et un rééquilibrage annuel implicite.
+L'espace `Portefeuille` regroupe `Construction`, `Comparaison` et `Validation`. Construction permet de tester une allocation pondérée sur la période commune sélectionnée. En mode `À la carte`, il propose automatiquement l'allocation au meilleur TCAM historique sous contraintes configurables, avec des pondérations testées sur une grille déterministe. La proposition est recalculée lorsque les actifs, la période ou la lecture changent, puis reste modifiable manuellement. L'espace affiche aussi la volatilité, le drawdown maximal, le rendement brut / volatilité, la trajectoire de 100 unités investies, les pires années, le drawdown année par année et les corrélations entre actifs. La simulation utilise les rendements annuels et un rééquilibrage annuel implicite.
+
+Validation applique un walk-forward expansif par défaut avec 20 ans d'apprentissage et des tests de 5 ans non chevauchants, valeurs réglables. Croissance est optimisée uniquement avant chaque test ; ses poids sont ensuite gelés. La comparaison inclut Personnalisée à poids fixes, équipondérée et MSCI World si disponible. Le TCAM hors échantillon est composé sur les seules années testées et une validation insuffisante est affichée explicitement.
 
 L'onglet `Corrélations` affiche tout l'univers des actifs par défaut dans une matrice thermique, avec sélection indépendante, période personnalisable, corrélation moyenne des paires, actifs et paires les plus complémentaires ou redondants, ainsi qu'un diagramme des TCAM nominaux ou réels. Les corrélations sont calculées sur les rendements annuels et indiquent le nombre d'observations communes par paire.
 
@@ -52,8 +54,10 @@ npm run build
 ```
 
 Le moteur financier est dans `src/domain/`, la recherche historique dans
-`src/optimization/` et le chargement dans `src/data/`. `src/analytics.ts` reste
-la façade des imports existants. Les tests Vitest couvrent les cas financiers
-calculables à la main, les données historiques et les contrôles de pondération.
+`src/optimization/`, la validation temporelle dans `src/validation/` et le
+chargement dans `src/data/`. `src/analytics.ts` reste la façade des imports
+existants. Les tests Vitest couvrent les cas financiers calculables à la main,
+les données historiques, les contrôles de pondération et les fenêtres
+walk-forward.
 Les conventions et écarts justifiés de phase 1 sont détaillés dans
 [ARCHITECTURE.md](docs/ARCHITECTURE.md#11-fondations-livrées-en-phase-1).
