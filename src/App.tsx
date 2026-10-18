@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import Papa from "papaparse";
+import { loadHistoricalData } from "./data/load";
 import {
   Area,
   AreaChart,
@@ -21,6 +21,14 @@ import {
   Currency,
   CurrencyContext,
   computeStats,
+  currencyFxReturn,
+  weightedCagrDiagnostics,
+  normalizeWeights as normalizeAllocationWeights,
+  maxDrawdown,
+  assetCoversPeriod,
+  dataBounds,
+  computeGrowthData,
+  computeDecadeData,
   computePortfolio,
   computeCorrelationDetails,
   computeCorrelationMatrix,
@@ -29,7 +37,6 @@ import {
   formatNumber,
   formatPercent,
   Mode,
-  normalizeRows,
   localizeRows,
   PortfolioStats,
   PortfolioOptimizationProfile,
@@ -87,7 +94,6 @@ const chartTabs: { id: Tab; label: string }[] = [
 ]; 
 
 const baseUrl = import.meta.env.BASE_URL;
-const dataUrl = (file: string) => `${baseUrl}data/${encodeURIComponent(file)}`;
 const preferredIds = ["msci_world", "gold", "us_lt_govt_bonds"];
 const MATRIX_ASSETS_PARAM = "matrixAssets";
 const tabIds = new Set<Tab>(["overview", "returns", "growth", "decades", "portfolio", "correlations"]);
@@ -120,32 +126,6 @@ function candidateRisk(id: string): string {
   if (id === "pure") return "Élevé";
   if (id === "constrained") return "Encadré";
   return "Modéré";
-}
-
-function maxDrawdown(rows: Row[], start: number, end: number, mode: Mode): number | null {
-  let value = 100;
-  let peak = value;
-  let drawdown = 0;
-  let observed = false;
-  rows.filter((row) => row.year >= start && row.year <= end).forEach((row) => {
-    const current = returnValue(row, mode);
-    if (current === null) return;
-    observed = true;
-    value *= 1 + current / 100;
-    peak = Math.max(peak, value);
-    drawdown = Math.min(drawdown, (value / peak - 1) * 100);
-  });
-  return observed ? drawdown : null;
-}
-
-function assetCoversPeriod(rows: Row[] | undefined, start: number, end: number): boolean {
-  if (!rows?.length || start > end) return false;
-  return rows.some((row) => row.year <= start) && rows.some((row) => row.year >= end);
-}
-
-function dataBounds(rows: Row[] | undefined, fallback: [number, number]): [number, number] {
-  const years = rows?.map((row) => row.year).filter(Number.isFinite) ?? [];
-  return years.length ? [Math.min(...years), Math.max(...years)] : fallback;
 }
 
 function readTab(value: string | null): Tab {
@@ -201,37 +181,12 @@ function App() {
     let cancelled = false;
     async function load() {
       try {
-        const [indexResponse, presetsResponse, fxResponse, cpiResponse] = await Promise.all([
-          fetch(`${baseUrl}data/assets_index.json`),
-          fetch(`${baseUrl}data/candidate_presets.json`),
-          fetch(`${baseUrl}data/fx_usd_per_eur_historical_1960_2025.csv`),
-          fetch(`${baseUrl}data/french_cpi_dec_dec_1960_2025.csv`),
-        ]);
-        if (!indexResponse.ok) throw new Error("Le registre des actifs est introuvable.");
-        if (!presetsResponse.ok) throw new Error("Les allocations candidates sont introuvables.");
-        if (!fxResponse.ok || !cpiResponse.ok) throw new Error("Les séries de change et d'inflation sont introuvables.");
-        const [registry, presets] = await Promise.all([
-          indexResponse.json() as Promise<Asset[]>,
-          presetsResponse.json() as Promise<CandidatePreset[]>,
-        ]);
-        const [fxCsv, cpiCsv] = await Promise.all([fxResponse.text(), cpiResponse.text()]);
-        const fxRows = Papa.parse<Record<string, unknown>>(fxCsv, { header: true, dynamicTyping: true, skipEmptyLines: true }).data;
-        const cpiRows = Papa.parse<Record<string, unknown>>(cpiCsv, { header: true, dynamicTyping: true, skipEmptyLines: true }).data;
-        const annual = (rows: Record<string, unknown>[], valueKey: string) => Object.fromEntries(rows.map((row) => [Number(row.Year), Number(row[valueKey])]).filter(([year, value]) => Number.isFinite(year) && Number.isFinite(value)));
-        const loaded = await Promise.all(
-          registry.map(async (asset) => {
-            const response = await fetch(dataUrl(asset.csvFile));
-            if (!response.ok) return [asset.id, [] as Row[]] as const;
-            const csv = await response.text();
-            const parsed = Papa.parse<Record<string, unknown>>(csv, { header: true, dynamicTyping: true, skipEmptyLines: true });
-            return [asset.id, normalizeRows(parsed.data)] as const;
-          }),
-        );
+        const { assets: registry, presets, rawData, currencyContext } = await loadHistoricalData<CandidatePreset>(baseUrl);
         if (cancelled) return;
         setAssets(registry);
         setPresetDefinitions(presets);
-        setRawData(Object.fromEntries(loaded));
-        setCurrencyContext({ usdPerEur: annual(fxRows, "USD_per_EUR"), frenchInflation: annual(cpiRows, "Inflation_Dec_Dec_Pct") });
+        setRawData(rawData);
+        setCurrencyContext(currencyContext);
         const sharedSelection = selected.filter((id) => registry.some((asset) => asset.id === id));
         const initialSelection = sharedSelection.length ? sharedSelection : preferredIds.filter((id) => registry.some((asset) => asset.id === id));
         setSelected(initialSelection);
@@ -329,42 +284,8 @@ function App() {
     return point;
   }), [data, mode, selectedAssets, years]);
 
-  const growthData = useMemo(() => {
-    const values = Object.fromEntries(selectedAssets.map((asset) => [asset.id, 100]));
-    return [{ year: start - 1, ...values }, ...years.map((year) => {
-      const point: Record<string, number | null> = { year };
-      selectedAssets.forEach((asset) => {
-        const row = data[asset.id].find((candidate) => candidate.year === year);
-        const value = row ? returnValue(row, mode) : null;
-        if (value === null) point[asset.id] = null;
-        else {
-          values[asset.id] *= 1 + value / 100;
-          point[asset.id] = Math.round(values[asset.id] * 10) / 10;
-        }
-      });
-      return point;
-    })];
-  }, [data, mode, selectedAssets, start, years]);
-
-  const decadeData = useMemo(() => {
-    const grouped = new Map<number, Record<string, number[]>>();
-    selectedAssets.forEach((asset) => data[asset.id].forEach((row) => {
-      const value = returnValue(row, mode);
-      if (row.year < start || row.year > end || value === null) return;
-      const decade = Math.floor(row.year / 10) * 10;
-      const group = grouped.get(decade) ?? {};
-      group[asset.id] = [...(group[asset.id] ?? []), value];
-      grouped.set(decade, group);
-    }));
-    return [...grouped.entries()].sort(([a], [b]) => a - b).map(([decade, group]) => {
-      const point: Record<string, number | string> = { decade: `${decade}s` };
-      selectedAssets.forEach((asset) => {
-        const values = group[asset.id] ?? [];
-        point[asset.id] = values.length ? (Math.pow(values.reduce((total, value) => total * (1 + value / 100), 1), 1 / values.length) - 1) * 100 : 0;
-      });
-      return point;
-    });
-  }, [data, end, mode, selectedAssets, start]);
+  const growthData = useMemo(() => computeGrowthData(data, selectedAssets.map(a => a.id), start, end, mode), [data, selectedAssets, start, end, mode]);
+  const decadeData = useMemo(() => computeDecadeData(data, selectedAssets.map(a => a.id), start, end, mode), [data, selectedAssets, start, end, mode]);
 
   const visiblePhases = historicalPhases.filter((phase) => phase.start >= start && phase.end <= end);
 
@@ -377,8 +298,6 @@ function App() {
         points: portfolio.points.flatMap((point) => {
           const usdPoint = usdPortfolio.points.find((candidate) => candidate.year === point.year);
           if (!usdPoint) return [];
-          const currentFx = currencyContext.usdPerEur[point.year];
-          const previousFx = currencyContext.usdPerEur[point.year - 1];
           return [{
             year: point.year,
             usdValue: usdPoint.value,
@@ -386,7 +305,7 @@ function App() {
             usdDrawdown: usdPoint.drawdown,
             currentReturn: point.return,
             currentDrawdown: point.drawdown,
-            fxReturn: Number.isFinite(currentFx) && Number.isFinite(previousFx) ? (previousFx / currentFx - 1) * 100 : null,
+            fxReturn: currencyFxReturn(currencyContext, point.year),
           }];
         }),
       }
@@ -414,16 +333,11 @@ function App() {
   const worstReturnAsset = [...decisionStats].sort((left, right) => (mode === "nominal" ? left.stat.cagrNominal ?? Infinity : left.stat.cagrReal ?? Infinity) - (mode === "nominal" ? right.stat.cagrNominal ?? Infinity : right.stat.cagrReal ?? Infinity))[0];
   const lowestRiskAsset = [...decisionStats].sort((left, right) => left.stat.volatility - right.stat.volatility)[0];
   const worstDrawdownAsset = [...decisionStats].sort((left, right) => (left.drawdown ?? 0) - (right.drawdown ?? 0))[0];
-  const portfolioContributions = selectedAssets.map((asset) => {
-    const stat = stats[asset.id];
-    const weight = portfolioWeights[asset.id] ?? 0;
-    const normalizedWeight = Object.values(portfolioWeights).reduce((total, current) => total + current, 0) > 0 ? weight / Object.values(portfolioWeights).reduce((total, current) => total + current, 0) * 100 : 0;
-    const cagr = mode === "nominal" ? stat?.cagrNominal ?? null : stat?.cagrReal ?? null;
-    return { asset, weight: normalizedWeight, contribution: cagr === null ? null : normalizedWeight / 100 * cagr };
-  });
+  const cagrDiagnostics = weightedCagrDiagnostics(stats, portfolioWeights, mode);
+  const portfolioContributions = selectedAssets.map(asset => ({ asset, ...cagrDiagnostics[asset.id] }));
   const diversificationMetrics = useMemo(
-    () => computeDiversificationMetrics(data, selectedAssets.map((asset) => asset.id), portfolioWeights, portfolio, start, end, mode, correlations),
-    [correlations, data, end, mode, portfolio, portfolioWeights, selectedAssets, start],
+    () => computeDiversificationMetrics(data, selectedAssets.map((asset) => asset.id), portfolioWeights, portfolio, start, end, mode),
+    [data, end, mode, portfolio, portfolioWeights, selectedAssets, start],
   );
   const weightedCorrelation = diversificationMetrics.weightedCorrelation;
   const diversificationRatio = diversificationMetrics.diversificationRatio;
@@ -904,7 +818,8 @@ function PortfolioView({
   onOptimizationProfileChange: (profile: PortfolioOptimizationProfile) => void;
 }) {
   const totalWeight = assets.reduce((sum, asset) => sum + (weights[asset.id] ?? 0), 0);
-  const normalizedWeights = Object.fromEntries(assets.map((asset) => [asset.id, totalWeight > 0 ? (weights[asset.id] ?? 0) / totalWeight * 100 : 0]));
+  const fractions = normalizeAllocationWeights(Object.fromEntries(assets.map(asset => [asset.id, weights[asset.id] ?? 0])));
+  const normalizedWeights = Object.fromEntries(assets.map(asset => [asset.id, (fractions?.[asset.id] ?? 0) * 100]));
   const portfolioData = portfolio?.points ?? [];
   const drawdownData = currencyComparison
     ? portfolioData.map((point) => ({ ...point, ...(currencyComparison.points.find((comparisonPoint) => comparisonPoint.year === point.year) ?? {}) }))
@@ -953,16 +868,16 @@ function PortfolioView({
         <span>Total saisi · simulation normalisée à 100 %</span><strong>{totalWeight.toFixed(1)} %</strong>
       </div>
       <button className="normalize-button" onClick={onNormalize}>Normaliser à 100 %</button>
-      <p className="method-note">Simulation basée sur des rendements annuels et un rééquilibrage annuel implicite. Les résultats décrivent un scénario historique, pas une prévision.</p>
+      <p className="method-note">Simulation avec rééquilibrage annuel ; risque observé aux clôtures annuelles seulement. Frais, fiscalité et coûts de transaction non pris en compte. Les résultats décrivent un scénario historique, pas une prévision.</p>
     </section>
 
     {portfolio ? <>
        <section className="portfolio-summary">
          <div className="portfolio-kpi featured"><span>Rendement annualisé · {mode === "nominal" ? "nominal" : "réel"}</span><strong>{formatPercent(portfolio.cagr)}</strong><small>Performance moyenne par an, composée.</small></div>
          <Metric label="Volatilité" value={formatPercent(portfolio.volatility)} description="Variation annuelle des rendements." featured />
-         <Metric label="Drawdown maximal" value={formatPercent(portfolio.maxDrawdown)} description="Plus forte baisse depuis un sommet." negative featured />
-           <Metric label="Sharpe brut" value={portfolio.sharpe === null ? "n.d." : portfolio.sharpe.toFixed(2)} description="< 0 faible · 0–1 moyen · 1–2 bon · > 2 très bon." tone={metricTone(portfolio.sharpe, "sharpe")} />
-           <Metric label="Corrélation pondérée" value={weightedCorrelation === null ? "n.d." : weightedCorrelation.toFixed(2)} description="< 0,2 faible · > 0,7 forte." tone={metricTone(weightedCorrelation, "correlation")} />
+         <Metric label="Drawdown maximal" value={formatPercent(portfolio.maxDrawdown)} description="Plus forte baisse entre clôtures annuelles, depuis le capital initial ou un sommet annuel." negative featured />
+           <Metric label="Rendement brut / volatilité" value={portfolio.grossReturnToVolatility === null ? "n.d." : portfolio.grossReturnToVolatility.toFixed(2)} description="Moyenne annuelle / volatilité, sans déduction du taux sans risque." tone={metricTone(portfolio.grossReturnToVolatility, "grossRatio")} />
+           <Metric label="Corrélation entre actifs" value={weightedCorrelation === null ? "n.d." : weightedCorrelation.toFixed(2)} description="Moyenne pondérée hors diagonale, sur les mêmes années communes." tone={metricTone(weightedCorrelation, "correlation")} />
            <Metric label="Ratio de diversification" value={diversificationRatio === null ? "n.d." : diversificationRatio.toFixed(2)} description="1 = aucune · 1,2–1,5 modérée · > 1,5 forte." tone={metricTone(diversificationRatio, "diversification")} />
            <Metric label="Années positives" value={`${portfolio.positiveRate.toFixed(0)} %`} description="Part des années au-dessus de 0 %." positive />
           <Metric label="Pire année" value={portfolio.worst ? `${portfolio.worst.year} · ${formatPercent(portfolio.worst.return)}` : "n.d."} description="Rendement annuel le plus faible." negative />
@@ -988,7 +903,7 @@ function PortfolioView({
         <div className="card-heading compact"><div className="heading-icon cool"><ArrowDownRight size={17} /></div><div><h2>Années difficiles</h2><p>Les cinq baisses annuelles les plus importantes du portefeuille.</p></div></div>
         <div className="table-scroll"><table><thead><tr><th>Année</th><th>Rendement</th><th>Valeur cumulée</th><th>Drawdown</th></tr></thead><tbody>{[...portfolioData].sort((a, b) => a.return - b.return).slice(0, 5).map((point) => <tr key={point.year}><td>{point.year}</td><td className={point.return >= 0 ? "positive" : "negative"}>{formatPercent(point.return)}</td><td>{formatNumber(point.value, 1)}</td><td className="negative">{formatPercent(point.drawdown)}</td></tr>)}</tbody></table></div>
       </section>
-    </> : <div className="error-panel portfolio-empty">Attribue au moins une pondération à un actif disposant de données sur toute la période commune.</div>}
+    </> : <div className="error-panel portfolio-empty">Données insuffisantes ou incohérentes : vérifie les pondérations et les rendements de chaque année de la période. Aucun rendement manquant n’est remplacé par zéro.</div>}
   </div>;
 }
 
@@ -1024,9 +939,9 @@ function ContributionChart({ contributions, mode }: { contributions: Array<{ ass
   const totalContribution = available.reduce((total, entry) => total + (entry.contribution as number), 0);
   const formatContributionShare = (contribution: number) => Math.abs(totalContribution) < Number.EPSILON ? "n.d." : `${(contribution / totalContribution * 100).toFixed(2).replace(".", ",")}%`;
   return <section className="contribution-card">
-    <div className="card-heading compact"><div className="heading-icon cool"><Activity size={17} /></div><div><h2>Contribution au rendement</h2><p>Points de rendement annualisé apportés par chaque actif selon son poids normalisé.</p></div></div>
+    <div className="card-heading compact"><div className="heading-icon cool"><Activity size={17} /></div><div><h2>Contribution au rendement</h2><p>Poids normalisé × TCAM individuel ; ces valeurs ne décomposent pas le TCAM du portefeuille.</p></div></div>
     <div className="contribution-list">{sortedContributions.map(({ asset, weight, contribution }) => <div className="contribution-row" key={asset.id}><div className="contribution-label"><i style={{ background: asset.accentColor }} /><span>{asset.name}</span><b>{weight.toFixed(1)} %</b></div><div className="contribution-track"><span className={contribution !== null && contribution < 0 ? "negative" : ""} style={{ width: `${contribution === null ? 0 : Math.max(4, Math.abs(contribution) / scale * 100)}%`, background: asset.accentColor }} /></div><strong>{contribution === null ? "n.d." : `${contribution >= 0 ? "+" : ""}${contribution.toFixed(2)} pts (${formatContributionShare(contribution)})`}</strong></div>)}</div>
-    <p className="method-note">Cette lecture décrit une contribution au rendement {mode === "nominal" ? "nominal" : "réel"}, pas une prévision.</p>
+    <p className="method-note">Cette lecture est un diagnostic pondéré des TCAM {mode === "nominal" ? "nominaux" : "réels"} individuels, pas une attribution additive ni une prévision.</p>
   </section>;
 }
 
@@ -1082,9 +997,9 @@ function Overview({ assets, stats, mode, start, end }: { assets: Asset[]; stats:
   </>;
 }
 
-function metricTone(value: number | null, kind: "sharpe" | "correlation" | "diversification"): "very-negative" | "negative" | "neutral" | "positive" | "very-positive" | undefined {
+function metricTone(value: number | null, kind: "grossRatio" | "correlation" | "diversification"): "very-negative" | "negative" | "neutral" | "positive" | "very-positive" | undefined {
   if (value === null || !Number.isFinite(value)) return undefined;
-  if (kind === "sharpe") return value < 0 ? "very-negative" : value < 0.5 ? "negative" : value < 1 ? "neutral" : value < 2 ? "positive" : "very-positive";
+  if (kind === "grossRatio") return value < 0 ? "very-negative" : value < 0.5 ? "negative" : value < 1 ? "neutral" : value < 2 ? "positive" : "very-positive";
   if (kind === "correlation") return value <= 0.2 ? "very-positive" : value <= 0.5 ? "positive" : value <= 0.7 ? "neutral" : value <= 0.9 ? "negative" : "very-negative";
   return value < 1.05 ? "very-negative" : value < 1.2 ? "negative" : value < 1.5 ? "neutral" : value < 2 ? "positive" : "very-positive";
 }
@@ -1095,7 +1010,7 @@ function RankingTable({ assets, stats, mode, best }: { assets: Asset[]; stats: R
 
 function HistoricalTable({ assets, data, phases, mode }: { assets: Asset[]; data: Dataset; phases: typeof historicalPhases; mode: Mode }) {
   if (!phases.length) return null;
-  return <section className="table-card"><div className="card-heading compact"><div className="heading-icon"><CalendarDays size={17} /></div><div><h2>Régimes historiques</h2><p>TCAM de chaque actif pendant les grandes séquences de marché</p></div></div><div className="table-scroll"><table><thead><tr><th>Période</th><th>Années</th>{assets.map((asset) => <th key={asset.id} style={{ color: asset.accentColor }}>{asset.name}</th>)}</tr></thead><tbody>{phases.map((phase) => <tr key={phase.name}><td><span className="phase-dot" style={{ background: phase.color }} />{phase.name}</td><td>{phase.start}–{phase.end}</td>{assets.map((asset) => { const rows = data[asset.id].filter((row) => row.year >= phase.start && row.year <= phase.end && returnValue(row, mode) !== null); const values = rows.map((row) => returnValue(row, mode) as number); const average = values.length ? (Math.pow(values.reduce((total, value) => total * (1 + value / 100), 1), 1 / values.length) - 1) * 100 : null; return <td key={asset.id} className={average !== null && average >= 0 ? "positive" : "negative"}>{formatPercent(average)}</td>; })}</tr>)}</tbody></table></div></section>;
+  return <section className="table-card"><div className="card-heading compact"><div className="heading-icon"><CalendarDays size={17} /></div><div><h2>Régimes historiques</h2><p>TCAM de chaque actif pendant les grandes séquences de marché</p></div></div><div className="table-scroll"><table><thead><tr><th>Période</th><th>Années</th>{assets.map((asset) => <th key={asset.id} style={{ color: asset.accentColor }}>{asset.name}</th>)}</tr></thead><tbody>{phases.map((phase) => <tr key={phase.name}><td><span className="phase-dot" style={{ background: phase.color }} />{phase.name}</td><td>{phase.start}–{phase.end}</td>{assets.map((asset) => { const stats = computeStats(data[asset.id], phase.start, phase.end, mode); const average = mode === "nominal" ? stats?.cagrNominal ?? null : stats?.cagrReal ?? null; return <td key={asset.id} className={average !== null && average >= 0 ? "positive" : "negative"}>{formatPercent(average)}</td>; })}</tr>)}</tbody></table></div></section>;
 }
 
 export default App;
