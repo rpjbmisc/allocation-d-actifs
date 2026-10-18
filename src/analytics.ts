@@ -7,6 +7,7 @@ export * from "./domain/portfolio";
 export * from "./domain/diversification";
 export * from "./domain/constraints";
 export * from "./optimization/search";
+export * from "./optimization/interface";
 export * from "./format";
 
 export * from "./domain/series";

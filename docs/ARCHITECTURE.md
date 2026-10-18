@@ -1,6 +1,6 @@
 # Architecture — Allocation d'actifs
 
-> **Document technique vivant** · État des lieux au 18 octobre 2026, mis à jour pour la livraison de phase 1 (en attente de revue/fusion).
+> **Document technique vivant** · État des lieux au 18 octobre 2026, mis à jour pour la livraison de phase 2 (en attente de revue/fusion).
 >
 > Les sections « **Existant** » décrivent le code actuel. Les sections « **Cible** » sont des propositions de refactoring, **pas des fonctionnalités déjà implémentées**.
 >
@@ -27,7 +27,8 @@ Objectifs secondaires : reproductibilité, testabilité, performance acceptable 
 | `src/analytics.ts` | Façade de compatibilité des modules `domain/`, `optimization/` et du formatage. |
 | `src/domain/` | Données/continuité, conversion, séries, métriques, portefeuille, contraintes et diversification. |
 | `src/data/load.ts` | Chargement JSON/CSV, validation des séries et des bornes du registre. |
-| `src/optimization/search.ts` | Grille historique héritée, isolée du domaine et de React. |
+| `src/optimization/interface.ts` / `growth.ts` | Contrat commun d'optimisation et stratégie Croissance historique, indépendants de React et du réseau. |
+| `src/optimization/search.ts` | Fonctions de recherche historiques conservées pour compatibilité ; le profil de production délègue désormais à `growth`. |
 | `src/styles.css` | Styles de l'interface. |
 | `public/data/assets_index.json` | Registre des séries d'actifs disponibles avec bornes temporelles. |
 | `public/data/CAGR_*.csv` | Séries annuelles (`Year,Series_Level,Annual_Return_Pct`). |
@@ -46,7 +47,7 @@ Objectifs secondaires : reproductibilité, testabilité, performance acceptable 
 - CAGR = croissance géométrique annualisée des valeurs composées ; volatilité = écart-type des rendements annuels ; drawdown = retrait depuis un plus-haut **de fin d'année** (sans creux intra-annuels).
 - `grossReturnToVolatility` = moyenne arithmétique brute / volatilité ; affiché « Rendement brut / volatilité », sans déduction du taux sans risque.
 - `computeDiversificationMetrics` calcule : (a) moyenne pondérée des corrélations **hors diagonale**, sur les années communes du portefeuille ; (b) ratio de diversification = somme pondérée des volatilités / volatilité du portefeuille.
-- `searchPortfolioOptimizationProfiles` teste des combinaisons de poids sur grille et maximise le CAGR sous drawdown historique annuel de 40 %. Deux variantes imposent des seuils arbitraires de corrélation pondérée et diversification ratio.
+- `optimize("growth", inputs, constraints)` teste des allocations long-only sur une grille déterministe et maximise le CAGR historique sous les contraintes fournies. `searchPortfolioOptimizationProfiles` reste une façade historique sans les anciennes variantes à seuils de corrélation/ratio.
 - Dans `App.tsx`, la grille est adaptative : **pas de 5 points** pour petites sélections, **10** à partir de 5 actifs et **20** à partir de 7 actifs. Ce n'est donc pas un optimum continu garanti.
 - Les profils candidats historiques stockés dans `candidate_presets.json` ne sont pas forcément recalculés sur la période courante ; ne pas les confondre avec les nouveaux optimiseurs.
 - Les rendements sont calculés en USD ou EUR, nominaux ou réels, selon les contrôles existants.
@@ -172,7 +173,10 @@ Conserver :
 
 ### Croissance — `growth`
 
-- **Phase 2** : objectif = maximiser le CAGR historique **sur la fenêtre d'apprentissage uniquement**, sous contraintes paramétrables.
+- **Phase 2 livrée sur cette branche** : `optimize` maximise le CAGR historique **sur la fenêtre d'apprentissage uniquement**, sous contraintes paramétrables.
+- Le contrat retourne des poids en fractions, un score, les statistiques du portefeuille, le nombre d'évaluations et des diagnostics ; une recherche sans solution retourne `weights: null` et `feasible: false`.
+- Les contraintes appliquées sont long-only, somme à 1, poids minimal éventuel, plafonds individuels, drawdown maximal observé aux clôtures annuelles et volatilité annuelle optionnelle.
+- La recherche est une grille bornée : pas de 5 % jusqu'à 4 actifs, 10 % de 5 à 6 actifs et 20 % au-delà dans l'interface, avec un budget maximal de 100 000 évaluations. Le résultat est donc optimal sur cette grille, pas sur le simplexe continu.
 - Période de test exclue de la recherche. Évaluer systématiquement face aux références.
 - Utiliser ensuite des hypothèses de rendement attendu robustifiées si leur modèle et leurs données sont justifiés.
 - Des plafonds de poids protègent de la concentration par *instrument* ; ne pas faire croire qu'ils plafonnent les expositions sous-jacentes.
@@ -261,9 +265,12 @@ Pour chaque PR : publier les commandes exécutées et leurs résultats ; ne pas 
 
 ### Choix techniques/probabilistes à trancher en phase concernée
 
-- Contrats TypeScript exacts, découpage final des dossiers et politique de gestion des erreurs.
-- Paramètres par défaut des contraintes ; convention du taux sans risque.
-- Granularité/algorithme de recherche et garanties d'optimalité.
+- Les contrats TypeScript et la granularité de recherche de la phase 2 sont fixés
+  en §12 ; les stratégies futures pourront les étendre sans modifier les invariants.
+- Les paramètres de contraintes de la phase 2 sont éditables et documentés comme
+  hypothèses UI, pas comme seuils universels.
+- Convention du taux sans risque, encore sans objet pour les stratégies futures tant
+  que le ratio affiché reste « rendement brut / volatilité ».
 - Forme exacte des scénarios, pondération des futurs possibles, objectifs de Robustesse.
 - Méthode de simulation patrimoniale, convention des versements et traitement des frais.
 - Fenêtres walk-forward par défaut et politique si insuffisance de données.
@@ -291,11 +298,12 @@ Lire `README.md`, `docs/ROADMAP.md`, `docs/ARCHITECTURE.md` puis les fichiers co
 
 ## 11. Fondations livrées en phase 1
 
-Cette section décrit la branche proposée ; la recette et la fusion restent à
-valider en revue. L'arborescence de §3 reste une cible pour les phases futures :
-aucun faux moteur walk-forward, scénario ou objectif patrimonial n'est créé ici.
-La simulation de portefeuille actuelle est dans `domain/portfolio.ts` ; les
-fenêtres de recherche historiques restent dans `optimization/search.ts`.
+Cette section décrit les fondations intégrées dans `main` via la PR #2.
+L'arborescence de §3 reste une cible pour les phases futures : aucun faux moteur
+walk-forward, scénario ou objectif patrimonial n'est créé ici. La simulation de
+portefeuille actuelle est dans `domain/portfolio.ts` ; l'optimiseur Croissance
+est décrit en §12 et les fonctions de recherche historiques restent dans
+`optimization/search.ts`.
 
 ### Contrat appliqué et hypothèses
 
@@ -334,9 +342,10 @@ fenêtres de recherche historiques restent dans `optimization/search.ts`.
   L'EUR conserve la borne de disponibilité historique 1961 de l'application.
 - Drawdown depuis le capital initial ou un sommet de **clôture annuelle** ; pas de
   mesure intra-annuelle. Frais, fiscalité et coûts de transaction non inclus.
-- La recherche compare les allocations sur le même univers et les mêmes années
-  complètes, y compris quand un candidat met certains poids à zéro. La grille et
-  les seuils hérités sont conservés jusqu'à la phase 2.
+- La recherche de phase 1 comparait les allocations sur le même univers et les
+  mêmes années complètes, y compris quand un candidat mettait certains poids à
+  zéro. La recherche de phase 2 applique désormais les contraintes explicites
+  décrites en §12 ; les fonctions historiques restent disponibles en compatibilité.
 
 ### Corrections et non-régression à examiner
 
@@ -371,10 +380,11 @@ tolérance flottante près ; les CSV/JSON historiques ne sont pas modifiés.
 6. La trajectoire d'un actif dont la première ligne est un niveau sans rendement
    commence à 100 sur cette année initiale, pas artificiellement une année avant.
 
-Les profils Croissance/Robustesse/Objectif, la validation walk-forward et les
-simulations prospectives ne sont pas implémentés par cette phase. Les seuils et
-couleurs historiques des diagnostics restent présents pour préserver l'interface ;
-ils ne constituent pas une note universelle et seront revus en phase 2.
+Les profils Robustesse/Objectif, la validation walk-forward et les simulations
+prospectives ne sont pas implémentés par les phases livrées. La phase 2 remplace
+les anciens profils de diversification à seuils par un profil Croissance sous
+contraintes configurables ; corrélation et ratio de diversification restent des
+diagnostics sans catégories normatives.
 
 ### Vérification reproductible
 
@@ -383,6 +393,40 @@ ils ne constituent pas une note universelle et seront revus en phase 2.
 équipondération vs concentration, rééquilibrage, poids invalides, trous et change/
 inflation), l'audit des 15 séries et les références historiques. React Testing
 Library/jsdom vérifie l'édition nombre/curseur, le recalcul, la normalisation et
-la navigation entre Portefeuille et Corrélations. Il ne remplace pas une recette
-visuelle complète. Le workflow `validate.yml` applique tests et build aux PR.
+la navigation entre Portefeuille et Corrélations. Les tests de phase 2 couvrent
+également un optimum connu, le plafond de poids, les budgets de drawdown/volatilité,
+l'infaisabilité et le budget d'évaluations. Il ne remplace pas une recette visuelle
+complète. Le workflow `validate.yml` applique tests et build aux PR.
 L'avertissement Vite sur le bundle > 500 kB reste non bloquant et préexistant.
+
+## 12. Optimisation Croissance livrée sur cette branche
+
+### Contrat et unités
+
+`src/optimization/interface.ts` expose `optimize(strategy, inputs, constraints)`.
+`AllocationInput` reçoit les séries déjà chargées/localisées, l'univers et la fenêtre
+d'apprentissage ; aucun module d'optimisation n'importe React ou le réseau.
+`PortfolioConstraints` impose `longOnly: true` et accepte un poids minimal, un
+plafond par actif, un drawdown maximal de clôture annuelle, une volatilité maximale,
+une granularité et un budget d'évaluations. Les poids retournés sont des fractions
+qui somment à 1 ; l'interface convertit seulement ces fractions en pourcentages.
+
+### Recherche et faisabilité
+
+`growth.ts` valide d'abord la période avec `alignAnnualSeries`, y compris les actifs
+à poids nul. Il énumère ensuite une grille de compositions dont la somme vaut 100 %,
+calcule le portefeuille avec le rééquilibrage annuel existant, puis rejette les
+candidats dépassant les contraintes de poids, drawdown ou volatilité. Les égalités
+sont départagées par volatilité, drawdown puis ordre stable des actifs. Le budget par
+défaut est de 100 000 candidats ; l'arrêt est signalé dans `diagnostics` et ne se
+présente pas comme une garantie d'optimum continu.
+
+Dans l'interface, le drawdown de clôture annuel démarre à 40 % pour préserver le
+comportement historique mais peut être désactivé ou modifié ; la volatilité est
+désactivée par défaut et le plafond par instrument démarre à 100 % (aucun plafond
+effectif). Ces valeurs sont des paramètres UI explicites, pas des seuils universels.
+Une configuration impossible ne déclenche plus de repli vers un « meilleur risque » :
+la proposition est absente, les diagnostics sont affichés et l'utilisateur conserve
+ses pondérations manuelles. Après édition, `computePortfolio` recalcule toutes les
+métriques comme auparavant ; la proposition Croissance peut être réappliquée sans
+modifier les contraintes.

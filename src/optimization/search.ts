@@ -3,6 +3,7 @@ import { alignAnnualSeries } from "../domain/data";
 import type { Row, Mode, PortfolioStats, PortfolioCandidate, PortfolioWindow, PortfolioOptimizationResults } from "../domain/types";
 import { computePortfolio } from "../domain/portfolio";
 import { computeDiversificationMetrics } from "../domain/diversification";
+import { optimizeGrowth } from "./growth";
 export function searchPortfolioOptimizationProfiles(
   data: Record<string, Row[]>,
   assetIds: string[],
@@ -20,58 +21,30 @@ export function searchPortfolioOptimizationProfiles(
   };
   if (!assetIds.length || new Set(assetIds).size !== assetIds.length || !Number.isFinite(step) || !Number.isFinite(maxDrawdown) || step <= 0 || 100 % step !== 0) return emptyResults;
 
-  const aligned = alignAnnualSeries(data, assetIds, start, end, mode);
-  if (!aligned.ok) return emptyResults;
-  start = aligned.years[0];
-
-  const results = { ...emptyResults };
-  const minimumObservations = end - start + 1;
-
-  const isBetterReturn = (candidate: PortfolioCandidate, current: PortfolioCandidate | null): boolean => {
-    if (!current) return true;
-    return (candidate.stats.cagr ?? -Infinity) > (current.stats.cagr ?? -Infinity)
-      || ((candidate.stats.cagr ?? -Infinity) === (current.stats.cagr ?? -Infinity) && candidate.stats.volatility < current.stats.volatility);
+  const result = optimizeGrowth({
+    data,
+    assetIds,
+    trainStart: start,
+    trainEnd: end,
+    returnMode: mode,
+    rebalancing: "annual",
+  }, {
+    longOnly: true,
+    maxAnnualCloseDrawdownPct: Math.abs(maxDrawdown),
+    gridStepPct: step,
+    maxEvaluations: 100_000,
+  });
+  if (!result.feasible || !result.weights || !result.stats) return emptyResults;
+  const weights = Object.fromEntries(assetIds.map(id => [id, result.weights?.[id] ?? 0])) as Record<string, number>;
+  const percentageWeights = Object.fromEntries(Object.entries(weights).map(([id, weight]) => [id, weight * 100]));
+  return {
+    ...emptyResults,
+    returnCandidate: {
+      weights: percentageWeights,
+      stats: result.stats,
+      ...computeDiversificationMetrics(data, assetIds, percentageWeights, result.stats, start, end, mode),
+    },
   };
-  const isBetterDrawdown = (candidate: PortfolioCandidate, current: PortfolioCandidate | null): boolean => {
-    if (!current) return true;
-    return candidate.stats.maxDrawdown > current.stats.maxDrawdown
-      || (candidate.stats.maxDrawdown === current.stats.maxDrawdown && isBetterReturn(candidate, current));
-  };
-
-  const visit = (index: number, remaining: number, weights: Record<string, number>) => {
-    if (index === assetIds.length - 1) {
-      const nextWeights = { ...weights, [assetIds[index]]: remaining * step };
-      const stats = computePortfolio(data, nextWeights, start, end, mode);
-      // The first row can be a starting index without a return; reject shortened histories.
-      if (!stats || stats.points.length < minimumObservations || stats.cagr === null) return;
-      const baseCandidate: PortfolioCandidate = { weights: nextWeights, stats };
-
-      if (isBetterDrawdown(baseCandidate, results.minimumDrawdownCandidate)) results.minimumDrawdownCandidate = baseCandidate;
-      if (stats.maxDrawdown < -Math.abs(maxDrawdown)) return;
-      const metrics = computeDiversificationMetrics(data, assetIds, nextWeights, stats, start, end, mode);
-      const candidate: PortfolioCandidate = { ...baseCandidate, ...metrics };
-      if (isBetterReturn(candidate, results.returnCandidate)) results.returnCandidate = candidate;
-
-      const { weightedCorrelation: correlation, diversificationRatio: diversification } = metrics;
-      if (correlation === null || diversification === null) return;
-      if (correlation >= 0.2 && correlation <= 0.7 && diversification >= 1.2 && diversification <= 1.5
-        && isBetterReturn(candidate, results.moderateDiversificationCandidate)) {
-        results.moderateDiversificationCandidate = candidate;
-      }
-      if (correlation < 0.2 && diversification > 1.5
-        && isBetterReturn(candidate, results.strongDiversificationCandidate)) {
-        results.strongDiversificationCandidate = candidate;
-      }
-      return;
-    }
-
-    for (let units = 0; units <= remaining; units += 1) {
-      visit(index + 1, remaining - units, { ...weights, [assetIds[index]]: units * step });
-    }
-  };
-
-  visit(0, 100 / step, {});
-  return results;
 }
 
 export function searchPortfolioCandidates(

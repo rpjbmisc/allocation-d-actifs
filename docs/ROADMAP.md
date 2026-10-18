@@ -2,7 +2,7 @@
 
 > **Document de pilotage** · Créé le 18 octobre 2026 · Référence de travail pour ChatGPT, Codex et OpenCode.
 >
-> **Statut** : phase 0 fusionnée (#1) ; phase 1 implémentée sur branche dédiée, en attente de revue et de fusion ; phases 2 à 6 non commencées. Mettre à jour les statuts **après fusion** des changements correspondants dans `main`.
+> **Statut** : phases 0 et 1 fusionnées (#1, #2) ; phase 2 implémentée sur branche dédiée, en attente de revue et de fusion ; phases 3 à 6 non commencées. Mettre à jour les statuts **après fusion** des changements correspondants dans `main`.
 
 ## 1. Vision et périmètre
 
@@ -61,8 +61,8 @@ L'application est un outil d'**analyse et de simulation**, pas une promesse de r
 | Phase | Statut initial | Dépendances | Livrable principal |
 |---|---|---|---|
 | **0. Cadrage** | Fusionnée (#1) | Aucune | ROADMAP, ARCHITECTURE, lien depuis README |
-| **1. Fondations financières** | Implémentée, à revoir (non fusionnée) | 0 | Moteur modulaire + tests de référence + invariants |
-| **2. Profil Croissance** | À faire | 1 | Optimisation CAGR sous contraintes communes + édition manuelle |
+| **1. Fondations financières** | Fusionnée (#2) | 0 | Moteur modulaire + tests de référence + invariants |
+| **2. Profil Croissance** | Implémentée, à revoir (non fusionnée) | 1 | Optimisation CAGR sous contraintes communes + édition manuelle |
 | **3. Validation walk-forward** | À faire | 2 | Backtests temporels hors échantillon + comparateur |
 | **4. Profil Robustesse** | À faire | 3 | Moteur de scénarios + objectif robuste + validation |
 | **5. Objectif patrimonial** | À faire | 4 | Simulation d'épargne/capital + probabilité conditionnelle |
@@ -96,7 +96,7 @@ Travaux :
 - Pas de CAGR artificiellement bon obtenu en sautant des années manquantes ; les échecs ou historiques insuffisants sont explicites.
 - Les valeurs clés de l'interface existante sont contrôlées par des tests de non-régression ou leurs écarts sont expliqués et approuvés.
 
-#### Livraison proposée de phase 1 (à valider en revue)
+#### Livraison de phase 1
 
 - Extraction derrière `src/analytics.ts` : données/alignement, devises/inflation,
   métriques, portefeuille/rééquilibrage, séries graphiques, diversification,
@@ -121,8 +121,8 @@ Travaux :
   leur remplacement relève de la phase 2. Walk-forward et simulations prospectives
   restent explicitement réservés aux phases 3–5.
 
-La recette n'est pas déclarée fusionnée/validée tant que la revue et la fusion
-n'ont pas eu lieu. Cette branche ne modifie pas `main`.
+La phase 1 a été revue et fusionnée dans `main` via la PR #2. La phase 2
+ci-dessous reste soumise à revue et cette branche ne modifie pas `main`.
 
 ### Phase 2 — Optimisation Croissance sous contraintes
 
@@ -135,6 +135,22 @@ Travaux :
 - Optimisation déterministe et bornée en temps ; reprendre la grille existante comme référence, puis introduire si nécessaire une recherche plus efficace (avec vérification du résultat sur petits cas).
 
 **Recette** : mêmes entrées = mêmes poids ; toutes les contraintes respectées à tolérance définie ; pas de solution impossible maquillée en optimum ; exemple synthétique à optimum connu ; UI inchangée hors nouveaux contrôles ; contrôle manuel préservé.
+
+#### Livraison de cette branche (à valider en revue)
+
+- [x] Contrat indépendant de l'UI : `optimize(strategy, inputs, constraints)` ; la stratégie `growth` maximise le CAGR historique sur la fenêtre fournie.
+- [x] Contraintes explicites : long-only, somme à 100 %, plafond par instrument, drawdown de clôture annuelle et volatilité annuelle optionnelle.
+- [x] Recherche discrète déterministe et bornée par un nombre maximal d'évaluations ; les mêmes entrées donnent les mêmes poids et une infaisabilité retourne `weights: null`.
+- [x] Paramètres UI éditables : drawdown initialement à 40 % pour conserver le comportement historique mais désactivable, volatilité désactivée par défaut et plafond par actif initialement à 100 % (aucun plafond effectif). Ces valeurs ne sont pas des règles universelles.
+- [x] Les anciens boutons de diversification fondés sur des seuils corrélation/ratio sont retirés ; corrélation et ratio restent des diagnostics.
+- [x] Les pondérations manuelles, la normalisation et le recalcul des métriques sont conservés ; cliquer à nouveau sur Croissance réapplique la proposition sans changer les contraintes.
+- [x] Tests déterministes d'optimum connu, contraintes de drawdown/volatilité, infaisabilité, déterminisme, budget de recherche et contrôles UI.
+- [ ] Revue et fusion dans `main`.
+
+Limites assumées : la recherche est optimale à la granularité de grille choisie (5, 10
+ou 20 points dans l'interface, selon le nombre d'actifs), pas un optimum continu ; les
+coûts, la fiscalité et les drawdowns intra-annuels ne sont pas modélisés. La période
+reste historique et in-sample ; la validation walk-forward est réservée à la phase 3.
 
 ### Phase 3 — Walk-forward commun et comparaison
 
