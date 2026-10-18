@@ -2,7 +2,7 @@
 
 > **Document de pilotage** · Créé le 18 octobre 2026 · Référence de travail pour ChatGPT, Codex et OpenCode.
 >
-> **Statut** : phase 0 proposée en Pull Request ; phases 1 à 6 non commencées. Mettre à jour les statuts **après fusion** des changements correspondants dans `main`.
+> **Statut** : phase 0 fusionnée (#1) ; phase 1 implémentée sur branche dédiée, en attente de revue et de fusion ; phases 2 à 6 non commencées. Mettre à jour les statuts **après fusion** des changements correspondants dans `main`.
 
 ## 1. Vision et périmètre
 
@@ -60,8 +60,8 @@ L'application est un outil d'**analyse et de simulation**, pas une promesse de r
 
 | Phase | Statut initial | Dépendances | Livrable principal |
 |---|---|---|---|
-| **0. Cadrage** | En revue (cette PR) | Aucune | ROADMAP, ARCHITECTURE, lien depuis README |
-| **1. Fondations financières** | À faire | 0 | Moteur modulaire + tests de référence + invariants |
+| **0. Cadrage** | Fusionnée (#1) | Aucune | ROADMAP, ARCHITECTURE, lien depuis README |
+| **1. Fondations financières** | Implémentée, à revoir (non fusionnée) | 0 | Moteur modulaire + tests de référence + invariants |
 | **2. Profil Croissance** | À faire | 1 | Optimisation CAGR sous contraintes communes + édition manuelle |
 | **3. Validation walk-forward** | À faire | 2 | Backtests temporels hors échantillon + comparateur |
 | **4. Profil Robustesse** | À faire | 3 | Moteur de scénarios + objectif robuste + validation |
@@ -76,7 +76,7 @@ La phase 6 peut être commencée plus tôt en mode exploratoire ; son contrôle 
 - [x] Documenter les choix financiers et le fonctionnement actuel dans `ARCHITECTURE.md`.
 - [x] Définir les critères de recette de chaque phase et la manière de reprendre le travail dans une nouvelle conversation.
 - [x] Prévoir un lien depuis le README.
-- [ ] Faire relire et **fusionner** la Pull Request dans `main`.
+- [x] Faire relire et **fusionner** la Pull Request dans `main` (#1).
 
 **Recette** : les deux documents existent dans `docs/`, les liens fonctionnent, aucun calcul ou comportement de production n'est modifié, `main` reste intact avant fusion.
 
@@ -95,6 +95,34 @@ Travaux :
 - Séries synthétiques testées : rendement constant, pertes et reprise, corrélations 0 / +1 / −1, portefeuille monoactif et multi-actifs, poids qui ne somment pas à 100, rééquilibrage, données manquantes, change/inflation.
 - Pas de CAGR artificiellement bon obtenu en sautant des années manquantes ; les échecs ou historiques insuffisants sont explicites.
 - Les valeurs clés de l'interface existante sont contrôlées par des tests de non-régression ou leurs écarts sont expliqués et approuvés.
+
+#### Livraison proposée de phase 1 (à valider en revue)
+
+- Extraction derrière `src/analytics.ts` : données/alignement, devises/inflation,
+  métriques, portefeuille/rééquilibrage, séries graphiques, diversification,
+  contraintes et recherche historique. Le chargement réseau est séparé du domaine.
+- Politique unique : années contiguës et complètes ; seule une véritable valeur
+  initiale sans rendement peut être exclue. Les raisons d'échec sont disponibles
+  via `alignAnnualSeries`. L'interface affiche un historique indisponible plutôt
+  qu'un CAGR calculé en sautant des années.
+- Rendements et volatilités en pourcentage ; poids saisis normalisés explicitement
+  en fractions. Poids négatifs/non finis refusés. Un rendement suffit au CAGR ;
+  au moins deux sont nécessaires à la volatilité/corrélation.
+- Tests synthétiques, audit des 15 séries, références historiques avant refactoring
+  dans les quatre modes devise/lecture et tests des contrôles React. `npm test`
+  et `npm run build` ; workflow CI de validation ajouté aux Pull Requests.
+- Corrections soumises à revue : corrélation pondérée hors diagonale, diagnostic
+  sur les mêmes années que le portefeuille, récupération après perte en première
+  année, perte totale à −100 %, indisponibilité des périodes incomplètes et
+  clarification du ratio brut/volatilité. Détails et limites dans
+  [ARCHITECTURE §11](ARCHITECTURE.md#11-fondations-livrées-en-phase-1).
+- Observations historiques et interface visuelle conservées. Les libellés
+  méthodologiques sont précisés ; les seuils des anciens profils restent hérités,
+  leur remplacement relève de la phase 2. Walk-forward et simulations prospectives
+  restent explicitement réservés aux phases 3–5.
+
+La recette n'est pas déclarée fusionnée/validée tant que la revue et la fusion
+n'ont pas eu lieu. Cette branche ne modifie pas `main`.
 
 ### Phase 2 — Optimisation Croissance sous contraintes
 

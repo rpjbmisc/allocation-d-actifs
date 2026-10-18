@@ -1,6 +1,6 @@
 # Architecture — Allocation d'actifs
 
-> **Document technique vivant** · État des lieux au 18 octobre 2026, basé sur le code `main` examiné en phase 0.
+> **Document technique vivant** · État des lieux au 18 octobre 2026, mis à jour pour la livraison de phase 1 (en attente de revue/fusion).
 >
 > Les sections « **Existant** » décrivent le code actuel. Les sections « **Cible** » sont des propositions de refactoring, **pas des fonctionnalités déjà implémentées**.
 >
@@ -23,16 +23,20 @@ Objectifs secondaires : reproductibilité, testabilité, performance acceptable 
 
 | Élément | Rôle actuel |
 |---|---|
-| `src/App.tsx` | Application React, chargement CSV/JSON, sélection, contrôles, onglets, simulations et affichage du portefeuille. |
-| `src/analytics.ts` | Normalisation et conversion, statistiques, simulation d'allocations, matrice de corrélations et recherche d'allocations par grille. |
+| `src/App.tsx` | Orchestration React : sélection, contrôles, onglets et affichage ; délègue chargement et calculs au domaine. |
+| `src/analytics.ts` | Façade de compatibilité des modules `domain/`, `optimization/` et du formatage. |
+| `src/domain/` | Données/continuité, conversion, séries, métriques, portefeuille, contraintes et diversification. |
+| `src/data/load.ts` | Chargement JSON/CSV, validation des séries et des bornes du registre. |
+| `src/optimization/search.ts` | Grille historique héritée, isolée du domaine et de React. |
 | `src/styles.css` | Styles de l'interface. |
 | `public/data/assets_index.json` | Registre des séries d'actifs disponibles avec bornes temporelles. |
 | `public/data/CAGR_*.csv` | Séries annuelles (`Year,Series_Level,Annual_Return_Pct`). |
 | `public/data/asset_currency_metadata.json` | Devise source, nature du rendement (prix/NTR/TR), avertissements de qualité. |
 | `public/data/candidate_presets.json` | Allocations candidates **statiques**, choisies précédemment hors chargement. |
 | `public/data/fx_*.csv` et `french_cpi_*.csv` | Conversion USD/EUR et inflation française. |
-| `package.json` | React, TypeScript, Vite, Recharts, PapaParse, Lucide ; scripts dev/build/preview, **pas encore de test**. |
+| `package.json` | React, TypeScript, Vite, Recharts, PapaParse, Lucide ; scripts dev/build/preview et tests Vitest (`npm test`, `npm run test:watch`). |
 | `.github/workflows/deploy-pages.yml` | Déploiement de l'application par GitHub Actions. |
+| `.github/workflows/validate.yml` | Tests et compilation sur les Pull Requests et `main`. |
 
 ### Fonctionnement financier actuel à préserver/clarifier
 
@@ -40,8 +44,8 @@ Objectifs secondaires : reproductibilité, testabilité, performance acceptable 
 - Conversion actuelle de l'USD vers l'EUR : rendement de l'actif en USD combiné au rendement USD/EUR non couvert. Rendement réel : correction de l'inflation française.
 - `computePortfolio` calcule une moyenne **arithmétique pondérée des rendements annuels** (pondérations cibles réappliquées annuellement) puis compose les années ; il suppose donc un **rééquilibrage annuel**.
 - CAGR = croissance géométrique annualisée des valeurs composées ; volatilité = écart-type des rendements annuels ; drawdown = retrait depuis un plus-haut **de fin d'année** (sans creux intra-annuels).
-- `sharpe` actuel = moyenne arithmétique brute des rendements / volatilité : ce n'est **pas** un ratio de Sharpe conventionnel déduction faite du taux sans risque.
-- `computeDiversificationMetrics` calcule : (a) moyenne pondérée des corrélations **avec diagonale incluse** ; (b) ratio de diversification = somme pondérée des volatilités / volatilité du portefeuille.
+- `grossReturnToVolatility` = moyenne arithmétique brute / volatilité ; affiché « Rendement brut / volatilité », sans déduction du taux sans risque.
+- `computeDiversificationMetrics` calcule : (a) moyenne pondérée des corrélations **hors diagonale**, sur les années communes du portefeuille ; (b) ratio de diversification = somme pondérée des volatilités / volatilité du portefeuille.
 - `searchPortfolioOptimizationProfiles` teste des combinaisons de poids sur grille et maximise le CAGR sous drawdown historique annuel de 40 %. Deux variantes imposent des seuils arbitraires de corrélation pondérée et diversification ratio.
 - Dans `App.tsx`, la grille est adaptative : **pas de 5 points** pour petites sélections, **10** à partir de 5 actifs et **20** à partir de 7 actifs. Ce n'est donc pas un optimum continu garanti.
 - Les profils candidats historiques stockés dans `candidate_presets.json` ne sont pas forcément recalculés sur la période courante ; ne pas les confondre avec les nouveaux optimiseurs.
@@ -50,9 +54,9 @@ Objectifs secondaires : reproductibilité, testabilité, performance acceptable 
 
 ### Risques techniques/statistiques identifiés
 
-1. **Années manquantes** : `computePortfolio` fait l'intersection des années valides ; des années non contiguës peuvent être composées comme si elles se suivaient, gonflant le CAGR annualisé. Exiger la continuité des séries dans la période testée ou exposer explicitement une règle alternative.
-2. **Corrélations par paire** : deux séries peuvent être corrélées sur des années différentes d'une troisième. Pour construire une matrice de covariance exploitable et positive semi-définie, choisir une fenêtre commune et vérifier la cohérence ; pour un diagnostic paire par paire, afficher les observations.
-3. **Corrélation moyenne pondérée** : la diagonale augmente artificiellement l'indicateur dit « entre actifs » ; exclure les paires identiques **seulement pour le diagnostic entre actifs**, jamais pour la variance du portefeuille.
+1. **Années manquantes — corrigé en phase 1** : la période est validée intégralement par `alignAnnualSeries` ; un trou ou une borne absente rend le calcul indisponible. Aucun raccourcissement silencieux.
+2. **Corrélations par paire** : le tableau descriptif conserve les observations propres à chaque paire (affichées). Le diagnostic de portefeuille utilise désormais un échantillon commun complet ; le tableau par paire n'est jamais utilisé comme matrice de covariance.
+3. **Corrélation moyenne pondérée — corrigé en phase 1** : diagnostic hors diagonale avec normalisation des poids de paires valides. La volatilité du portefeuille conserve toutes les variances individuelles.
 4. **Concentration de risques** : posséder MSCI World et S&P 500 peut concentrer l'exposition aux grandes capitalisations américaines. Les poids individuels ne suffisent pas.
 5. **Optimisation historique** : haut risque de surajustement ; période, univers et paramètres ne doivent pas être sélectionnés en regardant les résultats hors échantillon.
 6. **Séries hétérogènes** : certaines séries sont en prix, d'autres TR/NTR. Le S&P 500 NTR comporte un proxy estimé avant 2015 (voir métadonnées) ; ce niveau de qualité doit apparaître dans l'interprétation.
@@ -230,7 +234,7 @@ Tout plafond sur exposition « US », « actions », « crédit », etc. doit ê
 
 ## 8. Stratégie de tests (phase 1 et suite)
 
-Installer un outil de test adapté au projet TypeScript/Vite (Vitest convient ; choix réversible). Créer au moins :
+Vitest est installé en phase 1. Les tests financiers, de données et de contrôles UI sont livrés ; les cas walk-forward/scénarios ci-dessous restent à ajouter dans leurs phases respectives :
 
 - **Tests de conformité des données** : années triées, doublons, niveaux sans rendement, trous, non-finies, métadonnées discordantes.
 - **Calculs à la main** : CAGR composé, drawdown de fin d'année, volatilité, rééquilibrage, effet d'une année à −50 % suivie de +100 %.
@@ -277,10 +281,108 @@ Pour chaque PR : publier les commandes exécutées et leurs résultats ; ne pas 
 
 ```bash
 git pull
-npm install
+npm ci
+npm test
 npm run dev
 npm run build
-# npm test sera ajouté pendant la phase 1
 ```
 
 Lire `README.md`, `docs/ROADMAP.md`, `docs/ARCHITECTURE.md` puis les fichiers concernés. Avant toute implémentation, rappeler la phase demandée, les décisions validées, les hypothèses ouvertes et les risques de régression. Ouvrir une PR sur branche dédiée, joindre tests et statut ; ne pas modifier `main` directement.
+
+## 11. Fondations livrées en phase 1
+
+Cette section décrit la branche proposée ; la recette et la fusion restent à
+valider en revue. L'arborescence de §3 reste une cible pour les phases futures :
+aucun faux moteur walk-forward, scénario ou objectif patrimonial n'est créé ici.
+La simulation de portefeuille actuelle est dans `domain/portfolio.ts` ; les
+fenêtres de recherche historiques restent dans `optimization/search.ts`.
+
+### Contrat appliqué et hypothèses
+
+- `domain/data.ts` normalise les alias CSV et les nombres décimaux, trie les
+  observations et conserve les valeurs absentes en `NaN`. L'audit refuse les
+  doublons, années invalides, trous, niveaux absents/non positifs, rendements
+  inférieurs à −100 % et bornes de registre discordantes. Aucun historique n'est
+  corrigé et aucun rendement n'est reconstruit depuis les niveaux.
+- `alignAnnualSeries` retourne un succès typé (années et séries indexées) ou des
+  diagnostics (`code`, message, actif/année concernés). Pas d'interpolation ni
+  remplacement par zéro. La période demandée est inclusive et complète. Une seule
+  année initiale peut être exclue si elle correspond au premier niveau d'au moins
+  un actif, sans rendement source ; les autres actifs doivent aussi avoir un
+  niveau initial valide ou un rendement à cette date. Une inflation ou conversion
+  manquante n'est pas assimilée à une véritable année initiale.
+- Les façades `computeStats`/`computePortfolio` retournent `null` quand le calcul
+  n'est pas possible ; les graphiques et tableaux utilisent les mêmes règles.
+  Un rendement annuel suffit au CAGR. Volatilité/covariance/corrélation requièrent
+  au moins deux observations ; volatilité indisponible = `NaN`, affichée « n.d. ».
+  La corrélation d'une série constante est indéfinie, même avec elle-même.
+- Rendements, CAGR, volatilité et drawdown sont en **pourcentage**. Le moteur
+  conserve l'écart-type **population** (`N` au dénominateur) de l'application
+  historique. CAGR = moyenne géométrique de N rendements (pas N+1 niveaux).
+- Le portefeuille commence à 100, compose chaque rendement et revient aux poids
+  cibles à chaque début d'année. Les poids saisis par les curseurs sont des
+  pourcentages proportionnels ; `normalizeWeights` les convertit explicitement
+  en fractions. Des totaux différents de 100 restent acceptés conformément à
+  l'interface. Poids négatifs/non finis ou total nul sont refusés.
+  `validateWeights` contrôle séparément la somme de fractions (tolérance 1e−10),
+  le long-only et les plafonds par actif pour les prochaines stratégies.
+- USD→EUR non couvert : `(1 + r_USD) * FX[t−1]/FX[t] − 1`, où FX est USD pour
+  un EUR. Les deux cours doivent être finis et strictement positifs.
+  Rendement réel = `(1 + r_nominal)/(1 + inflation_FR) − 1`, une seule fois ;
+  inflation strictement supérieure à −100 %. L'inflation française reste utilisée
+  aussi en lecture USD, conformément à l'existant : ce n'est pas une inflation US.
+  L'EUR conserve la borne de disponibilité historique 1961 de l'application.
+- Drawdown depuis le capital initial ou un sommet de **clôture annuelle** ; pas de
+  mesure intra-annuelle. Frais, fiscalité et coûts de transaction non inclus.
+- La recherche compare les allocations sur le même univers et les mêmes années
+  complètes, y compris quand un candidat met certains poids à zéro. La grille et
+  les seuils hérités sont conservés jusqu'à la phase 2.
+
+### Corrections et non-régression à examiner
+
+`src/tests/fixtures/legacy-reference.json` a été capturé **avant refactoring** sur
+le commit `1b9305034e6abb419e727b8a2cdcd364ec50e0e6`, pour MSCI World/or/obligations
+US longues équipondérés de 1970 à 2025, en USD/EUR et nominal/réel. Les tests
+comparent nombres d'années, CAGR, volatilité, drawdown, capital final, statistiques
+individuelles et ratio de diversification. Ces valeurs restent inchangées à la
+tolérance flottante près ; les CSV/JSON historiques ne sont pas modifiés.
+
+Écarts intentionnels, soumis à la revue de cette PR :
+
+1. La corrélation moyenne pondérée exclut désormais la diagonale ; pour les trois
+   actifs équipondérés, `nouveau = (3 × ancien − 1)/2`, vérifié sur les quatre
+   lectures. Les anciens profils de diversification peuvent donc proposer des
+   poids différents ; leurs seuils ne sont pas recalibrés artificiellement.
+   Le diagnostic utilise les mêmes années que le portefeuille, contrairement au
+   tableau de corrélations descriptif par paire. Un seul actif : corrélation « n.d. ».
+2. Les historiques discontinus/incomplets ne produisent plus de CAGR, trajectoire
+   composée ou valeur de décennie présentée à tort comme zéro. Le chargement
+   signale un CSV absent/malformé plutôt que masquer l'actif par une série vide.
+3. Une perte de première année suivie de reprise dispose maintenant d'un délai
+   de récupération (−50 %, +100 % : CAGR 0 %, drawdown −50 %, reprise 1 an).
+   Une perte de −100 % est admise comme perte totale ; la valeur reste à zéro.
+4. « Sharpe brut » devient « Rendement brut / volatilité », sans changer son
+   calcul sur les historiques complets. Le champ interne devient
+   `grossReturnToVolatility`. Le drawdown est explicitement annuel.
+5. Le graphique historique `poids × CAGR individuel` est conservé visuellement,
+   mais son texte précise que ce n'est **pas** une attribution additive du CAGR
+   du portefeuille ni une contribution au risque. Une véritable attribution et
+   les contributions au risque restent des travaux futurs.
+6. La trajectoire d'un actif dont la première ligne est un niveau sans rendement
+   commence à 100 sur cette année initiale, pas artificiellement une année avant.
+
+Les profils Croissance/Robustesse/Objectif, la validation walk-forward et les
+simulations prospectives ne sont pas implémentés par cette phase. Les seuils et
+couleurs historiques des diagnostics restent présents pour préserver l'interface ;
+ils ne constituent pas une note universelle et seront revus en phase 2.
+
+### Vérification reproductible
+
+`npm ci`, `npm test`, `npm run build`. Vitest exécute des fixtures déterministes
+(rendement constant, pertes/reprise, perte totale, corrélations 0/+1/−1,
+équipondération vs concentration, rééquilibrage, poids invalides, trous et change/
+inflation), l'audit des 15 séries et les références historiques. React Testing
+Library/jsdom vérifie l'édition nombre/curseur, le recalcul, la normalisation et
+la navigation entre Portefeuille et Corrélations. Il ne remplace pas une recette
+visuelle complète. Le workflow `validate.yml` applique tests et build aux PR.
+L'avertissement Vite sur le bundle > 500 kB reste non bloquant et préexistant.
