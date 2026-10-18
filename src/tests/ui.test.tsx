@@ -23,6 +23,8 @@ it("preserves portfolio controls, manual weights, normalization and selection ta
   const input = await screen.findByRole("spinbutton", { name: "Poids saisi pour MSCI World" });
   const slider = screen.getByRole("slider", { name: "Slider du poids saisi pour MSCI World" });
   expect(screen.getByRole("tab", { name: "Portefeuille" }).getAttribute("aria-selected")).toBe("true");
+  expect(screen.getByRole("button", { name: /Croissance/ })).toBeTruthy();
+  expect(screen.getByRole("spinbutton", { name: "Plafond de poids par actif" })).toBeTruthy();
   const currentMetrics = () => document.querySelector(".portfolio-summary")?.textContent;
   fireEvent.change(screen.getByRole("spinbutton", { name: "Poids saisi pour Or" }), { target: { value: "30" } });
   fireEvent.change(screen.getByRole("spinbutton", { name: "Poids saisi pour Obligations d'État US (long terme)" }), { target: { value: "30" } });
