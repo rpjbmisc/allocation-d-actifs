@@ -1,0 +1,146 @@
+{
+  "usd_nominal": {
+    "portfolio": {
+      "count": 56,
+      "cagr": 9.190016495010811,
+      "volatility": 9.639794995867822,
+      "maxDrawdown": -16.420000000000012,
+      "finalValue": 13748.14707543086
+    },
+    "stats": {
+      "msci_world": {
+        "count": 56,
+        "cagrNominal": 9.25399617365601,
+        "cagrReal": 5.154148984525486,
+        "volatility": 17.02165060309448,
+        "positiveRate": 75
+      },
+      "gold": {
+        "count": 56,
+        "cagrNominal": 8.214510498582506,
+        "cagrReal": 4.1536708750545825,
+        "volatility": 23.393831732697304,
+        "positiveRate": 67.85714285714286
+      },
+      "us_lt_govt_bonds": {
+        "count": 56,
+        "cagrNominal": 6.92327169599567,
+        "cagrReal": 2.910886883831054,
+        "volatility": 13.000502598948055,
+        "positiveRate": 71.42857142857143
+      }
+    },
+    "diversification": {
+      "weightedCorrelation": 0.27524681358654,
+      "diversificationRatio": 1.8470650381270919
+    }
+  },
+  "usd_real": {
+    "portfolio": {
+      "count": 56,
+      "cagr": 5.092570196601387,
+      "volatility": 9.240607714119973,
+      "maxDrawdown": -21.715590730455546,
+      "finalValue": 1614.4803200575118
+    },
+    "stats": {
+      "msci_world": {
+        "count": 56,
+        "cagrNominal": 9.25399617365601,
+        "cagrReal": 5.154148984525486,
+        "volatility": 17.153441379348692,
+        "positiveRate": 69.64285714285714
+      },
+      "gold": {
+        "count": 56,
+        "cagrNominal": 8.214510498582506,
+        "cagrReal": 4.1536708750545825,
+        "volatility": 20.645202674309665,
+        "positiveRate": 53.57142857142857
+      },
+      "us_lt_govt_bonds": {
+        "count": 56,
+        "cagrNominal": 6.92327169599567,
+        "cagrReal": 2.910886883831054,
+        "volatility": 13.294492584650696,
+        "positiveRate": 57.14285714285714
+      }
+    },
+    "diversification": {
+      "weightedCorrelation": 0.289090501034506,
+      "diversificationRatio": 1.8430655291295381
+    }
+  },
+  "eur_nominal": {
+    "portfolio": {
+      "count": 56,
+      "cagr": 9.198626794938413,
+      "volatility": 12.872384103871353,
+      "maxDrawdown": -14.862376588393255,
+      "finalValue": 13808.989939083842
+    },
+    "stats": {
+      "msci_world": {
+        "count": 56,
+        "cagrNominal": 9.262611518772147,
+        "cagrReal": 5.162441031641607,
+        "volatility": 19.116489230628893,
+        "positiveRate": 73.21428571428571
+      },
+      "gold": {
+        "count": 56,
+        "cagrNominal": 8.223043873902135,
+        "cagrReal": 4.161884028359086,
+        "volatility": 23.821170321269634,
+        "positiveRate": 67.85714285714286
+      },
+      "us_lt_govt_bonds": {
+        "count": 56,
+        "cagrNominal": 6.931703249246546,
+        "cagrReal": 2.9190020360247093,
+        "volatility": 17.700162775173954,
+        "positiveRate": 66.07142857142857
+      }
+    },
+    "diversification": {
+      "weightedCorrelation": 0.41011492673278815,
+      "diversificationRatio": 1.5702302913940067
+    }
+  },
+  "eur_real": {
+    "portfolio": {
+      "count": 56,
+      "cagr": 5.100857387853841,
+      "volatility": 11.607591183919675,
+      "maxDrawdown": -19.61721450065218,
+      "finalValue": 1621.625254239892
+    },
+    "stats": {
+      "msci_world": {
+        "count": 56,
+        "cagrNominal": 9.262611518772147,
+        "cagrReal": 5.162441031641607,
+        "volatility": 18.491917378462936,
+        "positiveRate": 67.85714285714286
+      },
+      "gold": {
+        "count": 56,
+        "cagrNominal": 8.223043873902135,
+        "cagrReal": 4.161884028359086,
+        "volatility": 20.665390110412805,
+        "positiveRate": 62.5
+      },
+      "us_lt_govt_bonds": {
+        "count": 56,
+        "cagrNominal": 6.931703249246546,
+        "cagrReal": 2.9190020360247093,
+        "volatility": 17.10690588092158,
+        "positiveRate": 57.14285714285714
+      }
+    },
+    "diversification": {
+      "weightedCorrelation": 0.3876905851299117,
+      "diversificationRatio": 1.615730386500337
+    }
+  }
+}

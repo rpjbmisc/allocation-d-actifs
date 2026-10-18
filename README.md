@@ -38,3 +38,22 @@ Le picker propose aussi des allocations candidates calculées sur l'ensemble des
 
 - Casquette : `Second Cerveau/2 CASQUETTES/Investissement/Investissement.md`.
 - Projet : `Second Cerveau/1 PROJETS/Création d’une allocation d’actifs et d’une stratégie d’investissement/`.
+
+## Développement et tests financiers
+
+Node.js 24 LTS recommandé (CI de validation en Node 24). Les dépendances de test
+requièrent Node 22.22.2+ sur la branche 22, ou Node 24.15+ sur la branche 24.
+
+```bash
+npm ci
+npm test
+npm run build
+# Relance des tests pendant le développement : npm run test:watch
+```
+
+Le moteur financier est dans `src/domain/`, la recherche historique dans
+`src/optimization/` et le chargement dans `src/data/`. `src/analytics.ts` reste
+la façade des imports existants. Les tests Vitest couvrent les cas financiers
+calculables à la main, les données historiques et les contrôles de pondération.
+Les conventions et écarts justifiés de phase 1 sont détaillés dans
+[ARCHITECTURE.md](docs/ARCHITECTURE.md#11-fondations-livrées-en-phase-1).
