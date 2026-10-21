@@ -50,6 +50,7 @@ describe("walk-forward validation", () => {
       returnMode: "nominal" as const,
       customWeights: { a: 50, b: 50 },
       settings: { minTrainYears: 3, testYears: 2, expanding: true },
+      scenarioSettings: { scenarioCount: 20, horizonYears: 4, blockYears: 1, seed: 99, quantilePct: 20 },
       constraints,
       benchmarkAssetId: null,
     });
@@ -58,6 +59,9 @@ describe("walk-forward validation", () => {
     expect(first.windows).toHaveLength(1);
     expect(first.strategies.find(strategy => strategy.id === "growth")?.windows[0].weights).toEqual(
       second.strategies.find(strategy => strategy.id === "growth")?.windows[0].weights,
+    );
+    expect(first.strategies.find(strategy => strategy.id === "robust")?.windows[0].weights).toEqual(
+      second.strategies.find(strategy => strategy.id === "robust")?.windows[0].weights,
     );
   });
 

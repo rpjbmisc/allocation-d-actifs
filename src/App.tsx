@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { loadHistoricalData } from "./data/load";
 import {
   Area,
@@ -48,6 +48,8 @@ import {
   WalkForwardResult,
   WalkForwardSettings,
   weightStabilityLabel,
+  DEFAULT_SCENARIO_SETTINGS,
+  ScenarioSettings,
 } from "./analytics";
 
 type Tab = "overview" | "returns" | "growth" | "decades" | "portfolio" | "correlations";
@@ -128,6 +130,7 @@ const defaultValidationSettings: WalkForwardSettings = {
   testYears: 5,
   expanding: true,
 };
+const defaultRobustScenarioSettings: ScenarioSettings = DEFAULT_SCENARIO_SETTINGS;
 
 function assetCategory(id: string): AssetCategory {
   if (["sp500", "msci_world", "msci_world_ex_usa", "msci_world_small_cap_value", "msci_world_value", "msci_em", "russell2000", "us_total_market", "global_infrastructure"].includes(id)) return "Actions";
@@ -186,10 +189,12 @@ function App() {
   const [automaticWeights, setAutomaticWeights] = useState(false);
   const [optimizationProfile, setOptimizationProfile] = useState<PortfolioOptimizationProfile>("growth");
   const [growthConstraints, setGrowthConstraints] = useState<GrowthConstraintSettings>(defaultGrowthConstraints);
+  const [robustScenarioSettings, setRobustScenarioSettings] = useState<ScenarioSettings>(defaultRobustScenarioSettings);
   const [validationSettings, setValidationSettings] = useState<WalkForwardSettings>(defaultValidationSettings);
   const [activePreset, setActivePreset] = useState<PresetId>("custom");
   const [presetDefinitions, setPresetDefinitions] = useState<CandidatePreset[]>([]);
   const [presetModified, setPresetModified] = useState(false);
+  const automaticCandidateInitialized = useRef(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const data = useMemo(
@@ -249,7 +254,7 @@ function App() {
   const stats = useMemo(() => Object.fromEntries(selectedAssets.map((asset) => [asset.id, computeStats(data[asset.id], start, end, mode)])), [data, end, mode, selectedAssets, start]);
   // The search space grows exponentially, so use a coarser deterministic grid for larger selections.
   const automaticSearchStep = selectedAssets.length >= 7 ? 20 : selectedAssets.length >= 5 ? 10 : 5;
-  const optimizationResult = useMemo<OptimizationResult>(() => {
+  const growthOptimization = useMemo<OptimizationResult>(() => {
     if (activePreset !== "custom" || selectedAssets.length === 0 || end <= start) {
       return {
         strategy: "growth",
@@ -279,6 +284,40 @@ function App() {
       maxEvaluations: 100_000,
     });
   }, [activePreset, automaticSearchStep, data, end, growthConstraints, mode, selectedAssets, start]);
+  const robustOptimization = useMemo<OptimizationResult>(() => {
+    if (activePreset !== "custom" || selectedAssets.length === 0 || end <= start) {
+      return {
+        strategy: "robust",
+        weights: null,
+        feasible: false,
+        diagnostics: [],
+        score: null,
+        stats: null,
+        evaluatedCandidates: 0,
+        gridStepPct: automaticSearchStep,
+        scoreLabel: "TCAM simulé · quantile défavorable",
+        scenarioSummary: null,
+      };
+    }
+    const assetIds = selectedAssets.map((asset) => asset.id);
+    return optimize("robust", {
+      data,
+      assetIds,
+      trainStart: start,
+      trainEnd: end,
+      returnMode: mode,
+      rebalancing: "annual",
+      scenarioSettings: robustScenarioSettings,
+    }, {
+      longOnly: true,
+      maxWeightByAsset: Object.fromEntries(assetIds.map((id) => [id, growthConstraints.maxWeightPct / 100])),
+      maxAnnualCloseDrawdownPct: growthConstraints.maxAnnualCloseDrawdownPct,
+      maxAnnualVolatilityPct: growthConstraints.maxAnnualVolatilityPct,
+      gridStepPct: automaticSearchStep,
+      maxEvaluations: 100_000,
+    });
+  }, [activePreset, automaticSearchStep, data, end, growthConstraints, mode, robustScenarioSettings, selectedAssets, start]);
+  const optimizationResult = optimizationProfile === "robust" ? robustOptimization : growthOptimization;
   const automaticCandidate = useMemo(
     () => optimizationResult.weights
       ? Object.fromEntries(selectedAssets.map((asset) => [asset.id, (optimizationResult.weights?.[asset.id] ?? 0) * 100]))
@@ -292,12 +331,15 @@ function App() {
       setAutomaticWeights(false);
       return;
     }
+    // A manual edit must remain in place until the user explicitly reapplies a profile.
+    if (automaticCandidateInitialized.current && !automaticWeights) return;
     setWeights((current) => selectedAssets.reduce(
       (next, asset) => ({ ...next, [asset.id]: automaticCandidate[asset.id] ?? 0 }),
       { ...current },
     ));
     setAutomaticWeights(true);
-  }, [activePreset, automaticCandidate, loading, selectedAssets]);
+    automaticCandidateInitialized.current = true;
+  }, [activePreset, automaticCandidate, automaticWeights, loading, selectedAssets]);
 
   const years = useMemo(() => {
     const allYears = new Set<number>();
@@ -357,6 +399,7 @@ function App() {
       customWeights: portfolioWeights,
       settings: validationSettings,
       benchmarkAssetId: data.msci_world ? "msci_world" : null,
+      scenarioSettings: robustScenarioSettings,
       constraints: {
         longOnly: true,
         maxWeightByAsset: Object.fromEntries(assetIds.map((id) => [id, growthConstraints.maxWeightPct / 100])),
@@ -366,7 +409,7 @@ function App() {
         maxEvaluations: 100_000,
       },
     });
-  }, [automaticSearchStep, data, end, growthConstraints, mode, portfolioWeights, selectedAssets, start, validationSettings]);
+  }, [automaticSearchStep, data, end, growthConstraints, mode, portfolioWeights, robustScenarioSettings, selectedAssets, start, validationSettings]);
   const correlations = useMemo(() => computeCorrelationMatrix(data, selectedAssets.map((asset) => asset.id), start, end, mode), [data, end, mode, selectedAssets, start]);
   const availableAssets = assets.filter((asset) => data[asset.id]?.length);
   const periodRestricted = !commonPeriod;
@@ -412,6 +455,7 @@ function App() {
   };
 
   const selectCustom = () => {
+    automaticCandidateInitialized.current = false;
     setActivePreset("custom");
     setOptimizationProfile("growth");
     setAutomaticWeights(false);
@@ -448,6 +492,7 @@ function App() {
   };
 
   const resetConfiguration = () => {
+    automaticCandidateInitialized.current = false;
     const initialSelection = preferredIds.filter((id) => availableAssets.some((asset) => asset.id === id));
     const fallbackSelection = initialSelection.length ? initialSelection : availableAssets.slice(0, 3).map((asset) => asset.id);
     setActivePreset("custom");
@@ -460,17 +505,19 @@ function App() {
     setRange([1970, 2025]);
     setCurrency("eur");
     setMode("nominal");
+    setRobustScenarioSettings(defaultRobustScenarioSettings);
     setActiveTab("overview");
     setHiddenAssets([]);
     setConfigurationOpen(false);
   };
 
   const applyOptimizationProfile = (profile: PortfolioOptimizationProfile) => {
-    if (profile !== "growth" || !automaticCandidate) return;
+    const proposal = profile === "growth" ? growthOptimization : robustOptimization;
+    if (!proposal.weights) return;
     setOptimizationProfile(profile);
     setAutomaticWeights(true);
     setWeights((current) => selectedAssets.reduce(
-      (next, asset) => ({ ...next, [asset.id]: automaticCandidate[asset.id] ?? 0 }),
+      (next, asset) => ({ ...next, [asset.id]: (proposal.weights?.[asset.id] ?? 0) * 100 }),
       { ...current },
     ));
   };
@@ -604,17 +651,21 @@ function App() {
                     presetModified={presetModified}
                     automaticWeights={automaticWeights}
                     activePreset={activePreset}
-                    optimizationProfile={optimizationProfile}
-                    growthConstraints={growthConstraints}
-                    growthOptimization={optimizationResult}
-                    benchmarkPortfolio={benchmarkPortfolio}
+                     optimizationProfile={optimizationProfile}
+                     growthConstraints={growthConstraints}
+                     growthOptimization={optimizationResult}
+                     growthProposal={growthOptimization}
+                     robustProposal={robustOptimization}
+                     robustScenarioSettings={robustScenarioSettings}
+                     benchmarkPortfolio={benchmarkPortfolio}
                     walkForward={walkForward}
                     validationSettings={validationSettings}
                     onWeightChange={updateWeight}
                     onNormalize={normalizeWeights}
                     onOptimizationProfileChange={applyOptimizationProfile}
-                    onGrowthConstraintsChange={(next) => setGrowthConstraints((current) => ({ ...current, ...next }))}
-                    onValidationSettingsChange={(next) => setValidationSettings((current) => ({ ...current, ...next }))}
+                     onGrowthConstraintsChange={(next) => setGrowthConstraints((current) => ({ ...current, ...next }))}
+                     onRobustScenarioSettingsChange={(next) => setRobustScenarioSettings((current) => ({ ...current, ...next }))}
+                     onValidationSettingsChange={(next) => setValidationSettings((current) => ({ ...current, ...next }))}
                   />}
               {activeTab === "correlations" && <CorrelationView assets={selectedAssets} data={data} mode={mode} embedded start={start} end={end} />}
 
@@ -834,11 +885,11 @@ function correlationColor(value: number | null, diagonal: boolean): string {
 }
 
 function optimizationProfileLabel(profile: PortfolioOptimizationProfile): string {
-  return profile === "growth" ? "Croissance" : profile;
+  return profile === "growth" ? "Croissance" : "Robustesse";
 }
 
 function optimizationProfileDescription(profile: PortfolioOptimizationProfile): string {
-  return profile === "growth" ? "meilleur TCAM historique sous contraintes configurables" : profile;
+  return profile === "growth" ? "meilleur TCAM historique sous contraintes configurables" : "quantile défavorable du TCAM simulé";
 }
 
 function PortfolioView({
@@ -860,6 +911,9 @@ function PortfolioView({
   optimizationProfile,
   growthConstraints,
   growthOptimization,
+  growthProposal,
+  robustProposal,
+  robustScenarioSettings,
   benchmarkPortfolio,
   walkForward,
   validationSettings,
@@ -867,6 +921,7 @@ function PortfolioView({
   onNormalize,
   onOptimizationProfileChange,
   onGrowthConstraintsChange,
+  onRobustScenarioSettingsChange,
   onValidationSettingsChange,
 }: {
   assets: Asset[];
@@ -887,6 +942,9 @@ function PortfolioView({
   optimizationProfile: PortfolioOptimizationProfile;
   growthConstraints: GrowthConstraintSettings;
   growthOptimization: OptimizationResult;
+  growthProposal: OptimizationResult;
+  robustProposal: OptimizationResult;
+  robustScenarioSettings: ScenarioSettings;
   benchmarkPortfolio: PortfolioStats | null;
   walkForward: WalkForwardResult;
   validationSettings: WalkForwardSettings;
@@ -894,6 +952,7 @@ function PortfolioView({
   onNormalize: () => void;
   onOptimizationProfileChange: (profile: PortfolioOptimizationProfile) => void;
   onGrowthConstraintsChange: (next: Partial<GrowthConstraintSettings>) => void;
+  onRobustScenarioSettingsChange: (next: Partial<ScenarioSettings>) => void;
   onValidationSettingsChange: (next: Partial<WalkForwardSettings>) => void;
 }) {
   const [space, setSpace] = useState<PortfolioSpace>("construction");
@@ -908,7 +967,8 @@ function PortfolioView({
     ? portfolioData.map((point) => ({ ...point, usdValue: currencyComparison.points.find((comparisonPoint) => comparisonPoint.year === point.year)?.usdValue ?? null }))
     : portfolioData;
   const profileOptions: Array<{ id: PortfolioOptimizationProfile; label: string; shortDescription: string }> = [
-    { id: "growth", label: "Croissance", shortDescription: growthOptimization.feasible ? "TCAM maximal · contraintes respectées" : "Aucune solution faisable" },
+    { id: "growth", label: "Croissance", shortDescription: growthProposal.feasible ? "TCAM historique maximal" : "Aucune solution faisable" },
+    { id: "robust", label: "Robustesse", shortDescription: robustProposal.feasible ? `Quantile ${robustScenarioSettings.quantilePct} % · scénarios conjoints` : "Aucune solution faisable" },
   ];
 
   return <div className="portfolio-view">
@@ -926,17 +986,28 @@ function PortfolioView({
       {activePreset === "custom" && <div className="optimization-profiles">
         <div className="optimization-profiles-heading"><span>Proposition automatique</span><small>Calculée sur la configuration actuelle</small></div>
         <div className="optimization-profile-list" role="group" aria-label="Profils d'optimisation">
-          {profileOptions.map((profile) => <button key={profile.id} className={`optimization-profile ${optimizationProfile === profile.id ? "active" : ""}`} disabled={!growthOptimization.feasible} onClick={() => onOptimizationProfileChange(profile.id)} title={growthOptimization.feasible ? profile.shortDescription : "Aucune allocation ne respecte les contraintes choisies"}>
+          {profileOptions.map((profile) => <button key={profile.id} className={`optimization-profile ${optimizationProfile === profile.id ? "active" : ""}`} disabled={profile.id === "growth" ? !growthProposal.feasible : !robustProposal.feasible} onClick={() => onOptimizationProfileChange(profile.id)} title={(profile.id === "growth" ? growthProposal : robustProposal).feasible ? profile.shortDescription : "Aucune allocation ne respecte les contraintes choisies"}>
             <strong>{profile.label}</strong><span>{profile.shortDescription}</span>
           </button>)}
         </div>
+        {optimizationProfile === "robust" && <div className="robust-settings" aria-label="Hypothèses des scénarios de robustesse">
+          <div className="growth-constraints-heading"><span>Hypothèses de scénarios</span><small>Rééchantillonnage historique conjoint, sans prévision implicite.</small></div>
+          <div className="robust-settings-grid">
+            <label>Scénarios <input aria-label="Nombre de scénarios" type="number" min="1" max="10000" step="1" value={robustScenarioSettings.scenarioCount} onChange={(event) => onRobustScenarioSettingsChange({ scenarioCount: Math.max(1, Math.min(10000, Number(event.target.value) || 1)) })} /></label>
+            <label>Horizon <input aria-label="Horizon des scénarios" type="number" min="1" max="1000" step="1" value={robustScenarioSettings.horizonYears} onChange={(event) => onRobustScenarioSettingsChange({ horizonYears: Math.max(1, Math.min(1000, Number(event.target.value) || 1)) })} /> <span>ans</span></label>
+            <label>Bloc historique <input aria-label="Taille des blocs historiques" type="number" min="1" max="100" step="1" value={robustScenarioSettings.blockYears} onChange={(event) => onRobustScenarioSettingsChange({ blockYears: Math.max(1, Math.min(100, Number(event.target.value) || 1)) })} /> <span>an{robustScenarioSettings.blockYears > 1 ? "s" : ""}</span></label>
+            <label>Quantile défavorable <input aria-label="Quantile défavorable" type="number" min="0" max="50" step="1" value={robustScenarioSettings.quantilePct} onChange={(event) => onRobustScenarioSettingsChange({ quantilePct: Math.max(0, Math.min(50, Number(event.target.value) || 0)) })} /> <span>%</span></label>
+            <label>Graine <input aria-label="Graine des scénarios" type="number" step="1" value={robustScenarioSettings.seed} onChange={(event) => onRobustScenarioSettingsChange({ seed: Number(event.target.value) || 0 })} /></label>
+          </div>
+          {robustProposal.scenarioSummary && <p className="method-note">Score retenu : {formatPercent(robustProposal.scenarioSummary.quantileCagr)} au quantile {robustProposal.scenarioSummary.quantilePct} %. Médiane : {formatPercent(robustProposal.scenarioSummary.medianCagr)} ; fragilité médiane–quantile : {formatPercent(robustProposal.scenarioSummary.fragilityCagr)}.</p>}
+        </div>}
         <div className="growth-constraints" aria-label="Contraintes du profil Croissance">
           <div className="growth-constraints-heading"><span>Contraintes de recherche</span><small>Les valeurs sont modifiables et ne constituent pas des normes universelles.</small></div>
           <label>Plafond par actif <input aria-label="Plafond de poids par actif" type="number" min="0" max="100" step="1" value={growthConstraints.maxWeightPct} onChange={(event) => onGrowthConstraintsChange({ maxWeightPct: Math.max(0, Math.min(100, Number(event.target.value))) })} /> <span>%</span></label>
           <label><input aria-label="Activer le budget de drawdown annuel" type="checkbox" checked={growthConstraints.maxAnnualCloseDrawdownPct !== null} onChange={(event) => onGrowthConstraintsChange({ maxAnnualCloseDrawdownPct: event.target.checked ? 40 : null })} /> Drawdown maximal de clôture annuelle <input aria-label="Budget de drawdown annuel" type="number" min="0" max="100" step="1" value={growthConstraints.maxAnnualCloseDrawdownPct ?? ""} disabled={growthConstraints.maxAnnualCloseDrawdownPct === null} onChange={(event) => onGrowthConstraintsChange({ maxAnnualCloseDrawdownPct: Math.max(0, Math.min(100, Number(event.target.value))) })} /> <span>%</span></label>
           <label><input aria-label="Activer le budget de volatilité annuelle" type="checkbox" checked={growthConstraints.maxAnnualVolatilityPct !== null} onChange={(event) => onGrowthConstraintsChange({ maxAnnualVolatilityPct: event.target.checked ? 20 : null })} /> Volatilité annuelle maximale <input aria-label="Budget de volatilité annuelle" type="number" min="0" step="1" value={growthConstraints.maxAnnualVolatilityPct ?? ""} disabled={growthConstraints.maxAnnualVolatilityPct === null} onChange={(event) => onGrowthConstraintsChange({ maxAnnualVolatilityPct: Math.max(0, Number(event.target.value)) })} /> <span>%</span></label>
         </div>
-        {growthOptimization.diagnostics.length > 0 && <p className="optimization-profile-note">{growthOptimization.diagnostics.join(" ")}</p>}
+         {growthOptimization.diagnostics.length > 0 && <p className="optimization-profile-note">{growthOptimization.diagnostics.join(" ")}</p>}
       </div>}
       <div className="weight-list">
         {assets.map((asset) => {
@@ -995,8 +1066,8 @@ function PortfolioView({
       </section>
     </> : <div className="error-panel portfolio-empty">Données insuffisantes ou incohérentes : vérifie les pondérations et les rendements de chaque année de la période. Aucun rendement manquant n’est remplacé par zéro.</div>}
     </div>}
-    {space === "comparison" && <PortfolioComparisonDashboard assets={assets} weights={weights} portfolio={portfolio} equalPortfolio={equalPortfolio} benchmarkPortfolio={benchmarkPortfolio} growthOptimization={growthOptimization} mode={mode} />}
-    {space === "validation" && <WalkForwardView assets={assets} result={walkForward} settings={validationSettings} onSettingsChange={onValidationSettingsChange} />}
+    {space === "comparison" && <PortfolioComparisonDashboard assets={assets} weights={weights} portfolio={portfolio} equalPortfolio={equalPortfolio} benchmarkPortfolio={benchmarkPortfolio} growthOptimization={growthProposal} robustOptimization={robustProposal} mode={mode} />}
+    {space === "validation" && <WalkForwardView assets={assets} result={walkForward} settings={validationSettings} robustScenarioSettings={robustScenarioSettings} onSettingsChange={onValidationSettingsChange} />}
   </div>;
 }
 
@@ -1030,6 +1101,7 @@ function PortfolioComparisonDashboard({
   equalPortfolio,
   benchmarkPortfolio,
   growthOptimization,
+  robustOptimization,
   mode,
 }: {
   assets: Asset[];
@@ -1038,21 +1110,22 @@ function PortfolioComparisonDashboard({
   equalPortfolio: PortfolioStats | null;
   benchmarkPortfolio: PortfolioStats | null;
   growthOptimization: OptimizationResult;
+  robustOptimization: OptimizationResult;
   mode: Mode;
 }) {
   const rows: Array<{ label: string; type: string; weights: Record<string, number> | null; stats: PortfolioStats | null; note?: string }> = [
     { label: "Croissance", type: "Automatique · in-sample", weights: growthOptimization.weights, stats: growthOptimization.stats, note: "Optimisée sur toute la période affichée." },
+    { label: "Robustesse", type: "Automatique · scénario", weights: robustOptimization.weights, stats: robustOptimization.stats, note: robustOptimization.scenarioSummary ? `Quantile ${robustOptimization.scenarioSummary.quantilePct} % · ${robustOptimization.scenarioSummary.scenarioCount} scénarios` : "Scénarios indisponibles." },
     { label: "Personnalisée", type: "Poids fixes · in-sample", weights, stats: portfolio, note: "Pondérations modifiables dans Construction." },
     { label: "Équipondérée", type: "Référence · in-sample", weights: Object.fromEntries(assets.map(asset => [asset.id, 1])), stats: equalPortfolio },
     { label: "MSCI World", type: "Benchmark · in-sample", weights: { msci_world: 1 }, stats: benchmarkPortfolio, note: benchmarkPortfolio ? "Série indépendante si disponible." : "Non comparable sur cette période." },
-    { label: "Robustesse", type: "Automatique", weights: null, stats: null, note: "Disponible en phase 4." },
     { label: "Objectif patrimonial", type: "Automatique", weights: null, stats: null, note: "Disponible en phase 5." },
   ];
 
   return <div className="portfolio-space-content">
     <section className="table-card comparison-dashboard">
       <div className="card-heading compact"><div className="heading-icon warm"><BarChart3 size={17} /></div><div><h2>Comparer les allocations</h2><p>Résultats historiques sur la même période, devise, lecture et règles de rééquilibrage. Le hors échantillon est séparé dans Validation.</p></div></div>
-      <div className="table-scroll"><table><thead><tr><th>Allocation</th><th>Nature</th><th>TCAM</th><th>Volatilité</th><th>Drawdown annuel</th><th>Pondérations</th></tr></thead><tbody>{rows.map(row => <tr key={row.label}><td>{row.label}</td><td>{row.type}{row.note && <small className="table-note">{row.note}</small>}</td><td>{formatPercent(row.stats?.cagr)}</td><td>{formatPercent(row.stats?.volatility)}</td><td>{formatPercent(row.stats?.maxDrawdown)}</td><td>{row.label === "MSCI World" ? row.stats ? "100 % MSCI World" : "n.d." : allocationLabel(assets, row.weights)}</td></tr>)}</tbody></table></div>
+       <div className="table-scroll"><table><thead><tr><th>Allocation</th><th>Nature</th><th>TCAM historique</th><th>Score scénario</th><th>Volatilité</th><th>Drawdown annuel</th><th>Pondérations</th></tr></thead><tbody>{rows.map(row => <tr key={row.label}><td>{row.label}</td><td>{row.type}{row.note && <small className="table-note">{row.note}</small>}</td><td>{formatPercent(row.stats?.cagr)}</td><td>{row.label === "Robustesse" ? formatPercent(robustOptimization.scenarioSummary?.quantileCagr) : "n.a."}</td><td>{formatPercent(row.stats?.volatility)}</td><td>{formatPercent(row.stats?.maxDrawdown)}</td><td>{row.label === "MSCI World" ? row.stats ? "100 % MSCI World" : "n.d." : allocationLabel(assets, row.weights)}</td></tr>)}</tbody></table></div>
     </section>
     <section className="insight-card comparison-reading">
       <div className="card-heading compact"><div className="heading-icon cool"><CircleHelp size={17} /></div><div><h2>Lire cette comparaison</h2><p>Une bonne performance historique ne constitue pas une prévision.</p></div></div>
@@ -1077,7 +1150,7 @@ function InfoTip({ label, children }: { label: string; children: React.ReactNode
 }
 
 function WeightStabilityCell({ strategy }: { strategy: WalkForwardResult["strategies"][number] }) {
-  if (strategy.id !== "growth") return <span className="fixed-weight-label">Poids fixes</span>;
+  if (strategy.id !== "growth" && strategy.id !== "robust") return <span className="fixed-weight-label">Poids fixes</span>;
   const label = weightStabilityLabel(strategy.weightStabilityPct);
   if (!label) return <span>n.d.</span>;
   return <><strong className="stability-label">{label}</strong><small className="table-note">{strategy.weightStabilityPct!.toFixed(0)} % · rotation {strategy.averageTurnoverPct?.toFixed(1) ?? "n.d."} pts</small></>;
@@ -1087,11 +1160,13 @@ function WalkForwardView({
   assets,
   result,
   settings,
+  robustScenarioSettings,
   onSettingsChange,
 }: {
   assets: Asset[];
   result: WalkForwardResult;
   settings: WalkForwardSettings;
+  robustScenarioSettings: ScenarioSettings;
   onSettingsChange: (next: Partial<WalkForwardSettings>) => void;
 }) {
   return <div className="validation-layout">
@@ -1102,7 +1177,8 @@ function WalkForwardView({
         <label>Test par fenêtre <input aria-label="Années de test" type="number" min="1" max="30" step="1" value={settings.testYears} onChange={event => onSettingsChange({ testYears: Math.max(1, Number(event.target.value) || 1) })} /> <span>ans</span></label>
         <label className="validation-expanding"><input type="checkbox" checked={settings.expanding} disabled readOnly /> Apprentissage expansif</label>
       </div>
-      <p className="method-note">Fenêtres de test non chevauchantes · rééquilibrage annuel vers les poids cibles · aucune donnée de test utilisée pour l'optimisation. L'apprentissage roulant sera ajouté ultérieurement.</p>
+       <p className="method-note">Fenêtres de test non chevauchantes · rééquilibrage annuel vers les poids cibles · aucune donnée de test utilisée pour l'optimisation. L'apprentissage roulant sera ajouté ultérieurement.</p>
+       <p className="method-note">Robustesse : {robustScenarioSettings.scenarioCount} scénarios · horizon {robustScenarioSettings.horizonYears} ans · blocs de {robustScenarioSettings.blockYears} an{robustScenarioSettings.blockYears > 1 ? "s" : ""} · graine {robustScenarioSettings.seed} · quantile {robustScenarioSettings.quantilePct} %. Ces hypothèses sont calibrées séparément dans chaque apprentissage.</p>
     </section>
 
     <section className="validation-summary-card">
@@ -1114,13 +1190,13 @@ function WalkForwardView({
 
     <section className="table-card validation-results-card">
       <div className="card-heading compact"><div className="heading-icon"><Activity size={17} /></div><div><h2>Résultats hors échantillon</h2><p>Le TCAM est composé sur les seules années de test ; il ne s'agit pas d'une moyenne de TCAM par fenêtre.</p></div></div>
-      <div className="table-scroll"><table><thead><tr><th>Allocation</th><th>TCAM OOS <InfoTip label="Comprendre le TCAM OOS">OOS signifie « hors échantillon ». Les poids sont choisis sur l'apprentissage, puis testés uniquement sur les années suivantes. Le TCAM est composé sur ces années de test.</InfoTip></th><th>Volatilité</th><th>Drawdown annuel</th><th>Fenêtres valides</th><th>Stabilité des poids <InfoTip label="Comprendre la stabilité des poids">Pour Croissance, cet indicateur compare les pondérations recalculées entre les fenêtres. Stable signifie que les recommandations changent peu ; variable ou instable signifie qu'elles dépendent davantage de la période historique. Personnalisée, Équipondérée et MSCI World ont des poids fixes.<br /><br /><strong>Légende :</strong> Très stable 80–100 % · Stable 60–79 % · Variable 40–59 % · Instable 20–39 % · Très instable 0–19 %.</InfoTip></th></tr></thead><tbody>{result.strategies.map(strategy => <tr key={strategy.id}><td>{strategy.label}</td><td>{strategy.feasible ? formatPercent(strategy.stats?.cagr) : "n.d."}</td><td>{strategy.feasible ? formatPercent(strategy.stats?.volatility) : "n.d."}</td><td>{strategy.feasible ? formatPercent(strategy.stats?.maxDrawdown) : "n.d."}</td><td>{strategy.validWindowCount} / {strategy.plannedWindowCount}</td><td><WeightStabilityCell strategy={strategy} /></td></tr>)}</tbody></table></div>
+       <div className="table-scroll"><table><thead><tr><th>Allocation</th><th>TCAM OOS <InfoTip label="Comprendre le TCAM OOS">OOS signifie « hors échantillon ». Les poids sont choisis sur l'apprentissage, puis testés uniquement sur les années suivantes. Le TCAM est composé sur ces années de test.</InfoTip></th><th>Volatilité</th><th>Drawdown annuel</th><th>Fenêtres valides</th><th>Stabilité des poids <InfoTip label="Comprendre la stabilité des poids">Pour Croissance, cet indicateur compare les pondérations recalculées entre les fenêtres. Robustesse utilise le même diagnostic entre ses fenêtres. Stable signifie que les recommandations changent peu ; variable ou instable signifie qu'elles dépendent davantage de la période historique. Personnalisée, Équipondérée et MSCI World ont des poids fixes.<br /><br /><strong>Légende :</strong> Très stable 80–100 % · Stable 60–79 % · Variable 40–59 % · Instable 20–39 % · Très instable 0–19 %.</InfoTip></th></tr></thead><tbody>{result.strategies.map(strategy => <tr key={strategy.id}><td>{strategy.label}</td><td>{strategy.feasible ? formatPercent(strategy.stats?.cagr) : "n.d."}</td><td>{strategy.feasible ? formatPercent(strategy.stats?.volatility) : "n.d."}</td><td>{strategy.feasible ? formatPercent(strategy.stats?.maxDrawdown) : "n.d."}</td><td>{strategy.validWindowCount} / {strategy.plannedWindowCount}</td><td><WeightStabilityCell strategy={strategy} /></td></tr>)}</tbody></table></div>
       <p className="method-note">Personnalisée signifie ici les poids choisis aujourd'hui, appliqués rétrospectivement. Ce test ne prétend pas représenter une sélection historiquement disponible.</p>
     </section>
 
     {result.windows.length > 0 && <section className="table-card validation-windows-card">
-      <div className="card-heading compact"><div className="heading-icon warm"><SlidersHorizontal size={17} /></div><div><h2>Fenêtres et décisions</h2><p>Les poids de Croissance visibles dans chaque ligne proviennent uniquement de la période d'apprentissage correspondante.</p></div></div>
-      <div className="table-scroll"><table><thead><tr><th>Fenêtre</th><th>Apprentissage</th><th>Test</th><th>Poids Croissance</th><th>Score d'apprentissage</th></tr></thead><tbody>{result.windows.map(window => { const growth = result.strategies.find(strategy => strategy.id === "growth")?.windows[window.index]; return <tr key={window.index}><td>{String(window.index + 1).padStart(2, "0")}</td><td>{window.trainStart}–{window.trainEnd}</td><td>{window.testStart}–{window.testEnd}</td><td>{walkForwardWeights(assets, growth?.weights ?? null)}</td><td>{growth?.score === null || growth?.score === undefined ? "n.d." : formatPercent(growth.score)}</td></tr>; })}</tbody></table></div>
+       <div className="card-heading compact"><div className="heading-icon warm"><SlidersHorizontal size={17} /></div><div><h2>Fenêtres et décisions</h2><p>Les poids de Croissance et Robustesse visibles dans chaque ligne proviennent uniquement de la période d'apprentissage correspondante.</p></div></div>
+       <div className="table-scroll"><table><thead><tr><th>Fenêtre</th><th>Apprentissage</th><th>Test</th><th>Poids Croissance</th><th>Score TCAM</th><th>Poids Robustesse</th><th>Score quantile</th></tr></thead><tbody>{result.windows.map(window => { const growth = result.strategies.find(strategy => strategy.id === "growth")?.windows[window.index]; const robust = result.strategies.find(strategy => strategy.id === "robust")?.windows[window.index]; return <tr key={window.index}><td>{String(window.index + 1).padStart(2, "0")}</td><td>{window.trainStart}–{window.trainEnd}</td><td>{window.testStart}–{window.testEnd}</td><td>{walkForwardWeights(assets, growth?.weights ?? null)}</td><td>{growth?.score === null || growth?.score === undefined ? "n.d." : formatPercent(growth.score)}</td><td>{walkForwardWeights(assets, robust?.weights ?? null)}</td><td>{robust?.score === null || robust?.score === undefined ? "n.d." : formatPercent(robust.score)}</td></tr>; })}</tbody></table></div>
     </section>}
   </div>;
 }

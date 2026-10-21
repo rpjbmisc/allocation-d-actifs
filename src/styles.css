@@ -188,6 +188,11 @@ button:disabled, input:disabled { cursor: not-allowed; opacity: .45; }
 .growth-constraints label input[type="number"] { width: 62px; border: 1px solid #d5dfe4; background: #fff; color: #17324a; padding: 5px 6px; text-align: right; }
 .growth-constraints label input[type="checkbox"] { accent-color: #e76f51; }
 .growth-constraints label span { color: #718290; }
+.robust-settings { display: grid; gap: 8px; margin-top: 12px; padding: 12px; border: 1px solid #e8d8bf; background: #fffaf2; color: #536b7a; font-size: 11px; }
+.robust-settings-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.robust-settings-grid label { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; line-height: 1.4; }
+.robust-settings-grid input { width: 66px; border: 1px solid #d5dfe4; background: #fff; color: #17324a; padding: 5px 6px; text-align: right; }
+.robust-settings-grid span { color: #718290; }
 .metric.very-negative strong { color: #9b2226; }.metric.negative strong { color: #cf5b55; }.metric.neutral strong { color: #d97706; }.metric.positive strong { color: #61a88f; }.metric.very-positive strong { color: #258b78; }
 
 /* Keep the overview focused on at most three assets per row. */
@@ -232,4 +237,4 @@ button:disabled, input:disabled { cursor: not-allowed; opacity: .45; }
 .info-tip:hover .info-popover, .info-tip.open .info-popover, .info-button:focus-visible + .info-popover { opacity: 1; pointer-events: auto; transform: translateY(0); }
 .stability-label { color: #17324a; font-weight: 600; }
 .fixed-weight-label { color: #607682; font-style: italic; }
-@media (max-width: 560px) { .portfolio-spaces { overflow-x: auto; white-space: nowrap; }.portfolio-spaces button { flex: 0 0 auto; }.validation-controls { align-items: flex-start; flex-direction: column; }.validation-summary-heading strong { font-size: 29px; } }
+@media (max-width: 560px) { .portfolio-spaces { overflow-x: auto; white-space: nowrap; }.portfolio-spaces button { flex: 0 0 auto; }.validation-controls { align-items: flex-start; flex-direction: column; }.validation-summary-heading strong { font-size: 29px; }.robust-settings-grid { grid-template-columns: 1fr; } }

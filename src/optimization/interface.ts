@@ -1,5 +1,7 @@
 import { optimizeGrowth } from "./growth";
+import { optimizeRobust } from "./robust";
 import type { Mode, PortfolioStats, Row } from "../domain/types";
+import type { ScenarioSettings, ScenarioSummary } from "../scenarios/generator";
 
 export type StrategyId = "growth" | "robust" | "goal";
 
@@ -11,6 +13,7 @@ export interface AllocationInput {
   trainStart: number;
   trainEnd: number;
   rebalancing?: "annual";
+  scenarioSettings?: Partial<ScenarioSettings>;
 }
 
 /** Weights are fractions; risk budgets and grid resolution are percentage points. */
@@ -33,10 +36,13 @@ export interface OptimizationResult {
   stats: PortfolioStats | null;
   evaluatedCandidates: number;
   gridStepPct: number | null;
+  scoreLabel?: string;
+  scenarioSummary?: ScenarioSummary | null;
 }
 
 export function optimize(strategy: StrategyId, inputs: AllocationInput, constraints: PortfolioConstraints): OptimizationResult {
   if (strategy === "growth") return optimizeGrowth(inputs, constraints);
+  if (strategy === "robust") return optimizeRobust(inputs, constraints);
   return {
     strategy,
     weights: null,

@@ -60,6 +60,13 @@ it("exposes comparison and walk-forward spaces without removing manual construct
   render(<App />);
   await screen.findByRole("spinbutton", { name: "Poids saisi pour MSCI World" });
 
+  await user.click(screen.getByRole("button", { name: /^Robustesse/ }));
+  expect(screen.getByRole("spinbutton", { name: "Nombre de scénarios" })).toBeTruthy();
+  fireEvent.change(screen.getByRole("spinbutton", { name: "Poids saisi pour MSCI World" }), { target: { value: "37" } });
+  fireEvent.change(screen.getByRole("spinbutton", { name: "Nombre de scénarios" }), { target: { value: "40" } });
+  expect((screen.getByRole("spinbutton", { name: "Poids saisi pour MSCI World" }) as HTMLInputElement).value).toBe("37");
+  expect(screen.getByText(/Pondérations personnalisées/)).toBeTruthy();
+
   await user.click(screen.getByRole("tab", { name: "Comparaison" }));
   expect(screen.getByText("Comparer les allocations")).toBeTruthy();
   await user.click(screen.getByRole("tab", { name: "Validation" }));
