@@ -968,7 +968,7 @@ function PortfolioView({
     : portfolioData;
   const profileOptions: Array<{ id: PortfolioOptimizationProfile; label: string; shortDescription: string }> = [
     { id: "growth", label: "Croissance", shortDescription: growthProposal.feasible ? "TCAM historique maximal" : "Aucune solution faisable" },
-    { id: "robust", label: "Robustesse", shortDescription: robustProposal.feasible ? `Quantile ${robustScenarioSettings.quantilePct} % · scénarios conjoints` : "Aucune solution faisable" },
+    { id: "robust", label: "Robustesse", shortDescription: robustProposal.feasible ? "Mieux résister aux années difficiles" : "Aucune solution possible" },
   ];
 
   return <div className="portfolio-view">
@@ -990,16 +990,31 @@ function PortfolioView({
             <strong>{profile.label}</strong><span>{profile.shortDescription}</span>
           </button>)}
         </div>
-        {optimizationProfile === "robust" && <div className="robust-settings" aria-label="Hypothèses des scénarios de robustesse">
-          <div className="growth-constraints-heading"><span>Hypothèses de scénarios</span><small>Rééchantillonnage historique conjoint, sans prévision implicite.</small></div>
-          <div className="robust-settings-grid">
-            <label>Scénarios <input aria-label="Nombre de scénarios" type="number" min="1" max="10000" step="1" value={robustScenarioSettings.scenarioCount} onChange={(event) => onRobustScenarioSettingsChange({ scenarioCount: Math.max(1, Math.min(10000, Number(event.target.value) || 1)) })} /></label>
-            <label>Horizon <input aria-label="Horizon des scénarios" type="number" min="1" max="1000" step="1" value={robustScenarioSettings.horizonYears} onChange={(event) => onRobustScenarioSettingsChange({ horizonYears: Math.max(1, Math.min(1000, Number(event.target.value) || 1)) })} /> <span>ans</span></label>
-            <label>Bloc historique <input aria-label="Taille des blocs historiques" type="number" min="1" max="100" step="1" value={robustScenarioSettings.blockYears} onChange={(event) => onRobustScenarioSettingsChange({ blockYears: Math.max(1, Math.min(100, Number(event.target.value) || 1)) })} /> <span>an{robustScenarioSettings.blockYears > 1 ? "s" : ""}</span></label>
-            <label>Quantile défavorable <input aria-label="Quantile défavorable" type="number" min="0" max="50" step="1" value={robustScenarioSettings.quantilePct} onChange={(event) => onRobustScenarioSettingsChange({ quantilePct: Math.max(0, Math.min(50, Number(event.target.value) || 0)) })} /> <span>%</span></label>
-            <label>Graine <input aria-label="Graine des scénarios" type="number" step="1" value={robustScenarioSettings.seed} onChange={(event) => onRobustScenarioSettingsChange({ seed: Number(event.target.value) || 0 })} /></label>
-          </div>
-          {robustProposal.scenarioSummary && <p className="method-note">Score retenu : {formatPercent(robustProposal.scenarioSummary.quantileCagr)} au quantile {robustProposal.scenarioSummary.quantilePct} %. Médiane : {formatPercent(robustProposal.scenarioSummary.medianCagr)} ; fragilité médiane–quantile : {formatPercent(robustProposal.scenarioSummary.fragilityCagr)}.</p>}
+        {optimizationProfile === "robust" && <div className="robust-settings" aria-label="Réglages de robustesse">
+          <div className="robust-simple-heading"><strong>Et si les prochaines années étaient difficiles ?</strong><p>L'application essaie plusieurs suites possibles d'années passées et cherche une répartition qui s'en sort bien, même quand les résultats sont moins bons.</p></div>
+          <fieldset className="robust-prudence">
+            <legend>À quel point veux-tu privilégier les scénarios difficiles ?</legend>
+            <div className="robust-prudence-options">
+              {([ { value: 30, label: "Un peu", detail: "30 % des scénarios sont moins bons" }, { value: 20, label: "Moyennement", detail: "20 % des scénarios sont moins bons" }, { value: 10, label: "Beaucoup", detail: "10 % des scénarios sont moins bons" } ] as const).map(option => <label key={option.value} className={robustScenarioSettings.quantilePct === option.value ? "selected" : ""}><input type="radio" name="robust-quantile" checked={robustScenarioSettings.quantilePct === option.value} onChange={() => onRobustScenarioSettingsChange({ quantilePct: option.value })} /><span><strong>{option.label}</strong><small>{option.detail}</small></span></label>)}
+            </div>
+          </fieldset>
+          {robustProposal.scenarioSummary && <div className="robust-simple-result">
+            <strong>Dans les simulations : {formatPercent(robustProposal.scenarioSummary.quantileCagr)} par an au seuil choisi</strong>
+            <p>Environ {robustProposal.scenarioSummary.quantilePct} % des simulations font moins bien. Le résultat du milieu est de {formatPercent(robustProposal.scenarioSummary.medianCagr)} par an.</p>
+            <small>Ce n'est pas une prévision ni un rendement garanti : les simulations réutilisent les années du passé.</small>
+          </div>}
+          <details className="robust-advanced">
+            <summary>Réglages avancés (facultatifs)</summary>
+            <p>Ces réglages servent à fabriquer les simulations. Tu peux garder les valeurs proposées.</p>
+            <div className="robust-settings-grid">
+              <label>Nombre de simulations <input aria-label="Nombre de scénarios" type="number" min="1" max="10000" step="1" value={robustScenarioSettings.scenarioCount} onChange={(event) => onRobustScenarioSettingsChange({ scenarioCount: Math.max(1, Math.min(10000, Number(event.target.value) || 1)) })} /></label>
+              <label>Durée de chaque simulation <input aria-label="Horizon des scénarios" type="number" min="1" max="1000" step="1" value={robustScenarioSettings.horizonYears} onChange={(event) => onRobustScenarioSettingsChange({ horizonYears: Math.max(1, Math.min(1000, Number(event.target.value) || 1)) })} /> <span>ans</span></label>
+              <label>Années conservées à la suite <input aria-label="Taille des blocs historiques" type="number" min="1" max="100" step="1" value={robustScenarioSettings.blockYears} onChange={(event) => onRobustScenarioSettingsChange({ blockYears: Math.max(1, Math.min(100, Number(event.target.value) || 1)) })} /> <span>an{robustScenarioSettings.blockYears > 1 ? "s" : ""}</span></label>
+              <label>Numéro pour retrouver les mêmes tirages <input aria-label="Graine des scénarios" type="number" step="1" value={robustScenarioSettings.seed} onChange={(event) => onRobustScenarioSettingsChange({ seed: Number(event.target.value) || 0 })} /></label>
+              <label>Seuil défavorable exact <input aria-label="Quantile défavorable" type="number" min="0" max="50" step="1" value={robustScenarioSettings.quantilePct} onChange={(event) => onRobustScenarioSettingsChange({ quantilePct: Math.max(0, Math.min(50, Number(event.target.value) || 0)) })} /> <span>%</span></label>
+            </div>
+            <p>Changer ces réglages change les simulations. Pour appliquer les nouveaux poids proposés, clique de nouveau sur « Robustesse ».</p>
+          </details>
         </div>}
         <div className="growth-constraints" aria-label="Contraintes du profil Croissance">
           <div className="growth-constraints-heading"><span>Contraintes de recherche</span><small>Les valeurs sont modifiables et ne constituent pas des normes universelles.</small></div>
