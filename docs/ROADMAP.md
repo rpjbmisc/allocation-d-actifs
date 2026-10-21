@@ -2,7 +2,7 @@
 
 > **Document de pilotage** · Créé le 18 octobre 2026 · Référence de travail pour ChatGPT, Codex et OpenCode.
 >
-> **Statut** : phases 0 et 1 fusionnées (#1, #2) ; phase 2 implémentée sur branche dédiée, en attente de revue et de fusion ; phases 3 à 6 non commencées. Mettre à jour les statuts **après fusion** des changements correspondants dans `main`.
+> **Statut** : phases 0 à 2 fusionnées (#1, #2, #3) ; phase 3 implémentée sur branche dédiée, en attente de revue et de fusion ; phases 4 à 6 non commencées. Mettre à jour les statuts **après fusion** des changements correspondants dans `main`.
 
 ## 1. Vision et périmètre
 
@@ -62,8 +62,8 @@ L'application est un outil d'**analyse et de simulation**, pas une promesse de r
 |---|---|---|---|
 | **0. Cadrage** | Fusionnée (#1) | Aucune | ROADMAP, ARCHITECTURE, lien depuis README |
 | **1. Fondations financières** | Fusionnée (#2) | 0 | Moteur modulaire + tests de référence + invariants |
-| **2. Profil Croissance** | Implémentée, à revoir (non fusionnée) | 1 | Optimisation CAGR sous contraintes communes + édition manuelle |
-| **3. Validation walk-forward** | À faire | 2 | Backtests temporels hors échantillon + comparateur |
+| **2. Profil Croissance** | Fusionnée (#3) | 1 | Optimisation CAGR sous contraintes communes + édition manuelle |
+| **3. Validation walk-forward** | Implémentée, à revoir (non fusionnée) | 2 | Backtests temporels hors échantillon + comparateur |
 | **4. Profil Robustesse** | À faire | 3 | Moteur de scénarios + objectif robuste + validation |
 | **5. Objectif patrimonial** | À faire | 4 | Simulation d'épargne/capital + probabilité conditionnelle |
 | **6. Concentration économique** | À faire | 1–5 | Métadonnées d'exposition + contraintes de recouvrement |
@@ -121,8 +121,9 @@ Travaux :
   leur remplacement relève de la phase 2. Walk-forward et simulations prospectives
   restent explicitement réservés aux phases 3–5.
 
-La phase 1 a été revue et fusionnée dans `main` via la PR #2. La phase 2
-ci-dessous reste soumise à revue et cette branche ne modifie pas `main`.
+La phase 1 a été revue et fusionnée dans `main` via la PR #2. La phase 2 a
+ensuite été fusionnée via la PR #3. La phase 3 ci-dessous est soumise à revue
+sur sa branche dédiée et ne modifie pas `main`.
 
 ### Phase 2 — Optimisation Croissance sous contraintes
 
@@ -145,7 +146,7 @@ Travaux :
 - [x] Les anciens boutons de diversification fondés sur des seuils corrélation/ratio sont retirés ; corrélation et ratio restent des diagnostics.
 - [x] Les pondérations manuelles, la normalisation et le recalcul des métriques sont conservés ; cliquer à nouveau sur Croissance réapplique la proposition sans changer les contraintes.
 - [x] Tests déterministes d'optimum connu, contraintes de drawdown/volatilité, infaisabilité, déterminisme, budget de recherche et contrôles UI.
-- [ ] Revue et fusion dans `main`.
+- [x] Revue et fusion dans `main` via la PR #3.
 
 Limites assumées : la recherche est optimale à la granularité de grille choisie (5, 10
 ou 20 points dans l'interface, selon le nombre d'actifs), pas un optimum continu ; les
@@ -162,6 +163,34 @@ Travaux :
 - Permettre de choisir la durée d'apprentissage/test selon la profondeur des historiques ; afficher le faible nombre d'essais et une incertitude qualitative.
 
 **Recette** : tests « sans fuite temporelle » ; résultats de chaque fenêtre reproductibles ; CAGR OOS composé (pas moyenne naïve des CAGR) ; années sans données détectées ; prise en compte explicite des frais/hypothèses si ajoutés ; affichage de « données insuffisantes » pour les fenêtres non valides.
+
+#### Livraison de cette branche (à valider en revue)
+
+- [x] Moteur pur `src/validation/walkForward.ts` avec apprentissage expansif,
+  fenêtres de test non chevauchantes et années communes contiguës ; une fenêtre
+  qui traverse un trou n'est jamais fabriquée.
+- [x] Croissance est optimisée sur chaque apprentissage uniquement, puis ses
+  poids sont gelés pendant le test avec rééquilibrage annuel. Les mêmes fenêtres
+  servent à Personnalisée (poids choisis aujourd'hui), à l'équipondération et au
+  benchmark MSCI World lorsqu'il est disponible.
+- [x] Le CAGR OOS est composé chronologiquement sur les seuls rendements des
+  tests. Une fenêtre invalide ou un historique insuffisant rend le résultat
+  indisponible au lieu de produire un score partiel trompeur.
+- [x] La stabilité des poids Croissance est corrigée en points de rotation,
+  présentée par niveaux qualitatifs et expliquée par une infobulle accessible ;
+  les allocations fixes affichent `Poids fixes`.
+- [x] Construction, Comparaison et Validation sont réunies dans l'espace
+  Portefeuille. Les pondérations manuelles, leur normalisation et la
+  réapplication de Croissance restent disponibles.
+- [x] Tests déterministes de fenêtres, absence de fuite temporelle, composition
+  géométrique OOS, trous historiques et contrôles UI.
+- [ ] Revue et fusion dans `main`.
+
+Hypothèses de cette première version : apprentissage expansif par défaut de 20
+ans et test de 5 ans, réglables dans l'interface ; les tests sont annuels,
+rééquilibrés vers des poids cibles, sans frais ni fiscalité. L'apprentissage
+roulant est explicitement reporté. Une seule fenêtre ou moins de quatre fenêtres
+produit un avertissement qualitatif sur la faiblesse de l'inférence.
 
 ### Phase 4 — Robustesse multi-scénarios
 
@@ -219,7 +248,7 @@ Travaux :
 
 Ces choix sont **proposés, pas encore validés** :
 - Règle exacte de budget de risque et limites de concentration ; pas de valeur universelle présupposée.
-- Taille minimale des fenêtres walk-forward et type de fenêtre (expansive/roulante).
+- La phase 3 fixe 20 ans d'apprentissage minimal et 5 ans de test non chevauchant en mode expansif ; l'apprentissage roulant reste une évolution ultérieure.
 - Coûts de transaction, fiscalité, frais et politique précise de versement/rééquilibrage.
 - Modèle et pondération des scénarios économiques ; objective robuste exacte.
 - Méthode d'estimation prospective des rendements et de l'incertitude.

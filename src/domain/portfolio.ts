@@ -3,6 +3,48 @@ import { normalizeWeights } from "./constraints";
 import type { Row, Mode, PortfolioStats, PortfolioPoint } from "./types";
 import { returnValue } from "./returns";
 import { volatility, cagr as cagrValue } from "./metrics";
+
+export type AnnualPortfolioReturn = { year: number; return: number };
+
+/** Summarize already computed annual returns without filling or skipping years. */
+export function summarizePortfolioReturns(annualReturns: AnnualPortfolioReturn[]): PortfolioStats | null {
+  if (!annualReturns.length || annualReturns.some(point => !Number.isInteger(point.year) || !Number.isFinite(point.return) || point.return < -100)) return null;
+  if (annualReturns.some((point, index) => index > 0 && point.year !== annualReturns[index - 1].year + 1)) return null;
+
+  let value = 100;
+  let peak = value;
+  let maxDrawdown = 0;
+  const points = annualReturns.map(({ year, return: portfolioReturn }) => {
+    value *= 1 + portfolioReturn / 100;
+    peak = Math.max(peak, value);
+    const drawdown = (value / peak - 1) * 100;
+    maxDrawdown = Math.min(maxDrawdown, drawdown);
+    return { year, return: portfolioReturn, value, drawdown };
+  });
+
+  if (points.some(point => !Number.isFinite(point.value))) return null;
+  const returns = points.map(point => point.return);
+  const mean = returns.reduce((sum, current) => sum + current, 0) / returns.length;
+  const volatilityValue = volatility(returns);
+  const cagr = cagrValue(100, value, points.length);
+  const troughIndex = points.reduce((index, point, current) => point.drawdown < points[index].drawdown ? current : index, 0);
+  const recoveryIndex = points.findIndex((point, index) => index > troughIndex && point.drawdown >= -0.01);
+  const recoveryYears = maxDrawdown < 0 && recoveryIndex > troughIndex ? points[recoveryIndex].year - points[troughIndex].year : null;
+
+  return {
+    points,
+    count: points.length,
+    cagr,
+    volatility: volatilityValue,
+    grossReturnToVolatility: volatilityValue > 0 ? mean / volatilityValue : null,
+    positiveRate: returns.filter(current => current > 0).length / returns.length * 100,
+    best: points.reduce((best, point) => !best || point.return > best.return ? point : best, null as PortfolioPoint | null),
+    worst: points.reduce((worst, point) => !worst || point.return < worst.return ? point : worst, null as PortfolioPoint | null),
+    maxDrawdown,
+    recoveryYears,
+  };
+}
+
 export function computePortfolio(
   data: Record<string, Row[]>,
   weights: Record<string, number>,
@@ -17,42 +59,15 @@ export function computePortfolio(
   if (!aligned.ok) return null;
   const { years: validYears, rowsByAsset } = aligned;
 
-  let value = 100;
-  let peak = value;
-  let maxDrawdown = 0;
-  const points = validYears.map((year) => {
+  const annualReturns = validYears.map((year) => {
     const portfolioReturn = weightedAssets.reduce((sum, [id, weight]) => {
       const row = rowsByAsset[id].get(year) as Row;
       return sum + weight * (returnValue(row, mode) as number);
     }, 0);
-    value *= 1 + portfolioReturn / 100;
-    peak = Math.max(peak, value);
-    const drawdown = (value / peak - 1) * 100;
-    maxDrawdown = Math.min(maxDrawdown, drawdown);
-    return { year, return: portfolioReturn, value, drawdown };
+    return { year, return: portfolioReturn };
   });
 
-  if (points.some(point => !Number.isFinite(point.value) || !Number.isFinite(point.return))) return null;
-  const returns = points.map((point) => point.return);
-  const mean = returns.reduce((sum, current) => sum + current, 0) / returns.length;
-  const volatilityValue = volatility(returns);
-  const cagr = cagrValue(100, value, points.length);
-  const troughIndex = points.reduce((index, point, current) => point.drawdown < points[index].drawdown ? current : index, 0);
-  const recoveryIndex = points.findIndex((point, index) => index > troughIndex && point.drawdown >= -0.01);
-  const recoveryYears = maxDrawdown < 0 && recoveryIndex > troughIndex ? points[recoveryIndex].year - points[troughIndex].year : null;
-
-  return {
-    points,
-    count: points.length,
-    cagr,
-    volatility: volatilityValue,
-    grossReturnToVolatility: volatilityValue > 0 ? mean / volatilityValue : null,
-    positiveRate: returns.filter((current) => current > 0).length / returns.length * 100,
-    best: points.reduce((best, point) => !best || point.return > best.return ? point : best, null as PortfolioPoint | null),
-    worst: points.reduce((worst, point) => !worst || point.return < worst.return ? point : worst, null as PortfolioPoint | null),
-    maxDrawdown,
-    recoveryYears,
-  };
+  return summarizePortfolioReturns(annualReturns);
 }
 
 
