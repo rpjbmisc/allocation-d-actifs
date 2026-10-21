@@ -12,3 +12,4 @@ export * from "./format";
 
 export * from "./domain/series";
 export * from "./validation/walkForward";
+export * from "./scenarios/generator";

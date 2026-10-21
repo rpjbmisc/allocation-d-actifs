@@ -1,6 +1,6 @@
 # Architecture — Allocation d'actifs
 
-> **Document technique vivant** · État des lieux au 18 octobre 2026, mis à jour pour la livraison de phase 3 (en attente de revue/fusion).
+> **Document technique vivant** · État des lieux au 21 octobre 2026, mis à jour pour la livraison de phase 4 (en attente de revue/fusion).
 >
 > Les sections « **Existant** » décrivent le code actuel. Les sections « **Cible** » sont des propositions de refactoring, **pas des fonctionnalités déjà implémentées**.
 >
@@ -27,9 +27,10 @@ Objectifs secondaires : reproductibilité, testabilité, performance acceptable 
 | `src/analytics.ts` | Façade de compatibilité des modules `domain/`, `optimization/` et du formatage. |
 | `src/domain/` | Données/continuité, conversion, séries, métriques, portefeuille, contraintes et diversification. |
 | `src/data/load.ts` | Chargement JSON/CSV, validation des séries et des bornes du registre. |
-| `src/optimization/interface.ts` / `growth.ts` | Contrat commun d'optimisation et stratégie Croissance historique, indépendants de React et du réseau. |
+| `src/optimization/interface.ts` / `growth.ts` / `robust.ts` | Contrat commun d'optimisation, stratégie Croissance historique et stratégie Robustesse par quantile de scénarios, indépendants de React et du réseau. |
 | `src/optimization/search.ts` | Fonctions de recherche historiques conservées pour compatibilité ; le profil de production délègue désormais à `growth`. |
-| `src/validation/walkForward.ts` | Fenêtres chronologiques, exécution hors échantillon et comparaison des allocations de phase 3. |
+| `src/validation/walkForward.ts` | Fenêtres chronologiques, exécution hors échantillon et comparaison des allocations des phases 3–4. |
+| `src/scenarios/generator.ts` | Scénarios annuels historiques conjoints, rééchantillonnage par blocs, graine et résumés de quantiles. |
 | `src/styles.css` | Styles de l'interface. |
 | `public/data/assets_index.json` | Registre des séries d'actifs disponibles avec bornes temporelles. |
 | `public/data/CAGR_*.csv` | Séries annuelles (`Year,Series_Level,Annual_Return_Pct`). |
@@ -90,7 +91,7 @@ src/
   validation/
     walkForward.ts               # découpes temporelles, exécution OOS, baselines (phase 3)
   scenarios/
-    generator.ts                 # scénarios conjoints, graine, hypothèses
+    generator.ts                 # scénarios conjoints, graine, hypothèses (phase 4)
     assumptions.ts               # paramètres de croissance/inflation/incertitude
   data/
     exposures.ts                 # métadonnées économiques horodatées (phase 6)
@@ -184,11 +185,12 @@ Conserver :
 
 ### Robustesse — `robust`
 
-- **Phase 4** : générateur de scénarios en bloc pour les actifs, et hypothèses économiques explicitement déclarées.
-- Objectif exact à arbitrer : quantile défavorable du CAGR, mesure pénalisant la fragilité, ou regret. Documenter avant implémentation.
-- Calibration de l'objectif, pénalités et scénarios sans regarder la période OOS du walk-forward.
-- Les années peuvent être rééchantillonnées **conjointement** pour préserver les co-mouvements instantanés entre actifs ; cela ne reproduit pas nécessairement les dépendances dans le temps. Tester une variante par blocs pluriannuels si l'historique le permet.
-- Rapporter les sensibilités et les hypothèses ; des séries annuelles courtes ne justifient pas des probabilités très précises.
+- **Phase 4 livrée sur cette branche** : `src/scenarios/generator.ts` rééchantillonne avec remise des années historiques d'apprentissage ; tous les actifs utilisent le même vecteur source à chaque année simulée. Des blocs contigus de longueur configurable préservent aussi une partie de la dépendance temporelle observée, sans la prétendre prédictive.
+- L'objectif retenu est le **quantile empirique défavorable du TCAM géométrique** (20 % par défaut). La médiane, les extrêmes et l'écart médiane–quantile sont rapportés pour rendre la fragilité sensible aux hypothèses.
+- Les scénarios sont déterministes pour une graine, un univers, une période, un mode et des paramètres donnés. Les valeurs par défaut sont 250 scénarios, 10 ans, blocs d'un an et graine `20261021`.
+- La calibration est strictement locale à la fenêtre d'apprentissage dans le walk-forward ; aucune année de test n'est passée au générateur ou à l'optimiseur Robustesse.
+- Le score de scénario ne devient pas une probabilité de rendement : il s'agit d'un résumé conditionnel à l'historique rééchantillonné, aux rendements annuels, au rééquilibrage annuel et aux paramètres choisis. Les contraintes communes de poids, drawdown de clôture et volatilité restent contrôlées sur l'historique d'apprentissage.
+- Les co-mouvements contemporains sont préservés par l'échantillonnage conjoint, mais l'ordre temporel et les régimes futurs ne sont pas identifiés. Les coûts, la fiscalité et les drawdowns intra-annuels restent hors modèle.
 
 ### Objectif patrimonial — `goal`
 
@@ -247,9 +249,9 @@ Tout plafond sur exposition « US », « actions », « crédit », etc. doit ê
 
 ## 8. Stratégie de tests (phase 1 et suite)
 
-Vitest est installé en phase 1. Les tests financiers, de données, de contrôles UI
-et de walk-forward sont livrés ; les cas de scénarios et d'objectif patrimonial
-restent à ajouter dans leurs phases respectives :
+Vitest est installé en phase 1. Les tests financiers, de données, de contrôles UI,
+de walk-forward et de scénarios de Robustesse sont livrés ; les cas d'objectif
+patrimonial restent à ajouter dans leur phase respective :
 
 - **Tests de conformité des données** : années triées, doublons, niveaux sans rendement, trous, non-finies, métadonnées discordantes.
 - **Calculs à la main** : CAGR composé, drawdown de fin d'année, volatilité, rééquilibrage, effet d'une année à −50 % suivie de +100 %.
@@ -258,7 +260,7 @@ restent à ajouter dans leurs phases respectives :
 - **Contraintes** : somme 100 %, long-only, plafond par actif, aucun candidat faisable, cas avec un seul actif.
 - **Optimisation** : solutions connues sur petit univers, déterminisme, effet de la granularité.
 - **Walk-forward** : données futures volontairement modifiées **sans effet sur les poids antérieurs** ; dates de test strictement après dates de train ; fenêtres de test non chevauchantes ; composition du CAGR OOS ; trous / périodes insuffisantes.
-- **Scénarios et objectif** : graine fixe, trajectoires connues, versements déterministes, objectif nominal/réel, probabilité dans [0, 1].
+- **Scénarios et objectif** : graine fixe, trajectoires historiques conjointes, blocs, quantile robuste et sensibilité ; les versements, objectifs nominal/réel et probabilités restent réservés à la phase 5.
 - **Non-régression UI** : les contrôles existants et la modification manuelle des pondérations continuent de fonctionner.
 
 Pour chaque PR : publier les commandes exécutées et leurs résultats ; ne pas déclarer les tests « passés » sans les avoir exécutés.
@@ -312,10 +314,10 @@ Lire `README.md`, `docs/ROADMAP.md`, `docs/ARCHITECTURE.md` puis les fichiers co
 Cette section décrit les fondations intégrées dans `main` via la PR #2.
 À la livraison des fondations de phase 1, aucun faux moteur walk-forward, scénario
 ou objectif patrimonial n'était créé. La phase 3 ajoute désormais le moteur décrit
-en §6 ; les scénarios et l'objectif patrimonial restent futurs. La simulation de
-portefeuille est dans `domain/portfolio.ts` ; l'optimiseur Croissance est décrit
-en §12 et les fonctions de recherche historiques restent dans
-`optimization/search.ts`.
+en §6 et la phase 4 ajoute le générateur et l'optimiseur décrits en §13 ;
+l'objectif patrimonial reste futur. La simulation de portefeuille est dans
+`domain/portfolio.ts` ; l'optimiseur Croissance est décrit en §12 et les fonctions
+de recherche historiques restent dans `optimization/search.ts`.
 
 ### Contrat appliqué et hypothèses
 
@@ -392,12 +394,12 @@ tolérance flottante près ; les CSV/JSON historiques ne sont pas modifiés.
 6. La trajectoire d'un actif dont la première ligne est un niveau sans rendement
    commence à 100 sur cette année initiale, pas artificiellement une année avant.
 
-Les profils Robustesse/Objectif et les simulations prospectives ne sont pas
-implémentés par les phases livrées. La phase 2 remplace les anciens profils de
-diversification à seuils par un profil Croissance sous contraintes configurables ;
-la phase 3 ajoute la validation walk-forward et la comparaison, tandis que
-corrélation et ratio de diversification restent des diagnostics sans catégories
-normatives.
+L'objectif patrimonial et les simulations d'épargne ne sont pas implémentés par
+les phases livrées. La phase 2 remplace les anciens profils de diversification à
+seuils par un profil Croissance sous contraintes configurables ; la phase 3
+ajoute la validation walk-forward et la comparaison ; la phase 4 ajoute
+Robustesse par scénarios historiques conjoints. Corrélation et ratio de
+diversification restent des diagnostics sans catégories normatives.
 
 ### Vérification reproductible
 
@@ -410,7 +412,9 @@ la navigation entre Portefeuille et Corrélations. Les tests de phase 2 couvrent
 également un optimum connu, le plafond de poids, les budgets de drawdown/volatilité,
 l'infaisabilité et le budget d'évaluations. Les tests de phase 3 vérifient les
 fenêtres expansives, l'absence de fuite temporelle, la composition OOS et les
-historiques troués. Il ne remplace pas une recette visuelle
+historiques troués. Les tests de phase 4 vérifient la graine reproductible, les
+co-mouvements conjoints, les blocs contigus, le quantile géométrique et
+l'absence de fuite des rendements de test. Il ne remplace pas une recette visuelle
 complète. Le workflow `validate.yml` applique tests et build aux PR.
 L'avertissement Vite sur le bundle > 500 kB reste non bloquant et préexistant.
 
@@ -445,3 +449,31 @@ la proposition est absente, les diagnostics sont affichés et l'utilisateur cons
 ses pondérations manuelles. Après édition, `computePortfolio` recalcule toutes les
 métriques comme auparavant ; la proposition Croissance peut être réappliquée sans
 modifier les contraintes.
+
+## 13. Scénarios et Robustesse livrés sur cette branche
+
+`src/scenarios/generator.ts` aligne d'abord toutes les séries sur les rendements
+annuels complets de la fenêtre d'apprentissage. `generateJointScenarios` tire
+ensuite des blocs de `blockYears` années avec remise ; un tirage fournit le même
+vecteur d'année source à tous les actifs, puis les années sources sont conservées
+dans le résultat. Le générateur n'accède jamais aux données hors de la période
+passée en entrée.
+
+`summarizeScenarioPortfolio` applique les pondérations cibles et le
+rééquilibrage annuel à chaque trajectoire, compose les rendements et calcule le
+TCAM. Le quantile empirique est interpolé entre les valeurs ordonnées ; le
+résultat expose aussi médiane, minimum, maximum et écart médiane–quantile.
+
+`robust.ts` réutilise la validation des contraintes et la grille déterministe de
+Croissance. Son score est le quantile défavorable du TCAM simulé ; ses métriques
+`stats` restent les métriques historiques du candidat sur l'apprentissage, afin
+de ne pas confondre résultat observé et scénario. Dans `runWalkForward`, la
+stratégie reçoit une fenêtre d'apprentissage distincte pour chaque décision et
+ses poids sont gelés sur le test suivant. La comparaison OOS reste composée
+chronologiquement par le moteur de phase 3.
+
+La configuration par défaut est de 250 scénarios de 10 ans, blocs d'un an,
+graine `20261021` et quantile 20 %. Ces valeurs sont des hypothèses réversibles,
+pas des paramètres universels. Modifier la graine ou le nombre de scénarios
+change le résultat ; les historiques annuels courts et les indices
+reconstruits ne justifient pas une interprétation probabiliste précise.

@@ -8,7 +8,7 @@ const WEIGHT_TOLERANCE = 1e-10;
 const DEFAULT_GRID_STEP_PCT = 5;
 const DEFAULT_MAX_EVALUATIONS = 100_000;
 
-type ValidatedConstraints = {
+export type ValidatedConstraints = {
   minWeight: number;
   maxWeightByAsset: Record<string, number>;
   maxAnnualCloseDrawdownPct: number | null;
@@ -17,8 +17,15 @@ type ValidatedConstraints = {
   maxEvaluations: number;
 };
 
-type SearchState = {
-  best: { weights: Record<string, number>; stats: PortfolioStats; score: number } | null;
+export type GridCandidate<Metadata = undefined> = {
+  weights: Record<string, number>;
+  stats: PortfolioStats;
+  score: number;
+  metadata?: Metadata;
+};
+
+export type GridSearchState<Metadata = undefined> = {
+  best: GridCandidate<Metadata> | null;
   evaluatedCandidates: number;
   stoppedByBudget: boolean;
 };
@@ -36,8 +43,8 @@ function emptyResult(diagnostics: string[], gridStepPct: number | null = null): 
   };
 }
 
-function validateConfiguration(assetIds: string[], constraints: PortfolioConstraints): { value: ValidatedConstraints } | { diagnostics: string[] } {
-  if (constraints.longOnly !== true) return { diagnostics: ["La stratégie Croissance exige une allocation long-only."] };
+export function validateOptimizationConfiguration(assetIds: string[], constraints: PortfolioConstraints): { value: ValidatedConstraints } | { diagnostics: string[] } {
+  if (constraints.longOnly !== true) return { diagnostics: ["Les stratégies d'optimisation exigent une allocation long-only."] };
   if (!assetIds.length || new Set(assetIds).size !== assetIds.length) return { diagnostics: ["L'univers d'actifs est vide ou contient des doublons."] };
 
   const minWeight = constraints.minWeight ?? 0;
@@ -72,9 +79,9 @@ function validateConfiguration(assetIds: string[], constraints: PortfolioConstra
   };
 }
 
-function compareCandidates(
-  candidate: { weights: Record<string, number>; stats: PortfolioStats; score: number },
-  current: { weights: Record<string, number>; stats: PortfolioStats; score: number } | null,
+function compareCandidates<Metadata>(
+  candidate: GridCandidate<Metadata>,
+  current: GridCandidate<Metadata> | null,
   assetIds: string[],
 ): boolean {
   if (!current) return true;
@@ -94,7 +101,7 @@ function compareCandidates(
   });
 }
 
-function candidateRespectsConstraints(
+export function candidateRespectsConstraints(
   weights: Record<string, number>,
   stats: PortfolioStats,
   assetIds: string[],
@@ -107,15 +114,16 @@ function candidateRespectsConstraints(
   return true;
 }
 
-function searchGrid(
+export function searchGrid<Metadata = undefined>(
   inputs: AllocationInput,
   assetIds: string[],
   constraints: ValidatedConstraints,
-): SearchState {
+  scoreCandidate: (weights: Record<string, number>, stats: PortfolioStats) => { score: number; metadata?: Metadata } | null,
+): GridSearchState<Metadata> {
   const totalUnits = Math.round(100 / constraints.gridStepPct);
   const minUnits = Math.ceil((constraints.minWeight * 100) / constraints.gridStepPct - WEIGHT_TOLERANCE);
   const maxUnits = Object.fromEntries(assetIds.map(id => [id, Math.floor((constraints.maxWeightByAsset[id] * 100) / constraints.gridStepPct + WEIGHT_TOLERANCE)]));
-  const state: SearchState = { best: null, evaluatedCandidates: 0, stoppedByBudget: false };
+  const state: GridSearchState<Metadata> = { best: null, evaluatedCandidates: 0, stoppedByBudget: false };
   const mode = inputs.returnMode ?? "nominal";
 
   const visit = (index: number, remainingUnits: number, units: number[]) => {
@@ -138,9 +146,10 @@ function searchGrid(
       }));
       state.evaluatedCandidates += 1;
       const stats = computePortfolio(inputs.data, weights, inputs.trainStart, inputs.trainEnd, mode);
-      if (!stats || stats.cagr === null || !candidateRespectsConstraints(weights, stats, assetIds, constraints)) return;
-      const score = stats.cagr;
-      const candidate = { weights, stats, score };
+       if (!stats || !candidateRespectsConstraints(weights, stats, assetIds, constraints)) return;
+       const score = scoreCandidate(weights, stats);
+       if (!score || !Number.isFinite(score.score)) return;
+       const candidate = { weights, stats, score: score.score, metadata: score.metadata };
       if (compareCandidates(candidate, state.best, assetIds)) state.best = candidate;
       return;
     }
@@ -157,7 +166,7 @@ function searchGrid(
 }
 
 export function optimizeGrowth(inputs: AllocationInput, rawConstraints: PortfolioConstraints): OptimizationResult {
-  const configuration = validateConfiguration(inputs.assetIds, rawConstraints);
+  const configuration = validateOptimizationConfiguration(inputs.assetIds, rawConstraints);
   if ("diagnostics" in configuration) return emptyResult(configuration.diagnostics, rawConstraints.gridStepPct ?? null);
   if (inputs.rebalancing !== undefined && inputs.rebalancing !== "annual") return emptyResult(["Seul le rééquilibrage annuel est disponible dans cette phase."], configuration.value.gridStepPct);
 
@@ -166,7 +175,7 @@ export function optimizeGrowth(inputs: AllocationInput, rawConstraints: Portfoli
   if (!aligned.ok) return emptyResult(aligned.diagnostics.map(diagnostic => diagnostic.message), configuration.value.gridStepPct);
   if (!aligned.years.length) return emptyResult(["La fenêtre d'apprentissage ne contient aucun rendement annuel."], configuration.value.gridStepPct);
 
-  const state = searchGrid(inputs, inputs.assetIds, configuration.value);
+  const state = searchGrid(inputs, inputs.assetIds, configuration.value, (_weights, stats) => stats.cagr === null ? null : { score: stats.cagr });
   const diagnostics = state.best ? [] : ["Aucune allocation faisable ne respecte simultanément les contraintes et la qualité des données."];
   if (state.stoppedByBudget) diagnostics.push(`Recherche arrêtée au budget déterministe de ${configuration.value.maxEvaluations.toLocaleString("fr-FR")} évaluations.`);
   if (state.best && state.stoppedByBudget) diagnostics.push("Le résultat est le meilleur candidat trouvé à la résolution choisie, pas une garantie d'optimum continu.");

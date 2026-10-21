@@ -2,7 +2,7 @@
 
 > **Document de pilotage** · Créé le 18 octobre 2026 · Référence de travail pour ChatGPT, Codex et OpenCode.
 >
-> **Statut** : phases 0 à 2 fusionnées (#1, #2, #3) ; phase 3 implémentée sur branche dédiée, en attente de revue et de fusion ; phases 4 à 6 non commencées. Mettre à jour les statuts **après fusion** des changements correspondants dans `main`.
+> **Statut** : phases 0 à 3 fusionnées (#1 à #4) ; phase 4 implémentée sur branche dédiée, en attente de revue et de fusion ; phases 5 et 6 non commencées. Mettre à jour les statuts **après fusion** des changements correspondants dans `main`.
 
 ## 1. Vision et périmètre
 
@@ -63,8 +63,8 @@ L'application est un outil d'**analyse et de simulation**, pas une promesse de r
 | **0. Cadrage** | Fusionnée (#1) | Aucune | ROADMAP, ARCHITECTURE, lien depuis README |
 | **1. Fondations financières** | Fusionnée (#2) | 0 | Moteur modulaire + tests de référence + invariants |
 | **2. Profil Croissance** | Fusionnée (#3) | 1 | Optimisation CAGR sous contraintes communes + édition manuelle |
-| **3. Validation walk-forward** | Implémentée, à revoir (non fusionnée) | 2 | Backtests temporels hors échantillon + comparateur |
-| **4. Profil Robustesse** | À faire | 3 | Moteur de scénarios + objectif robuste + validation |
+| **3. Validation walk-forward** | Fusionnée (#4) | 2 | Backtests temporels hors échantillon + comparateur |
+| **4. Profil Robustesse** | Implémentée, à revoir (branche dédiée) | 3 | Moteur de scénarios + objectif robuste + validation |
 | **5. Objectif patrimonial** | À faire | 4 | Simulation d'épargne/capital + probabilité conditionnelle |
 | **6. Concentration économique** | À faire | 1–5 | Métadonnées d'exposition + contraintes de recouvrement |
 
@@ -122,8 +122,8 @@ Travaux :
   restent explicitement réservés aux phases 3–5.
 
 La phase 1 a été revue et fusionnée dans `main` via la PR #2. La phase 2 a
-ensuite été fusionnée via la PR #3. La phase 3 ci-dessous est soumise à revue
-sur sa branche dédiée et ne modifie pas `main`.
+ensuite été fusionnée via la PR #3, puis la phase 3 via la PR #4. La phase 4
+ci-dessous est soumise à revue sur sa branche dédiée et ne modifie pas `main`.
 
 ### Phase 2 — Optimisation Croissance sous contraintes
 
@@ -184,7 +184,7 @@ Travaux :
   réapplication de Croissance restent disponibles.
 - [x] Tests déterministes de fenêtres, absence de fuite temporelle, composition
   géométrique OOS, trous historiques et contrôles UI.
-- [ ] Revue et fusion dans `main`.
+- [x] Revue et fusion dans `main` via la PR #4.
 
 Hypothèses de cette première version : apprentissage expansif par défaut de 20
 ans et test de 5 ans, réglables dans l'interface ; les tests sont annuels,
@@ -201,6 +201,25 @@ Travaux :
 - Comparer la performance et la stabilité à Croissance et aux références via le walk-forward.
 
 **Recette** : scénarios déterministes avec graine fixe ; corrélations de choc respectées dans l'échantillonnage conjoint ; aucun accès aux données du test lors du calibrage ; sensibilité aux hypothèses présentée ; distinction claire entre données historiques et hypothèses prospectives.
+
+#### Livraison de cette branche (à valider en revue)
+
+- [x] Générateur pur `src/scenarios/generator.ts` : rééchantillonnage avec remise de vecteurs de rendements annuels, par blocs contigus optionnels, avec la même année source pour tous les actifs. Les années sources sont conservées pour l'audit.
+- [x] Graine entière explicite, nombre de scénarios, horizon, taille de bloc et quantile configurables ; valeurs par défaut : 250 scénarios, 10 ans, blocs d'un an, graine `20261021`, quantile défavorable 20 %.
+- [x] Objectif `optimize("robust", ...)` : maximisation du TCAM géométrique au quantile empirique défavorable choisi, sous les mêmes contraintes long-only, poids, drawdown et volatilité que Croissance. Le score est simulé ; les métriques historiques du candidat restent affichées séparément.
+- [x] Walk-forward : Robustesse est recalibrée dans chaque apprentissage avec les seuls rendements antérieurs à la fenêtre de test ; les poids sont ensuite gelés pendant le test annuel et comparés à Croissance, Personnalisée, l'équipondération et MSCI World.
+- [x] Construction et Comparaison exposent le profil Robustesse, ses hypothèses et sa fragilité médiane–quantile. La modification manuelle des poids reste prioritaire jusqu'à une réapplication explicite d'une proposition automatique.
+- [x] Tests déterministes : graine et co-mouvements conjoints, blocs contigus, composition géométrique du score, contraintes, absence de fuite temporelle et contrôles UI.
+- [ ] Revue et fusion dans `main`.
+
+Choix d'implémentation : les scénarios sont des futurs conditionnels construits à
+partir de l'historique d'apprentissage ; ils ne constituent ni une prévision ni
+une distribution statistique calibrée. Les contraintes de drawdown et de
+volatilité sont vérifiées sur l'historique d'apprentissage, comme pour
+Croissance, tandis que le quantile simulé sert uniquement d'objectif robuste.
+Les coûts, la fiscalité, les frais et les drawdowns intra-annuels restent
+exclus. Une faible profondeur historique peut produire des scénarios répétitifs
+et ne justifie pas une probabilité précise.
 
 ### Phase 5 — Objectif patrimonial
 

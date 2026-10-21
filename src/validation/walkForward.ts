@@ -5,6 +5,7 @@ import type { AnnualPortfolioReturn } from "../domain/portfolio";
 import type { Mode, PortfolioStats, Row } from "../domain/types";
 import { optimize } from "../optimization/interface";
 import type { AllocationInput, OptimizationResult, PortfolioConstraints } from "../optimization/interface";
+import type { ScenarioSettings } from "../scenarios/generator";
 
 export interface WalkForwardSettings {
   minTrainYears: number;
@@ -30,7 +31,7 @@ export interface WalkForwardWindowEvaluation {
   optimization?: OptimizationResult;
 }
 
-export type WalkForwardStrategyId = "growth" | "custom" | "equal" | "benchmark";
+export type WalkForwardStrategyId = "growth" | "robust" | "custom" | "equal" | "benchmark";
 
 export interface WalkForwardStrategyResult {
   id: WalkForwardStrategyId;
@@ -55,6 +56,7 @@ export interface WalkForwardInput {
   customWeights: Record<string, number>;
   settings?: Partial<WalkForwardSettings>;
   benchmarkAssetId?: string | null;
+  scenarioSettings?: Partial<ScenarioSettings>;
 }
 
 export interface WalkForwardResult {
@@ -211,9 +213,10 @@ function fixedEvaluation(
     : { window, feasible: false, weights, score: null, testStats: null, diagnostics: [`Données insuffisantes sur le test ${window.testStart}–${window.testEnd}.`] };
 }
 
-function growthEvaluations(
+function optimizationEvaluations(
   input: WalkForwardInput,
   windows: WalkForwardWindow[],
+  strategy: "growth" | "robust",
 ): WalkForwardWindowEvaluation[] {
   return windows.map(window => {
     const allocationInput: AllocationInput = {
@@ -223,8 +226,9 @@ function growthEvaluations(
       trainEnd: window.trainEnd,
       returnMode: input.returnMode,
       rebalancing: "annual",
+      scenarioSettings: input.scenarioSettings,
     };
-    const optimization = optimize("growth", allocationInput, input.constraints);
+    const optimization = optimize(strategy, allocationInput, input.constraints);
     if (!optimization.weights || !optimization.feasible) {
       return { window, feasible: false, weights: null, score: optimization.score, testStats: null, diagnostics: optimization.diagnostics, optimization };
     }
@@ -252,7 +256,8 @@ export function runWalkForward(input: WalkForwardInput): WalkForwardResult {
   const windows = buildWalkForwardWindows(input.data, input.assetIds, input.periodStart, input.periodEnd, input.returnMode, settings);
   const customWeights = normalizeWeights(Object.fromEntries(input.assetIds.map(id => [id, input.customWeights[id] ?? 0])));
   const equalWeights = normalizeWeights(Object.fromEntries(input.assetIds.map(id => [id, 1])));
-  const growth = strategyResult("growth", "Croissance", windows, growthEvaluations(input, windows));
+  const growth = strategyResult("growth", "Croissance", windows, optimizationEvaluations(input, windows, "growth"));
+  const robust = strategyResult("robust", "Robustesse", windows, optimizationEvaluations(input, windows, "robust"));
   const custom = strategyResult("custom", "Personnalisée", windows, windows.map(window => fixedEvaluation(input.data, input.returnMode, window, customWeights)), ["Poids cibles choisis aujourd'hui, appliqués rétrospectivement ; ce n'est pas une stratégie réoptimisée."]);
   const equal = strategyResult("equal", "Équipondérée", windows, windows.map(window => fixedEvaluation(input.data, input.returnMode, window, equalWeights)));
 
@@ -264,7 +269,7 @@ export function runWalkForward(input: WalkForwardInput): WalkForwardResult {
   return {
     settings,
     windows,
-    strategies: [growth, custom, equal, benchmark],
+    strategies: [growth, robust, custom, equal, benchmark],
     diagnostics: uniqueDiagnostics(diagnostics),
     uncertainty: uncertainty(windows.length),
   };
