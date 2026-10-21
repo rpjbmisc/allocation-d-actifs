@@ -216,7 +216,7 @@ La première implémentation retient un **apprentissage expansif**, un test de *
 
 Pour chaque fenêtre, `optimize("growth", ...)` reçoit uniquement la période d'apprentissage. Les pondérations retournées sont ensuite passées sans modification à `computePortfolio` sur la période de test. Les références équipondérée, Personnalisée et MSCI World utilisent les mêmes fenêtres ; la Personnalisée conserve les poids choisis aujourd'hui et n'est jamais réoptimisée. Les rendements OOS sont concaténés dans l'ordre chronologique puis composés par `summarizePortfolioReturns`. Un trou, une fenêtre invalide ou une suite de tests non contiguë rend le score global indisponible.
 
-Le résultat expose également le nombre de fenêtres valides, une rotation moyenne des poids et une stabilité descriptive des poids de Croissance. Cette dernière est un diagnostic, pas une note de qualité. Une seule fenêtre ou moins de quatre fenêtres déclenche une incertitude qualitative dans l'interface.
+Le résultat expose également le nombre de fenêtres valides, une rotation moyenne des poids et une stabilité descriptive des poids de Croissance. La rotation est la moitié de la somme des variations absolues des poids, exprimée en points ; la stabilité vaut `100 - rotation moyenne`, bornée entre 0 et 100. L'interface traduit ensuite ce score en niveau qualitatif (`Très stable`, `Stable`, `Variable`, `Instable`, `Très instable`) et l'explique dans une infobulle. Cette dernière est un diagnostic, pas une note de qualité. Une seule fenêtre ou moins de quatre fenêtres déclenche une incertitude qualitative dans l'interface. Les allocations à poids fixes affichent `Poids fixes` plutôt qu'un score de stabilité.
 
 ### 6.2 Particularités fondamentales
 

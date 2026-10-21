@@ -176,6 +176,9 @@ Travaux :
 - [x] Le CAGR OOS est composé chronologiquement sur les seuls rendements des
   tests. Une fenêtre invalide ou un historique insuffisant rend le résultat
   indisponible au lieu de produire un score partiel trompeur.
+- [x] La stabilité des poids Croissance est corrigée en points de rotation,
+  présentée par niveaux qualitatifs et expliquée par une infobulle accessible ;
+  les allocations fixes affichent `Poids fixes`.
 - [x] Construction, Comparaison et Validation sont réunies dans l'espace
   Portefeuille. Les pondérations manuelles, leur normalisation et la
   réapplication de Croissance restent disponibles.

@@ -65,6 +65,8 @@ export interface WalkForwardResult {
   uncertainty: string;
 }
 
+export type WeightStabilityLevel = "Très stable" | "Stable" | "Variable" | "Instable" | "Très instable";
+
 const DEFAULT_SETTINGS: WalkForwardSettings = { minTrainYears: 20, testYears: 5, expanding: true };
 
 function normalizedSettings(settings?: Partial<WalkForwardSettings>): WalkForwardSettings | null {
@@ -135,15 +137,33 @@ function uniqueDiagnostics(diagnostics: string[]): string[] {
   return [...new Set(diagnostics)];
 }
 
-function weightStability(evaluations: WalkForwardWindowEvaluation[]): { turnover: number | null; stability: number | null } {
-  const weights = evaluations.filter(evaluation => evaluation.feasible && evaluation.weights).map(evaluation => evaluation.weights!);
-  if (weights.length < 2) return { turnover: null, stability: null };
-  const turnovers = weights.slice(1).map((current, index) => Object.keys(current).reduce(
-    (sum, id) => sum + Math.abs((current[id] ?? 0) - (weights[index][id] ?? 0)),
-    0,
-  ) * 50 * 100);
+export function calculateWeightStability(weightSeries: Record<string, number>[]): { turnover: number | null; stability: number | null } {
+  if (weightSeries.length < 2) return { turnover: null, stability: null };
+  const assetIds = [...new Set(weightSeries.flatMap(weights => Object.keys(weights)))];
+  const turnovers = weightSeries.slice(1).map((current, index) => {
+    const absoluteDifference = assetIds.reduce(
+      (sum, id) => sum + Math.abs((current[id] ?? 0) - (weightSeries[index][id] ?? 0)),
+      0,
+    );
+    // Weights are fractions. Divide the L1 change by two because each transfer
+    // appears once as a sale and once as a purchase, then express it in points.
+    return absoluteDifference * 50;
+  });
   const turnover = turnovers.reduce((sum, value) => sum + value, 0) / turnovers.length;
-  return { turnover, stability: 100 - turnover };
+  return { turnover, stability: Math.max(0, Math.min(100, 100 - turnover)) };
+}
+
+export function weightStabilityLabel(stability: number | null): WeightStabilityLevel | null {
+  if (stability === null || !Number.isFinite(stability)) return null;
+  if (stability >= 80) return "Très stable";
+  if (stability >= 60) return "Stable";
+  if (stability >= 40) return "Variable";
+  if (stability >= 20) return "Instable";
+  return "Très instable";
+}
+
+function weightStability(evaluations: WalkForwardWindowEvaluation[]): { turnover: number | null; stability: number | null } {
+  return calculateWeightStability(evaluations.filter(evaluation => evaluation.feasible && evaluation.weights).map(evaluation => evaluation.weights!));
 }
 
 function strategyResult(

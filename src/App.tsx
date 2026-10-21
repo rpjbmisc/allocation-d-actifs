@@ -15,7 +15,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { Activity, AlertTriangle, ArrowDownRight, ArrowUpRight, BarChart3, CalendarDays, CircleHelp, Download, EyeOff, RotateCcw, Search, SlidersHorizontal } from "lucide-react";
+import { Activity, AlertTriangle, ArrowDownRight, ArrowUpRight, BarChart3, CalendarDays, CircleHelp, Download, EyeOff, Info, RotateCcw, Search, SlidersHorizontal } from "lucide-react";
 import {
   Asset,
   Currency,
@@ -47,6 +47,7 @@ import {
   runWalkForward,
   WalkForwardResult,
   WalkForwardSettings,
+  weightStabilityLabel,
 } from "./analytics";
 
 type Tab = "overview" | "returns" | "growth" | "decades" | "portfolio" | "correlations";
@@ -1067,6 +1068,21 @@ function walkForwardWeights(assets: Asset[], weights: Record<string, number> | n
   return entries.length ? entries.slice(0, 3).map(entry => `${entry.asset.name} ${entry.weight.toFixed(0)} %`).join(" · ") : "0 %";
 }
 
+function InfoTip({ label, children }: { label: string; children: React.ReactNode }) {
+  const [open, setOpen] = useState(false);
+  return <span className={`info-tip ${open ? "open" : ""}`}>
+    <button type="button" className="info-button" aria-label={label} aria-expanded={open} onClick={() => setOpen(current => !current)}><Info size={14} /></button>
+    <span className="info-popover" role="tooltip">{children}</span>
+  </span>;
+}
+
+function WeightStabilityCell({ strategy }: { strategy: WalkForwardResult["strategies"][number] }) {
+  if (strategy.id !== "growth") return <span className="fixed-weight-label">Poids fixes</span>;
+  const label = weightStabilityLabel(strategy.weightStabilityPct);
+  if (!label) return <span>n.d.</span>;
+  return <><strong className="stability-label">{label}</strong><small className="table-note">{strategy.weightStabilityPct!.toFixed(0)} % · rotation {strategy.averageTurnoverPct?.toFixed(1) ?? "n.d."} pts</small></>;
+}
+
 function WalkForwardView({
   assets,
   result,
@@ -1098,7 +1114,7 @@ function WalkForwardView({
 
     <section className="table-card validation-results-card">
       <div className="card-heading compact"><div className="heading-icon"><Activity size={17} /></div><div><h2>Résultats hors échantillon</h2><p>Le TCAM est composé sur les seules années de test ; il ne s'agit pas d'une moyenne de TCAM par fenêtre.</p></div></div>
-      <div className="table-scroll"><table><thead><tr><th>Allocation</th><th>TCAM OOS</th><th>Volatilité</th><th>Drawdown annuel</th><th>Fenêtres valides</th><th>Stabilité des poids</th></tr></thead><tbody>{result.strategies.map(strategy => <tr key={strategy.id}><td>{strategy.label}</td><td>{strategy.feasible ? formatPercent(strategy.stats?.cagr) : "n.d."}</td><td>{strategy.feasible ? formatPercent(strategy.stats?.volatility) : "n.d."}</td><td>{strategy.feasible ? formatPercent(strategy.stats?.maxDrawdown) : "n.d."}</td><td>{strategy.validWindowCount} / {strategy.plannedWindowCount}</td><td>{strategy.weightStabilityPct === null ? "n.d." : `${strategy.weightStabilityPct.toFixed(0)} %`} {strategy.averageTurnoverPct !== null && <small className="table-note">Rotation moy. {strategy.averageTurnoverPct.toFixed(1)} pts</small>}</td></tr>)}</tbody></table></div>
+      <div className="table-scroll"><table><thead><tr><th>Allocation</th><th>TCAM OOS <InfoTip label="Comprendre le TCAM OOS">OOS signifie « hors échantillon ». Les poids sont choisis sur l'apprentissage, puis testés uniquement sur les années suivantes. Le TCAM est composé sur ces années de test.</InfoTip></th><th>Volatilité</th><th>Drawdown annuel</th><th>Fenêtres valides</th><th>Stabilité des poids <InfoTip label="Comprendre la stabilité des poids">Pour Croissance, cet indicateur compare les pondérations recalculées entre les fenêtres. Stable signifie que les recommandations changent peu ; variable ou instable signifie qu'elles dépendent davantage de la période historique. Personnalisée, Équipondérée et MSCI World ont des poids fixes.</InfoTip></th></tr></thead><tbody>{result.strategies.map(strategy => <tr key={strategy.id}><td>{strategy.label}</td><td>{strategy.feasible ? formatPercent(strategy.stats?.cagr) : "n.d."}</td><td>{strategy.feasible ? formatPercent(strategy.stats?.volatility) : "n.d."}</td><td>{strategy.feasible ? formatPercent(strategy.stats?.maxDrawdown) : "n.d."}</td><td>{strategy.validWindowCount} / {strategy.plannedWindowCount}</td><td><WeightStabilityCell strategy={strategy} /></td></tr>)}</tbody></table></div>
       <p className="method-note">Personnalisée signifie ici les poids choisis aujourd'hui, appliqués rétrospectivement. Ce test ne prétend pas représenter une sélection historiquement disponible.</p>
     </section>
 

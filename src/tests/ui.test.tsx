@@ -66,4 +66,9 @@ it("exposes comparison and walk-forward spaces without removing manual construct
   expect(screen.getByText("Validation walk-forward")).toBeTruthy();
   expect(screen.getByRole("spinbutton", { name: "Années d'apprentissage" })).toBeTruthy();
   expect(screen.getByText("Résultats hors échantillon")).toBeTruthy();
+  const stabilityInfo = screen.getByRole("button", { name: "Comprendre la stabilité des poids" });
+  expect(stabilityInfo.getAttribute("aria-expanded")).toBe("false");
+  await user.click(stabilityInfo);
+  expect(stabilityInfo.getAttribute("aria-expanded")).toBe("true");
+  expect(screen.getByText(/Pour Croissance, cet indicateur compare/)).toBeTruthy();
 });

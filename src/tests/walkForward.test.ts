@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { rows } from "./fixtures";
-import { buildWalkForwardWindows, runWalkForward } from "../analytics";
+import { buildWalkForwardWindows, calculateWeightStability, runWalkForward, weightStabilityLabel } from "../analytics";
 
 const constraints = {
   longOnly: true as const,
@@ -11,6 +11,18 @@ const constraints = {
 };
 
 describe("walk-forward validation", () => {
+  it("calculates weight rotation in percentage points and classifies stability", () => {
+    const result = calculateWeightStability([
+      { stocks: 0.8, gold: 0.2 },
+      { stocks: 0.6, gold: 0.4 },
+    ]);
+    expect(result.turnover).toBeCloseTo(20);
+    expect(result.stability).toBeCloseTo(80);
+    expect(weightStabilityLabel(result.stability)).toBe("Très stable");
+    expect(weightStabilityLabel(53.3)).toBe("Variable");
+    expect(calculateWeightStability([{ stocks: 1 }])).toEqual({ turnover: null, stability: null });
+  });
+
   it("creates expanding training windows and non-overlapping tests", () => {
     const data = { a: rows(Array(12).fill(5)), b: rows(Array(12).fill(3)) };
     expect(buildWalkForwardWindows(data, ["a", "b"], 2000, 2011, "nominal", { minTrainYears: 3, testYears: 2, expanding: true })).toEqual([
