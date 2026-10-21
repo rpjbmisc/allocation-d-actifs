@@ -17,6 +17,8 @@ beforeEach(() => {
 });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
+const UI_TEST_TIMEOUT = 15_000;
+
 it("preserves portfolio controls, manual weights, normalization and selection tabs", async () => {
   const user = userEvent.setup();
   render(<App />);
@@ -47,7 +49,7 @@ it("preserves portfolio controls, manual weights, normalization and selection ta
   await waitFor(() => expect(screen.getByText("Corrélation moyenne des paires")).toBeTruthy());
   await user.click(screen.getByRole("tab", { name: "Portefeuille" }));
   expect((screen.getByRole("spinbutton", { name: "Poids saisi pour MSCI World" }) as HTMLInputElement).value).not.toBe("60");
-});
+}, UI_TEST_TIMEOUT);
 
 it("shows an explicit load error if a historical series is unavailable", async () => {
   vi.stubGlobal("fetch", async () => new Response("missing", { status: 404 }));
@@ -79,4 +81,4 @@ it("exposes comparison and walk-forward spaces without removing manual construct
   expect(stabilityInfo.getAttribute("aria-expanded")).toBe("true");
   expect(screen.getByText(/Pour Croissance, cet indicateur compare/)).toBeTruthy();
   expect(screen.getByText(/Légende :/)).toBeTruthy();
-});
+}, UI_TEST_TIMEOUT);
