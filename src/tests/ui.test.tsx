@@ -71,4 +71,5 @@ it("exposes comparison and walk-forward spaces without removing manual construct
   await user.click(stabilityInfo);
   expect(stabilityInfo.getAttribute("aria-expanded")).toBe("true");
   expect(screen.getByText(/Pour Croissance, cet indicateur compare/)).toBeTruthy();
+  expect(screen.getByText(/Légende :/)).toBeTruthy();
 });

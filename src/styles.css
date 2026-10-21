@@ -227,8 +227,8 @@ button:disabled, input:disabled { cursor: not-allowed; opacity: .45; }
 .info-tip { position: relative; display: inline-flex; vertical-align: middle; margin-left: 4px; }
 .info-button { display: inline-grid; place-items: center; width: 18px; height: 18px; padding: 0; border: 1px solid #9aaeb9; border-radius: 50%; background: #fff; color: #5e82a2; cursor: help; }
 .info-button:hover, .info-button:focus-visible { border-color: #e76f51; color: #e76f51; }
-.info-popover { position: absolute; z-index: 20; right: 0; bottom: calc(100% + 9px); display: block; width: 270px; padding: 11px 12px; border: 1px solid #b9c9d2; background: #17324a; color: #fff; box-shadow: 0 8px 22px rgba(23,50,74,.2); font-family: 'DM Sans', sans-serif; font-size: 11px; font-weight: 400; line-height: 1.45; letter-spacing: 0; text-transform: none; text-align: left; opacity: 0; pointer-events: none; transform: translateY(4px); transition: opacity .15s, transform .15s; }
-.info-popover::after { content: ''; position: absolute; right: 5px; bottom: -6px; width: 10px; height: 10px; border-right: 1px solid #b9c9d2; border-bottom: 1px solid #b9c9d2; background: #17324a; transform: rotate(45deg); }
+.info-popover { position: absolute; z-index: 20; right: 0; top: calc(100% + 9px); display: block; width: 290px; padding: 11px 12px; border: 1px solid #b9c9d2; background: #17324a; color: #fff; box-shadow: 0 8px 22px rgba(23,50,74,.2); font-family: 'DM Sans', sans-serif; font-size: 11px; font-weight: 400; line-height: 1.45; letter-spacing: 0; text-transform: none; text-align: left; opacity: 0; pointer-events: none; transform: translateY(-4px); transition: opacity .15s, transform .15s; }
+.info-popover::after { content: ''; position: absolute; right: 5px; top: -6px; width: 10px; height: 10px; border-left: 1px solid #b9c9d2; border-top: 1px solid #b9c9d2; background: #17324a; transform: rotate(45deg); }
 .info-tip:hover .info-popover, .info-tip.open .info-popover, .info-button:focus-visible + .info-popover { opacity: 1; pointer-events: auto; transform: translateY(0); }
 .stability-label { color: #17324a; font-weight: 600; }
 .fixed-weight-label { color: #607682; font-style: italic; }
