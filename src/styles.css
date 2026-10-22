@@ -271,3 +271,22 @@ button:disabled, input:disabled { cursor: not-allowed; opacity: .45; }
 .prospective-regimes input, .prospective-panel input[type=number] { width: 75px; padding: 5px; border: 1px solid #d5dfe4; color: #17324a; text-align: right; }
 .prospective-panel button { padding: 7px 9px; border: 1px solid #d5dfe4; background: #fff; cursor: pointer; }
 .prospective-panel ul { margin: 5px 0; padding-left: 18px; }
+
+/* Prevent scenario editors from expanding the portfolio sidebar beyond its grid cell. */
+.portfolio-layout, .portfolio-controls, .optimization-profiles, .robust-settings, .prospective-panel,
+.prospective-panel details, .prospective-regimes, .prospective-regimes section { min-width: 0; max-width: 100%; }
+.prospective-panel { overflow-wrap: anywhere; }
+.prospective-panel details, .prospective-regimes section { overflow: visible; }
+.prospective-regimes label { min-width: 0; justify-content: space-between; }
+.prospective-regimes label input { flex: 0 0 75px; max-width: 100%; }
+.prospective-panel select { width: 100%; min-width: 0; white-space: normal; }
+.prospective-objective-options { border: 0; padding: 0; margin: 0; min-width: 0; }
+.prospective-objective-options legend { font-weight: 600; color: #17324a; margin-bottom: 8px; }
+.prospective-objective-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 7px; }
+.prospective-objective-card { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; border: 1px solid #d5dfe4; background: #fff; padding: 10px; }
+.prospective-objective-card.selected { background: #fff6ee; border-color: #e76f51; }
+.prospective-objective-card label { display: flex; align-items: center; flex: 1; gap: 8px; min-width: 0; cursor: pointer; color: #17324a; }
+.prospective-objective-card label span { min-width: 0; overflow-wrap: break-word; }
+.prospective-objective-card label input { accent-color: #e76f51; flex: 0 0 auto; }
+.prospective-objective-card .info-tip { flex: 0 0 auto; margin-left: 0; }
+.prospective-objective-card .info-popover { width: min(290px, 70vw); }
