@@ -477,3 +477,16 @@ graine `20261021` et quantile 20 %. Ces valeurs sont des hypothèses réversible
 pas des paramètres universels. Modifier la graine ou le nombre de scénarios
 change le résultat ; les historiques annuels courts et les indices
 reconstruits ne justifient pas une interprétation probabiliste précise.
+
+
+### Phase 5 — implémentation sur branche dédiée (à valider)
+
+- `src/optimization/goal.ts` expose `GoalSettings`, `GoalSummary`, `terminalGoalCapital`, `summarizeGoal`, `optimizeGoal` et le validateur.
+- Les versements sont modélisés **en fin d'année** ; calcul : `capital=(capital*(1+rendement_annuel/100))+versement_annuel`. Les actifs sont ramenés aux poids cibles chaque année ; pas de frais ni fiscalité.
+- Les montants sont définis **dans la même devise et convention nominale/réelle que les rendements d'entrée**. Aucun ajustement d'inflation supplémentaire n'est appliqué en mode réel. Le libellé UI doit le rappeler.
+- Les trajectoires sont générées ensemble pour les actifs par `generateJointScenarios`, avec horizon de l'objectif, nombres de simulations/graine/blocs communs à Robustesse.
+- Le score optimisé est le **pourcentage empirique des scénarios simulés dont la valeur finale atteint ou dépasse la cible**. Aucune interprétation comme probabilité de marché calibrée n'est justifiée.
+- Les contraintes historiques annuelles restent appliquées pendant l'entraînement. À scores de réussite égaux, le moteur de grille existant départage par volatilité puis drawdown annuel : la probabilité étant discrète, cette convention peut être affinée plus tard.
+- `runWalkForward` réoptimise le profil `goal` dans chaque fenêtre d'apprentissage, puis mesure les rendements hors échantillon ; ce score hors échantillon n'est **pas** une probabilité d'atteindre un objectif sur 25 ans.
+- Le profil et ses paramètres figurent dans Construction et ses propositions dans Comparaison. L'édition manuelle des poids reste indépendante.
+- Limites : historique annuel, bootstrap historique joint, absence de fiscalité/coûts, absence de simulation des drawdowns intra-annuels, incertitude importante sur la vraie probabilité d'atteindre la cible.
