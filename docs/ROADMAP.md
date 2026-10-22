@@ -274,3 +274,14 @@ Ces choix sont **proposés, pas encore validés** :
 - Représentation du chevauchement des indices, qualité et date des métadonnées d'exposition.
 
 Ces sujets doivent être tranchés **avant le codage de la phase concernée**, ou faire l'objet d'hypothèses affichées et réversibles.
+
+
+### Implémentation phase 5 (PR dédiée, octobre 2026)
+
+- Moteur `src/optimization/goal.ts` : capital initial, versement de fin d'année, horizon et cible (montants dans la devise et le mode réel/nominal sélectionnés).
+- Objectif : proportion des scénarios conjoints atteignant la cible ; médiane, quantiles 10/90, pire capital et nombre de simulations affichables.
+- Mêmes contraintes de poids/volatilité/drawdown annuel que Croissance et Robustesse ; scénarios rééchantillonnés sur l'apprentissage uniquement.
+- Intégration dans Construction, Comparaison et Validation walk-forward ; poids manuels conservés.
+- Avertissements : probabilité conditionnelle au modèle historique, sans frais, fiscalité, ni risque intra-annuel ; précision limitée par les séries.
+- Tests unitaires ajoutés dans `src/tests/goal.test.ts`.
+- **État de la PR** : en revue ; ne cocher « terminé » qu'après exécution des tests et fusion.
