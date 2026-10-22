@@ -1025,7 +1025,7 @@ function PortfolioView({
             <label>Horizon <input aria-label="Horizon patrimonial" type="number" min="1" max="100" value={goalSettings.horizonYears} onChange={event => onGoalSettingsChange({ horizonYears: Number(event.target.value) })} /> ans</label>
           </div>
           {goalProposal.goalSummary && <div className="robust-simple-result"><strong>{goalProposal.goalSummary.probabilityPct.toFixed(1)} % des simulations atteignent l'objectif</strong>
-            <p>Capital médian : {formatMoney(goalProposal.goalSummary.medianCapital)} · scénario défavorable (10 %) : {formatMoney(goalProposal.goalSummary.lowerCapital)}.</p>
+            <p>Capital médian : {formatNumber(goalProposal.goalSummary.medianCapital, 0)} · scénario défavorable (10 %) : {formatNumber(goalProposal.goalSummary.lowerCapital, 0)}.</p>
             <small>Estimation conditionnelle aux années historiques rééchantillonnées, sans frais ni fiscalité ; versements en fin d'année. Pour des euros constants, activer « Réel ».</small></div>}
           {goalProposal.diagnostics.filter(d => !d.startsWith("Probabilité indicative")).map(d => <p key={d} className="optimization-profile-note">{d}</p>)}
           <p className="method-note">Pour appliquer la nouvelle proposition après modification, clique de nouveau sur « Objectif patrimonial ».</p>
@@ -1176,7 +1176,7 @@ function PortfolioComparisonDashboard({
     { label: "Personnalisée", type: "Poids fixes · in-sample", weights, stats: portfolio, note: "Pondérations modifiables dans Construction." },
     { label: "Équipondérée", type: "Référence · in-sample", weights: Object.fromEntries(assets.map(asset => [asset.id, 1])), stats: equalPortfolio },
     { label: "MSCI World", type: "Benchmark · in-sample", weights: { msci_world: 1 }, stats: benchmarkPortfolio, note: benchmarkPortfolio ? "Série indépendante si disponible." : "Non comparable sur cette période." },
-    { label: "Objectif patrimonial", type: "Automatique · simulation", weights: goalOptimization.weights, stats: goalOptimization.stats, note: goalOptimization.goalSummary ? `Cible atteinte dans ${goalOptimization.goalSummary.probabilityPct.toFixed(1)} % des scénarios ; capital médian ${formatMoney(goalOptimization.goalSummary.medianCapital)}` : "Simulation indisponible." },
+    { label: "Objectif patrimonial", type: "Automatique · simulation", weights: goalOptimization.weights, stats: goalOptimization.stats, note: goalOptimization.goalSummary ? `Cible atteinte dans ${goalOptimization.goalSummary.probabilityPct.toFixed(1)} % des scénarios ; capital médian ${formatNumber(goalOptimization.goalSummary.medianCapital, 0)}` : "Simulation indisponible." },
   ];
 
   return <div className="portfolio-space-content">
