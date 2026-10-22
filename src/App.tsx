@@ -1156,6 +1156,7 @@ function PortfolioComparisonDashboard({
   benchmarkPortfolio,
   growthOptimization,
   robustOptimization,
+  goalOptimization,
   mode,
 }: {
   assets: Asset[];
@@ -1165,6 +1166,7 @@ function PortfolioComparisonDashboard({
   benchmarkPortfolio: PortfolioStats | null;
   growthOptimization: OptimizationResult;
   robustOptimization: OptimizationResult;
+  goalOptimization: OptimizationResult;
   mode: Mode;
 }) {
   const rows: Array<{ label: string; type: string; weights: Record<string, number> | null; stats: PortfolioStats | null; note?: string }> = [
@@ -1173,13 +1175,13 @@ function PortfolioComparisonDashboard({
     { label: "Personnalisée", type: "Poids fixes · in-sample", weights, stats: portfolio, note: "Pondérations modifiables dans Construction." },
     { label: "Équipondérée", type: "Référence · in-sample", weights: Object.fromEntries(assets.map(asset => [asset.id, 1])), stats: equalPortfolio },
     { label: "MSCI World", type: "Benchmark · in-sample", weights: { msci_world: 1 }, stats: benchmarkPortfolio, note: benchmarkPortfolio ? "Série indépendante si disponible." : "Non comparable sur cette période." },
-    { label: "Objectif patrimonial", type: "Automatique", weights: null, stats: null, note: "Disponible en phase 5." },
+    { label: "Objectif patrimonial", type: "Automatique · simulation", weights: goalOptimization.weights, stats: goalOptimization.stats, note: goalOptimization.goalSummary ? `Cible atteinte dans ${goalOptimization.goalSummary.probabilityPct.toFixed(1)} % des scénarios ; capital médian ${formatMoney(goalOptimization.goalSummary.medianCapital)}` : "Simulation indisponible." },
   ];
 
   return <div className="portfolio-space-content">
     <section className="table-card comparison-dashboard">
       <div className="card-heading compact"><div className="heading-icon warm"><BarChart3 size={17} /></div><div><h2>Comparer les allocations</h2><p>Résultats historiques sur la même période, devise, lecture et règles de rééquilibrage. Le hors échantillon est séparé dans Validation.</p></div></div>
-       <div className="table-scroll"><table><thead><tr><th>Allocation</th><th>Nature</th><th>TCAM historique</th><th>Score scénario</th><th>Volatilité</th><th>Drawdown annuel</th><th>Pondérations</th></tr></thead><tbody>{rows.map(row => <tr key={row.label}><td>{row.label}</td><td>{row.type}{row.note && <small className="table-note">{row.note}</small>}</td><td>{formatPercent(row.stats?.cagr)}</td><td>{row.label === "Robustesse" ? formatPercent(robustOptimization.scenarioSummary?.quantileCagr) : "n.a."}</td><td>{formatPercent(row.stats?.volatility)}</td><td>{formatPercent(row.stats?.maxDrawdown)}</td><td>{row.label === "MSCI World" ? row.stats ? "100 % MSCI World" : "n.d." : allocationLabel(assets, row.weights)}</td></tr>)}</tbody></table></div>
+       <div className="table-scroll"><table><thead><tr><th>Allocation</th><th>Nature</th><th>TCAM historique</th><th>Score scénario</th><th>Volatilité</th><th>Drawdown annuel</th><th>Pondérations</th></tr></thead><tbody>{rows.map(row => <tr key={row.label}><td>{row.label}</td><td>{row.type}{row.note && <small className="table-note">{row.note}</small>}</td><td>{formatPercent(row.stats?.cagr)}</td><td>{row.label === "Robustesse" ? formatPercent(robustOptimization.scenarioSummary?.quantileCagr) : row.label === "Objectif patrimonial" ? goalOptimization.goalSummary ? `${goalOptimization.goalSummary.probabilityPct.toFixed(1)} % de réussite` : "n.d." : "n.a."}</td><td>{formatPercent(row.stats?.volatility)}</td><td>{formatPercent(row.stats?.maxDrawdown)}</td><td>{row.label === "MSCI World" ? row.stats ? "100 % MSCI World" : "n.d." : allocationLabel(assets, row.weights)}</td></tr>)}</tbody></table></div>
     </section>
     <section className="insight-card comparison-reading">
       <div className="card-heading compact"><div className="heading-icon cool"><CircleHelp size={17} /></div><div><h2>Lire cette comparaison</h2><p>Une bonne performance historique ne constitue pas une prévision.</p></div></div>
