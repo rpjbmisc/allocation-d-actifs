@@ -1062,13 +1062,22 @@ function PortfolioView({
           </fieldset>
           {prospectiveSettings.enabled && <div className="prospective-panel">
             <p>Les chiffres ci-dessous sont des <strong>hypothèses inventées pour explorer des possibilités</strong>, pas des prévisions. Chaque valeur ajoute ou retire des points au rendement annuel historique d'un actif.</p>
-            <label>Comment comparer ces futurs ?
-              <select aria-label="Objectif multi-scénarios" value={prospectiveSettings.objective} onChange={event=>onProspectiveSettingsChange({...prospectiveSettings,objective:event.target.value as ProspectiveSettings["objective"]})}>
-                <option value="regret">Limiter les mauvaises surprises (regret maximal)</option>
-                <option value="worst">Mieux résister au pire scénario</option>
-                <option value="average">Meilleure croissance moyenne (scénarios égaux)</option>
-              </select>
-            </label>
+            <fieldset className="prospective-objective-options">
+              <legend>Comment choisir la meilleure répartition ?</legend>
+              <div className="prospective-objective-list">
+                {([
+                  { value:"regret", title:"Limiter les mauvaises surprises", help:"Dans chacun des quatre futurs, l'application trouve d'abord la meilleure répartition possible. Puis elle choisit celle dont le plus grand manque à gagner par rapport à ces meilleures répartitions est le plus petit. C'est la minimisation du regret maximal : cela ne garantit pas de gagner de l'argent." },
+                  { value:"worst", title:"Mieux résister au pire scénario", help:"L'application regarde, pour chaque répartition, le futur économique où son rendement annuel simulé est le plus faible. Elle privilégie la répartition avec le meilleur résultat dans ce pire futur. Elle ne garantit pas l'absence de pertes." },
+                  { value:"average", title:"Chercher le meilleur rendement moyen", help:"L'application calcule le rendement annuel simulé dans chacun des quatre futurs, puis en prend la moyenne en comptant chaque futur autant que les autres. Elle privilégie la meilleure moyenne, même si un futur reste très mauvais." },
+                ] as const).map(option => <div className={`prospective-objective-card ${prospectiveSettings.objective===option.value?"selected":""}`} key={option.value}>
+                  <label htmlFor={`prospective-objective-${option.value}`}>
+                    <input id={`prospective-objective-${option.value}`} type="radio" name="prospective-objective" value={option.value} checked={prospectiveSettings.objective===option.value} onChange={()=>onProspectiveSettingsChange({...prospectiveSettings,objective:option.value})} />
+                    <span>{option.title}</span>
+                  </label>
+                  <InfoTip label={`Comprendre : ${option.title}`}>{option.help}</InfoTip>
+                </div>)}
+              </div>
+            </fieldset>
             <details><summary>Modifier les quatre futurs et leurs hypothèses</summary>
               <div className="prospective-regimes">{prospectiveSettings.regimes.map((regime,index)=><section key={regime.id}>
                 <strong>{regime.name}</strong><p>{regime.description}</p>
@@ -1083,7 +1092,7 @@ function PortfolioView({
               <button type="button" onClick={()=>onProspectiveSettingsChange({...defaultProspectiveSettings(),enabled:true})}>Rétablir les hypothèses illustratives</button>
             </details>
             {("prospectiveSummary" in robustProposal && robustProposal.prospectiveSummary) && <div className="robust-simple-result">
-              <strong>{prospectiveSettings.objective==="regret"?"Regret maximal limité":prospectiveSettings.objective==="worst"?"Score du pire futur":"Score moyen des futurs"} : {prospectiveSettings.objective==="regret"?`${Math.abs(robustProposal.prospectiveSummary.score).toFixed(2)} points/an`:formatPercent(robustProposal.prospectiveSummary.score)}</strong>
+              <strong>{prospectiveSettings.objective==="regret"?"Plus grand manque à gagner limité":prospectiveSettings.objective==="worst"?"Score du pire futur":"Score moyen des futurs"} : {prospectiveSettings.objective==="regret"?`${Math.abs(robustProposal.prospectiveSummary.score).toFixed(2)} points/an`:formatPercent(robustProposal.prospectiveSummary.score)}</strong>
               <ul>{robustProposal.prospectiveSummary.regimeCagrs.map(r=><li key={r.id}>{r.name} : {formatPercent(r.medianCagr)} / an</li>)}</ul>
               <small>Résultats issus d'hypothèses modifiables, non de prévisions. Les contraintes de risque restent calculées sur les années historiques.</small>
             </div>}
