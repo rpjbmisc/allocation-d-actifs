@@ -82,3 +82,21 @@ it("exposes comparison and walk-forward spaces without removing manual construct
   expect(screen.getByText(/Pour Croissance, cet indicateur compare/)).toBeTruthy();
   expect(screen.getByText(/Légende :/)).toBeTruthy();
 }, UI_TEST_TIMEOUT);
+
+it("explains all three prospective optimization choices in clear language", async () => {
+  const user = userEvent.setup();
+  render(<App />);
+  await screen.findByRole("spinbutton", { name: "Poids saisi pour MSCI World" });
+  await user.click(screen.getByRole("button", { name: /^Robustesse/ }));
+  await user.click(screen.getByRole("radio", { name: /Futurs possibles/ }));
+  for (const choice of ["Limiter les mauvaises surprises", "Mieux résister au pire scénario", "Chercher le meilleur rendement moyen"]) {
+    const radio = screen.getByRole("radio", { name: choice });
+    expect(radio).toBeTruthy();
+    const tip = screen.getByRole("button", { name: `Comprendre : ${choice}` });
+    expect(tip).toBeTruthy();
+    await user.click(tip);
+    expect(tip.getAttribute("aria-expanded")).toBe("true");
+    await user.click(radio);
+    expect((radio as HTMLInputElement).checked).toBe(true);
+  }
+}, UI_TEST_TIMEOUT);
