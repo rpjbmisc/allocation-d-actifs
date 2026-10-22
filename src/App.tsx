@@ -418,6 +418,7 @@ function App() {
       settings: validationSettings,
       benchmarkAssetId: data.msci_world ? "msci_world" : null,
       scenarioSettings: robustScenarioSettings,
+      goalSettings,
       constraints: {
         longOnly: true,
         maxWeightByAsset: Object.fromEntries(assetIds.map((id) => [id, growthConstraints.maxWeightPct / 100])),
@@ -427,7 +428,7 @@ function App() {
         maxEvaluations: 100_000,
       },
     });
-  }, [automaticSearchStep, data, end, growthConstraints, mode, portfolioWeights, robustScenarioSettings, selectedAssets, start, validationSettings]);
+  }, [automaticSearchStep, data, end, growthConstraints, mode, portfolioWeights, robustScenarioSettings, goalSettings, selectedAssets, start, validationSettings]);
   const correlations = useMemo(() => computeCorrelationMatrix(data, selectedAssets.map((asset) => asset.id), start, end, mode), [data, end, mode, selectedAssets, start]);
   const availableAssets = assets.filter((asset) => data[asset.id]?.length);
   const periodRestricted = !commonPeriod;
@@ -1206,7 +1207,7 @@ function InfoTip({ label, children }: { label: string; children: React.ReactNode
 }
 
 function WeightStabilityCell({ strategy }: { strategy: WalkForwardResult["strategies"][number] }) {
-  if (strategy.id !== "growth" && strategy.id !== "robust") return <span className="fixed-weight-label">Poids fixes</span>;
+  if (strategy.id !== "growth" && strategy.id !== "robust" && strategy.id !== "goal") return <span className="fixed-weight-label">Poids fixes</span>;
   const label = weightStabilityLabel(strategy.weightStabilityPct);
   if (!label) return <span>n.d.</span>;
   return <><strong className="stability-label">{label}</strong><small className="table-note">{strategy.weightStabilityPct!.toFixed(0)} % · rotation {strategy.averageTurnoverPct?.toFixed(1) ?? "n.d."} pts</small></>;
@@ -1252,7 +1253,7 @@ function WalkForwardView({
 
     {result.windows.length > 0 && <section className="table-card validation-windows-card">
        <div className="card-heading compact"><div className="heading-icon warm"><SlidersHorizontal size={17} /></div><div><h2>Fenêtres et décisions</h2><p>Les poids de Croissance et Robustesse visibles dans chaque ligne proviennent uniquement de la période d'apprentissage correspondante.</p></div></div>
-       <div className="table-scroll"><table><thead><tr><th>Fenêtre</th><th>Apprentissage</th><th>Test</th><th>Poids Croissance</th><th>Score TCAM</th><th>Poids Robustesse</th><th>Score quantile</th></tr></thead><tbody>{result.windows.map(window => { const growth = result.strategies.find(strategy => strategy.id === "growth")?.windows[window.index]; const robust = result.strategies.find(strategy => strategy.id === "robust")?.windows[window.index]; return <tr key={window.index}><td>{String(window.index + 1).padStart(2, "0")}</td><td>{window.trainStart}–{window.trainEnd}</td><td>{window.testStart}–{window.testEnd}</td><td>{walkForwardWeights(assets, growth?.weights ?? null)}</td><td>{growth?.score === null || growth?.score === undefined ? "n.d." : formatPercent(growth.score)}</td><td>{walkForwardWeights(assets, robust?.weights ?? null)}</td><td>{robust?.score === null || robust?.score === undefined ? "n.d." : formatPercent(robust.score)}</td></tr>; })}</tbody></table></div>
+       <div className="table-scroll"><table><thead><tr><th>Fenêtre</th><th>Apprentissage</th><th>Test</th><th>Poids Croissance</th><th>Score TCAM</th><th>Poids Robustesse</th><th>Score quantile</th><th>Poids Objectif</th><th>Réussite simulée</th></tr></thead><tbody>{result.windows.map(window => { const growth = result.strategies.find(strategy => strategy.id === "growth")?.windows[window.index]; const robust = result.strategies.find(strategy => strategy.id === "robust")?.windows[window.index]; return <tr key={window.index}><td>{String(window.index + 1).padStart(2, "0")}</td><td>{window.trainStart}–{window.trainEnd}</td><td>{window.testStart}–{window.testEnd}</td><td>{walkForwardWeights(assets, growth?.weights ?? null)}</td><td>{growth?.score === null || growth?.score === undefined ? "n.d." : formatPercent(growth.score)}</td><td>{walkForwardWeights(assets, robust?.weights ?? null)}</td><td>{robust?.score === null || robust?.score === undefined ? "n.d." : formatPercent(robust.score)}</td></tr>; })}</tbody></table></div>
     </section>}
   </div>;
 }
