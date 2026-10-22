@@ -50,6 +50,8 @@ import {
   weightStabilityLabel,
   DEFAULT_SCENARIO_SETTINGS,
   ScenarioSettings,
+  GoalSettings,
+  DEFAULT_GOAL_SETTINGS,
 } from "./analytics";
 
 type Tab = "overview" | "returns" | "growth" | "decades" | "portfolio" | "correlations";
@@ -190,6 +192,7 @@ function App() {
   const [optimizationProfile, setOptimizationProfile] = useState<PortfolioOptimizationProfile>("growth");
   const [growthConstraints, setGrowthConstraints] = useState<GrowthConstraintSettings>(defaultGrowthConstraints);
   const [robustScenarioSettings, setRobustScenarioSettings] = useState<ScenarioSettings>(defaultRobustScenarioSettings);
+  const [goalSettings, setGoalSettings] = useState<GoalSettings>(DEFAULT_GOAL_SETTINGS);
   const [validationSettings, setValidationSettings] = useState<WalkForwardSettings>(defaultValidationSettings);
   const [activePreset, setActivePreset] = useState<PresetId>("custom");
   const [presetDefinitions, setPresetDefinitions] = useState<CandidatePreset[]>([]);
@@ -317,7 +320,22 @@ function App() {
       maxEvaluations: 100_000,
     });
   }, [activePreset, automaticSearchStep, data, end, growthConstraints, mode, robustScenarioSettings, selectedAssets, start]);
-  const optimizationResult = optimizationProfile === "robust" ? robustOptimization : growthOptimization;
+  const goalOptimization = useMemo<OptimizationResult>(() => {
+    if (activePreset !== "custom" || !selectedAssets.length || end <= start) return {
+      strategy: "goal", weights: null, feasible: false, diagnostics: [], score: null, stats: null, evaluatedCandidates: 0, gridStepPct: automaticSearchStep,
+    };
+    const assetIds = selectedAssets.map(asset => asset.id);
+    return optimize("goal", {
+      data, assetIds, trainStart: start, trainEnd: end, returnMode: mode,
+      scenarioSettings: robustScenarioSettings, goalSettings,
+    }, {
+      longOnly: true, maxWeightByAsset: Object.fromEntries(assetIds.map(id => [id, growthConstraints.maxWeightPct / 100])),
+      maxAnnualCloseDrawdownPct: growthConstraints.maxAnnualCloseDrawdownPct,
+      maxAnnualVolatilityPct: growthConstraints.maxAnnualVolatilityPct,
+      gridStepPct: automaticSearchStep, maxEvaluations: 100_000,
+    });
+  }, [activePreset, selectedAssets, end, start, automaticSearchStep, data, mode, robustScenarioSettings, goalSettings, growthConstraints]);
+  const optimizationResult = optimizationProfile === "robust" ? robustOptimization : optimizationProfile === "goal" ? goalOptimization : growthOptimization;
   const automaticCandidate = useMemo(
     () => optimizationResult.weights
       ? Object.fromEntries(selectedAssets.map((asset) => [asset.id, (optimizationResult.weights?.[asset.id] ?? 0) * 100]))
@@ -512,7 +530,7 @@ function App() {
   };
 
   const applyOptimizationProfile = (profile: PortfolioOptimizationProfile) => {
-    const proposal = profile === "growth" ? growthOptimization : robustOptimization;
+    const proposal = profile === "growth" ? growthOptimization : profile === "robust" ? robustOptimization : goalOptimization;
     if (!proposal.weights) return;
     setOptimizationProfile(profile);
     setAutomaticWeights(true);
@@ -655,7 +673,7 @@ function App() {
                      growthConstraints={growthConstraints}
                      growthOptimization={optimizationResult}
                      growthProposal={growthOptimization}
-                     robustProposal={robustOptimization}
+                     robustProposal={robustOptimization} goalProposal={goalOptimization} goalSettings={goalSettings} onGoalSettingsChange={(next) => setGoalSettings(current => ({ ...current, ...next }))}
                      robustScenarioSettings={robustScenarioSettings}
                      benchmarkPortfolio={benchmarkPortfolio}
                     walkForward={walkForward}
@@ -885,11 +903,11 @@ function correlationColor(value: number | null, diagonal: boolean): string {
 }
 
 function optimizationProfileLabel(profile: PortfolioOptimizationProfile): string {
-  return profile === "growth" ? "Croissance" : "Robustesse";
+  return profile === "growth" ? "Croissance" : profile === "robust" ? "Robustesse" : "Objectif patrimonial";
 }
 
 function optimizationProfileDescription(profile: PortfolioOptimizationProfile): string {
-  return profile === "growth" ? "meilleur TCAM historique sous contraintes configurables" : "quantile défavorable du TCAM simulé";
+  return profile === "growth" ? "meilleur TCAM historique sous contraintes configurables" : profile === "robust" ? "quantile défavorable du TCAM simulé" : "probabilité d’atteindre un capital cible";
 }
 
 function PortfolioView({
@@ -913,6 +931,9 @@ function PortfolioView({
   growthOptimization,
   growthProposal,
   robustProposal,
+  goalProposal,
+  goalSettings,
+  onGoalSettingsChange,
   robustScenarioSettings,
   benchmarkPortfolio,
   walkForward,
@@ -944,6 +965,9 @@ function PortfolioView({
   growthOptimization: OptimizationResult;
   growthProposal: OptimizationResult;
   robustProposal: OptimizationResult;
+  goalProposal: OptimizationResult;
+  goalSettings: GoalSettings;
+  onGoalSettingsChange: (next: Partial<GoalSettings>) => void;
   robustScenarioSettings: ScenarioSettings;
   benchmarkPortfolio: PortfolioStats | null;
   walkForward: WalkForwardResult;
@@ -969,6 +993,7 @@ function PortfolioView({
   const profileOptions: Array<{ id: PortfolioOptimizationProfile; label: string; shortDescription: string }> = [
     { id: "growth", label: "Croissance", shortDescription: growthProposal.feasible ? "TCAM historique maximal" : "Aucune solution faisable" },
     { id: "robust", label: "Robustesse", shortDescription: robustProposal.feasible ? "Mieux résister aux années difficiles" : "Aucune solution possible" },
+    { id: "goal", label: "Objectif patrimonial", shortDescription: goalProposal.feasible ? "Atteindre un capital cible" : "Aucune solution possible" },
   ];
 
   return <div className="portfolio-view">
@@ -986,10 +1011,24 @@ function PortfolioView({
       {activePreset === "custom" && <div className="optimization-profiles">
         <div className="optimization-profiles-heading"><span>Proposition automatique</span><small>Calculée sur la configuration actuelle</small></div>
         <div className="optimization-profile-list" role="group" aria-label="Profils d'optimisation">
-          {profileOptions.map((profile) => <button key={profile.id} className={`optimization-profile ${optimizationProfile === profile.id ? "active" : ""}`} disabled={profile.id === "growth" ? !growthProposal.feasible : !robustProposal.feasible} onClick={() => onOptimizationProfileChange(profile.id)} title={(profile.id === "growth" ? growthProposal : robustProposal).feasible ? profile.shortDescription : "Aucune allocation ne respecte les contraintes choisies"}>
+          {profileOptions.map((profile) => <button key={profile.id} className={`optimization-profile ${optimizationProfile === profile.id ? "active" : ""}`} disabled={profile.id === "growth" ? !growthProposal.feasible : profile.id === "robust" ? !robustProposal.feasible : !goalProposal.feasible} onClick={() => onOptimizationProfileChange(profile.id)} title={(profile.id === "growth" ? growthProposal : profile.id === "robust" ? robustProposal : goalProposal).feasible ? profile.shortDescription : "Aucune allocation ne respecte les contraintes choisies"}>
             <strong>{profile.label}</strong><span>{profile.shortDescription}</span>
           </button>)}
         </div>
+        {optimizationProfile === "goal" && <div className="robust-settings" aria-label="Réglages de l'objectif patrimonial">
+          <div className="robust-simple-heading"><strong>Quel capital souhaites-tu atteindre ?</strong><p>Les simulations utilisent les rendements annuels historiques dans la devise et le mode nominal/réel affichés.</p></div>
+          <div className="robust-settings-grid">
+            <label>Capital initial <input aria-label="Capital initial" type="number" min="0" value={goalSettings.initialCapital} onChange={event => onGoalSettingsChange({ initialCapital: Number(event.target.value) })} /></label>
+            <label>Versement annuel, fin d'année <input aria-label="Versement annuel" type="number" min="0" value={goalSettings.annualContribution} onChange={event => onGoalSettingsChange({ annualContribution: Number(event.target.value) })} /></label>
+            <label>Capital cible <input aria-label="Capital cible" type="number" min="1" value={goalSettings.targetCapital} onChange={event => onGoalSettingsChange({ targetCapital: Number(event.target.value) })} /></label>
+            <label>Horizon <input aria-label="Horizon patrimonial" type="number" min="1" max="100" value={goalSettings.horizonYears} onChange={event => onGoalSettingsChange({ horizonYears: Number(event.target.value) })} /> ans</label>
+          </div>
+          {goalProposal.goalSummary && <div className="robust-simple-result"><strong>{goalProposal.goalSummary.probabilityPct.toFixed(1)} % des simulations atteignent l'objectif</strong>
+            <p>Capital médian : {formatMoney(goalProposal.goalSummary.medianCapital)} · scénario défavorable (10 %) : {formatMoney(goalProposal.goalSummary.lowerCapital)}.</p>
+            <small>Estimation conditionnelle aux années historiques rééchantillonnées, sans frais ni fiscalité ; versements en fin d'année. Pour des euros constants, activer « Réel ».</small></div>}
+          {goalProposal.diagnostics.filter(d => !d.startsWith("Probabilité indicative")).map(d => <p key={d} className="optimization-profile-note">{d}</p>)}
+          <p className="method-note">Pour appliquer la nouvelle proposition après modification, clique de nouveau sur « Objectif patrimonial ».</p>
+        </div>}
         {optimizationProfile === "robust" && <div className="robust-settings" aria-label="Réglages de robustesse">
           <div className="robust-simple-heading"><strong>Et si les prochaines années étaient difficiles ?</strong><p>L'application essaie plusieurs suites possibles d'années passées et cherche une répartition qui s'en sort bien, même quand les résultats sont moins bons.</p></div>
           <fieldset className="robust-prudence">
@@ -1081,7 +1120,7 @@ function PortfolioView({
       </section>
     </> : <div className="error-panel portfolio-empty">Données insuffisantes ou incohérentes : vérifie les pondérations et les rendements de chaque année de la période. Aucun rendement manquant n’est remplacé par zéro.</div>}
     </div>}
-    {space === "comparison" && <PortfolioComparisonDashboard assets={assets} weights={weights} portfolio={portfolio} equalPortfolio={equalPortfolio} benchmarkPortfolio={benchmarkPortfolio} growthOptimization={growthProposal} robustOptimization={robustProposal} mode={mode} />}
+    {space === "comparison" && <PortfolioComparisonDashboard assets={assets} weights={weights} portfolio={portfolio} equalPortfolio={equalPortfolio} benchmarkPortfolio={benchmarkPortfolio} growthOptimization={growthProposal} robustOptimization={robustProposal} goalOptimization={goalProposal} mode={mode} />}
     {space === "validation" && <WalkForwardView assets={assets} result={walkForward} settings={validationSettings} robustScenarioSettings={robustScenarioSettings} onSettingsChange={onValidationSettingsChange} />}
   </div>;
 }
