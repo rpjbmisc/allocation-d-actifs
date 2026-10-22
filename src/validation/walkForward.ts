@@ -6,6 +6,7 @@ import type { Mode, PortfolioStats, Row } from "../domain/types";
 import { optimize } from "../optimization/interface";
 import type { AllocationInput, OptimizationResult, PortfolioConstraints } from "../optimization/interface";
 import type { ScenarioSettings } from "../scenarios/generator";
+import type { GoalSettings } from "../optimization/goal";
 
 export interface WalkForwardSettings {
   minTrainYears: number;
@@ -31,7 +32,7 @@ export interface WalkForwardWindowEvaluation {
   optimization?: OptimizationResult;
 }
 
-export type WalkForwardStrategyId = "growth" | "robust" | "custom" | "equal" | "benchmark";
+export type WalkForwardStrategyId = "growth" | "robust" | "goal" | "custom" | "equal" | "benchmark";
 
 export interface WalkForwardStrategyResult {
   id: WalkForwardStrategyId;
@@ -57,6 +58,7 @@ export interface WalkForwardInput {
   settings?: Partial<WalkForwardSettings>;
   benchmarkAssetId?: string | null;
   scenarioSettings?: Partial<ScenarioSettings>;
+  goalSettings?: Partial<GoalSettings>;
 }
 
 export interface WalkForwardResult {
@@ -216,7 +218,7 @@ function fixedEvaluation(
 function optimizationEvaluations(
   input: WalkForwardInput,
   windows: WalkForwardWindow[],
-  strategy: "growth" | "robust",
+  strategy: "growth" | "robust" | "goal",
 ): WalkForwardWindowEvaluation[] {
   return windows.map(window => {
     const allocationInput: AllocationInput = {
@@ -227,6 +229,7 @@ function optimizationEvaluations(
       returnMode: input.returnMode,
       rebalancing: "annual",
       scenarioSettings: input.scenarioSettings,
+      goalSettings: input.goalSettings,
     };
     const optimization = optimize(strategy, allocationInput, input.constraints);
     if (!optimization.weights || !optimization.feasible) {
@@ -258,6 +261,7 @@ export function runWalkForward(input: WalkForwardInput): WalkForwardResult {
   const equalWeights = normalizeWeights(Object.fromEntries(input.assetIds.map(id => [id, 1])));
   const growth = strategyResult("growth", "Croissance", windows, optimizationEvaluations(input, windows, "growth"));
   const robust = strategyResult("robust", "Robustesse", windows, optimizationEvaluations(input, windows, "robust"));
+  const goal = strategyResult("goal", "Objectif patrimonial", windows, optimizationEvaluations(input, windows, "goal"));
   const custom = strategyResult("custom", "Personnalisée", windows, windows.map(window => fixedEvaluation(input.data, input.returnMode, window, customWeights)), ["Poids cibles choisis aujourd'hui, appliqués rétrospectivement ; ce n'est pas une stratégie réoptimisée."]);
   const equal = strategyResult("equal", "Équipondérée", windows, windows.map(window => fixedEvaluation(input.data, input.returnMode, window, equalWeights)));
 
@@ -269,7 +273,7 @@ export function runWalkForward(input: WalkForwardInput): WalkForwardResult {
   return {
     settings,
     windows,
-    strategies: [growth, robust, custom, equal, benchmark],
+    strategies: [growth, robust, goal, custom, equal, benchmark],
     diagnostics: uniqueDiagnostics(diagnostics),
     uncertainty: uncertainty(windows.length),
   };
