@@ -257,3 +257,17 @@ button:disabled, input:disabled { cursor: not-allowed; opacity: .45; }
 .robust-advanced { border-top: 1px solid #e8d8bf; padding-top: 9px; }
 .robust-advanced summary { color: #17324a; cursor: pointer; font-weight: 600; }
 .robust-advanced .robust-settings-grid { margin-top: 10px; }
+
+/* Phase 4 bis — illustrative prospective scenarios */
+.prospective-panel { border-top: 1px solid #e8d8bf; padding-top: 10px; display: grid; gap: 10px; line-height: 1.5; }
+.prospective-panel p { margin: 3px 0; }
+.prospective-panel select { max-width: 100%; padding: 6px; border: 1px solid #d5dfe4; color: #17324a; background: white; }
+.prospective-panel details { border: 1px solid #e8d8bf; padding: 9px; }
+.prospective-panel summary { cursor: pointer; font-weight: 600; color: #17324a; }
+.prospective-regimes { display: grid; gap: 10px; margin: 9px 0; }
+.prospective-regimes section { background: #fff; border: 1px solid #e8d8bf; padding: 10px; display: grid; gap: 6px; }
+.prospective-regimes strong { color: #17324a; }
+.prospective-regimes label { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.prospective-regimes input, .prospective-panel input[type=number] { width: 75px; padding: 5px; border: 1px solid #d5dfe4; color: #17324a; text-align: right; }
+.prospective-panel button { padding: 7px 9px; border: 1px solid #d5dfe4; background: #fff; cursor: pointer; }
+.prospective-panel ul { margin: 5px 0; padding-left: 18px; }

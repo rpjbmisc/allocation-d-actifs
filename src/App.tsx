@@ -1,5 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { loadHistoricalData } from "./data/load";
+import { defaultProspectiveSettings } from "./scenarios/prospective";
+import type { ProspectiveSettings } from "./scenarios/prospective";
+import { optimizeProspective } from "./optimization/prospective";
+import type { ProspectiveResult } from "./optimization/prospective";
 import {
   Area,
   AreaChart,
@@ -192,6 +196,7 @@ function App() {
   const [optimizationProfile, setOptimizationProfile] = useState<PortfolioOptimizationProfile>("growth");
   const [growthConstraints, setGrowthConstraints] = useState<GrowthConstraintSettings>(defaultGrowthConstraints);
   const [robustScenarioSettings, setRobustScenarioSettings] = useState<ScenarioSettings>(defaultRobustScenarioSettings);
+  const [prospectiveSettings, setProspectiveSettings] = useState<ProspectiveSettings>(defaultProspectiveSettings);
   const [goalSettings, setGoalSettings] = useState<GoalSettings>(DEFAULT_GOAL_SETTINGS);
   const [validationSettings, setValidationSettings] = useState<WalkForwardSettings>(defaultValidationSettings);
   const [activePreset, setActivePreset] = useState<PresetId>("custom");
@@ -320,6 +325,19 @@ function App() {
       maxEvaluations: 100_000,
     });
   }, [activePreset, automaticSearchStep, data, end, growthConstraints, mode, robustScenarioSettings, selectedAssets, start]);
+  const prospectiveOptimization = useMemo<ProspectiveResult>(() => {
+    if (activePreset !== "custom" || !selectedAssets.length || end <= start || !prospectiveSettings.enabled) return {
+      strategy:"robust",weights:null,feasible:false,diagnostics:[],score:null,stats:null,evaluatedCandidates:0,gridStepPct:automaticSearchStep,prospectiveSummary:null
+    };
+    const assetIds=selectedAssets.map(a=>a.id);
+    return optimizeProspective({data,assetIds,trainStart:start,trainEnd:end,returnMode:mode,rebalancing:"annual",scenarioSettings:robustScenarioSettings}, {
+      longOnly:true,maxWeightByAsset:Object.fromEntries(assetIds.map(id=>[id,growthConstraints.maxWeightPct/100])),
+      maxAnnualCloseDrawdownPct:growthConstraints.maxAnnualCloseDrawdownPct,
+      maxAnnualVolatilityPct:growthConstraints.maxAnnualVolatilityPct,
+      gridStepPct:automaticSearchStep,maxEvaluations:700
+    },prospectiveSettings);
+  },[activePreset,selectedAssets,end,start,prospectiveSettings,automaticSearchStep,data,mode,robustScenarioSettings,growthConstraints]);
+  const activeRobustOptimization = prospectiveSettings.enabled ? prospectiveOptimization : robustOptimization;
   const goalOptimization = useMemo<OptimizationResult>(() => {
     if (activePreset !== "custom" || !selectedAssets.length || end <= start) return {
       strategy: "goal", weights: null, feasible: false, diagnostics: [], score: null, stats: null, evaluatedCandidates: 0, gridStepPct: automaticSearchStep,
@@ -335,7 +353,7 @@ function App() {
       gridStepPct: automaticSearchStep, maxEvaluations: 100_000,
     });
   }, [activePreset, selectedAssets, end, start, automaticSearchStep, data, mode, robustScenarioSettings, goalSettings, growthConstraints]);
-  const optimizationResult = optimizationProfile === "robust" ? robustOptimization : optimizationProfile === "goal" ? goalOptimization : growthOptimization;
+  const optimizationResult = optimizationProfile === "robust" ? activeRobustOptimization : optimizationProfile === "goal" ? goalOptimization : growthOptimization;
   const automaticCandidate = useMemo(
     () => optimizationResult.weights
       ? Object.fromEntries(selectedAssets.map((asset) => [asset.id, (optimizationResult.weights?.[asset.id] ?? 0) * 100]))
@@ -525,13 +543,14 @@ function App() {
     setCurrency("eur");
     setMode("nominal");
     setRobustScenarioSettings(defaultRobustScenarioSettings);
+    setProspectiveSettings(defaultProspectiveSettings());
     setActiveTab("overview");
     setHiddenAssets([]);
     setConfigurationOpen(false);
   };
 
   const applyOptimizationProfile = (profile: PortfolioOptimizationProfile) => {
-    const proposal = profile === "growth" ? growthOptimization : profile === "robust" ? robustOptimization : goalOptimization;
+    const proposal = profile === "growth" ? growthOptimization : profile === "robust" ? activeRobustOptimization : goalOptimization;
     if (!proposal.weights) return;
     setOptimizationProfile(profile);
     setAutomaticWeights(true);
@@ -674,7 +693,7 @@ function App() {
                      growthConstraints={growthConstraints}
                      growthOptimization={optimizationResult}
                      growthProposal={growthOptimization}
-                     robustProposal={robustOptimization} goalProposal={goalOptimization} goalSettings={goalSettings} onGoalSettingsChange={(next) => setGoalSettings(current => ({ ...current, ...next }))}
+                     robustProposal={activeRobustOptimization} prospectiveSettings={prospectiveSettings} onProspectiveSettingsChange={setProspectiveSettings} goalProposal={goalOptimization} goalSettings={goalSettings} onGoalSettingsChange={(next) => setGoalSettings(current => ({ ...current, ...next }))}
                      robustScenarioSettings={robustScenarioSettings}
                      benchmarkPortfolio={benchmarkPortfolio}
                     walkForward={walkForward}
@@ -936,6 +955,8 @@ function PortfolioView({
   goalSettings,
   onGoalSettingsChange,
   robustScenarioSettings,
+  prospectiveSettings,
+  onProspectiveSettingsChange,
   benchmarkPortfolio,
   walkForward,
   validationSettings,
@@ -970,6 +991,8 @@ function PortfolioView({
   goalSettings: GoalSettings;
   onGoalSettingsChange: (next: Partial<GoalSettings>) => void;
   robustScenarioSettings: ScenarioSettings;
+  prospectiveSettings: ProspectiveSettings;
+  onProspectiveSettingsChange: (next: ProspectiveSettings) => void;
   benchmarkPortfolio: PortfolioStats | null;
   walkForward: WalkForwardResult;
   validationSettings: WalkForwardSettings;
@@ -1031,6 +1054,43 @@ function PortfolioView({
           <p className="method-note">Pour appliquer la nouvelle proposition après modification, clique de nouveau sur « Objectif patrimonial ».</p>
         </div>}
         {optimizationProfile === "robust" && <div className="robust-settings" aria-label="Réglages de robustesse">
+          <fieldset className="robust-prudence"><legend>Quelle méthode de robustesse veux-tu tester ?</legend>
+            <div className="robust-prudence-options">
+              <label className={!prospectiveSettings.enabled?"selected":""}><input type="radio" name="robust-method" checked={!prospectiveSettings.enabled} onChange={()=>onProspectiveSettingsChange({...prospectiveSettings,enabled:false})}/><span><strong>Historique</strong><small>Réutilise les rendements du passé.</small></span></label>
+              <label className={prospectiveSettings.enabled?"selected":""}><input type="radio" name="robust-method" checked={prospectiveSettings.enabled} onChange={()=>onProspectiveSettingsChange({...prospectiveSettings,enabled:true})}/><span><strong>Futurs possibles</strong><small>Explore quatre situations économiques hypothétiques.</small></span></label>
+            </div>
+          </fieldset>
+          {prospectiveSettings.enabled && <div className="prospective-panel">
+            <p>Les chiffres ci-dessous sont des <strong>hypothèses inventées pour explorer des possibilités</strong>, pas des prévisions. Chaque valeur ajoute ou retire des points au rendement annuel historique d'un actif.</p>
+            <label>Comment comparer ces futurs ?
+              <select aria-label="Objectif multi-scénarios" value={prospectiveSettings.objective} onChange={event=>onProspectiveSettingsChange({...prospectiveSettings,objective:event.target.value as ProspectiveSettings["objective"]})}>
+                <option value="regret">Limiter les mauvaises surprises (regret maximal)</option>
+                <option value="worst">Mieux résister au pire scénario</option>
+                <option value="average">Meilleure croissance moyenne (scénarios égaux)</option>
+              </select>
+            </label>
+            <details><summary>Modifier les quatre futurs et leurs hypothèses</summary>
+              <div className="prospective-regimes">{prospectiveSettings.regimes.map((regime,index)=><section key={regime.id}>
+                <strong>{regime.name}</strong><p>{regime.description}</p>
+                {assets.map(asset=><label key={asset.id}>{asset.name} <input aria-label={`Ajustement ${regime.name} ${asset.name}`} type="number" min="-100" max="100" step="0.5" value={regime.shiftsPct[asset.id]??0} onChange={event=>{
+                  const regimes=prospectiveSettings.regimes.map((r,i)=>i===index?{...r,shiftsPct:{...r.shiftsPct,[asset.id]:Number(event.target.value)}}:r);
+                  onProspectiveSettingsChange({...prospectiveSettings,regimes});
+                }}/><small>points/an</small></label>)}
+                <label>Amplitude des variations <input aria-label={`Variations ${regime.name}`} type="number" min="0" max="3" step="0.1" value={regime.volatilityMultiplier} onChange={event=>onProspectiveSettingsChange({...prospectiveSettings,regimes:prospectiveSettings.regimes.map((r,i)=>i===index?{...r,volatilityMultiplier:Number(event.target.value)}:r)})}/></label>
+                <label>Choc commun aux actifs risqués <input aria-label={`Choc commun ${regime.name}`} type="number" min="0" max="2" step="0.05" value={regime.equityShockMultiplier} onChange={event=>onProspectiveSettingsChange({...prospectiveSettings,regimes:prospectiveSettings.regimes.map((r,i)=>i===index?{...r,equityShockMultiplier:Number(event.target.value)}:r)})}/></label>
+              </section>)}</div>
+              <label>Simulations par futur <input aria-label="Simulations par régime" type="number" min="1" max="500" value={prospectiveSettings.pathsPerRegime} onChange={event=>onProspectiveSettingsChange({...prospectiveSettings,pathsPerRegime:Math.min(500,Math.max(1,Number(event.target.value)||1))})}/></label>
+              <button type="button" onClick={()=>onProspectiveSettingsChange({...defaultProspectiveSettings(),enabled:true})}>Rétablir les hypothèses illustratives</button>
+            </details>
+            {("prospectiveSummary" in robustProposal && robustProposal.prospectiveSummary) && <div className="robust-simple-result">
+              <strong>{prospectiveSettings.objective==="regret"?"Regret maximal limité":prospectiveSettings.objective==="worst"?"Score du pire futur":"Score moyen des futurs"} : {prospectiveSettings.objective==="regret"?`${Math.abs(robustProposal.prospectiveSummary.score).toFixed(2)} points/an`:formatPercent(robustProposal.prospectiveSummary.score)}</strong>
+              <ul>{robustProposal.prospectiveSummary.regimeCagrs.map(r=><li key={r.id}>{r.name} : {formatPercent(r.medianCagr)} / an</li>)}</ul>
+              <small>Résultats issus d'hypothèses modifiables, non de prévisions. Les contraintes de risque restent calculées sur les années historiques.</small>
+            </div>}
+            {robustProposal.diagnostics.map(d=><p className="optimization-profile-note" key={d}>{d}</p>)}
+            <p>Après un changement, reclique sur « Robustesse » pour appliquer les nouveaux poids.</p>
+          </div>}
+          {!prospectiveSettings.enabled && <>
           <div className="robust-simple-heading"><strong>Et si les prochaines années étaient difficiles ?</strong><p>L'application essaie plusieurs suites possibles d'années passées et cherche une répartition qui s'en sort bien, même quand les résultats sont moins bons.</p></div>
           <fieldset className="robust-prudence">
             <legend>À quel point veux-tu privilégier les scénarios difficiles ?</legend>
@@ -1055,6 +1115,7 @@ function PortfolioView({
             </div>
             <p>Changer ces réglages change les simulations. Pour appliquer les nouveaux poids proposés, clique de nouveau sur « Robustesse ».</p>
           </details>
+        </>}
         </div>}
         <div className="growth-constraints" aria-label="Contraintes du profil Croissance">
           <div className="growth-constraints-heading"><span>Contraintes de recherche</span><small>Les valeurs sont modifiables et ne constituent pas des normes universelles.</small></div>
@@ -1172,7 +1233,7 @@ function PortfolioComparisonDashboard({
 }) {
   const rows: Array<{ label: string; type: string; weights: Record<string, number> | null; stats: PortfolioStats | null; note?: string }> = [
     { label: "Croissance", type: "Automatique · in-sample", weights: growthOptimization.weights, stats: growthOptimization.stats, note: "Optimisée sur toute la période affichée." },
-    { label: "Robustesse", type: "Automatique · scénario", weights: robustOptimization.weights, stats: robustOptimization.stats, note: robustOptimization.scenarioSummary ? `Quantile ${robustOptimization.scenarioSummary.quantilePct} % · ${robustOptimization.scenarioSummary.scenarioCount} scénarios` : "Scénarios indisponibles." },
+    { label: "Robustesse", type: "Automatique · scénario", weights: robustOptimization.weights, stats: robustOptimization.stats, note: robustOptimization.prospectiveSummary ? `Hypothèses macro · ${robustOptimization.prospectiveSummary.regimeCagrs.length} futurs` : robustOptimization.scenarioSummary ? `Quantile ${robustOptimization.scenarioSummary.quantilePct} % · ${robustOptimization.scenarioSummary.scenarioCount} scénarios` : "Scénarios indisponibles." },
     { label: "Personnalisée", type: "Poids fixes · in-sample", weights, stats: portfolio, note: "Pondérations modifiables dans Construction." },
     { label: "Équipondérée", type: "Référence · in-sample", weights: Object.fromEntries(assets.map(asset => [asset.id, 1])), stats: equalPortfolio },
     { label: "MSCI World", type: "Benchmark · in-sample", weights: { msci_world: 1 }, stats: benchmarkPortfolio, note: benchmarkPortfolio ? "Série indépendante si disponible." : "Non comparable sur cette période." },
@@ -1182,7 +1243,7 @@ function PortfolioComparisonDashboard({
   return <div className="portfolio-space-content">
     <section className="table-card comparison-dashboard">
       <div className="card-heading compact"><div className="heading-icon warm"><BarChart3 size={17} /></div><div><h2>Comparer les allocations</h2><p>Résultats historiques sur la même période, devise, lecture et règles de rééquilibrage. Le hors échantillon est séparé dans Validation.</p></div></div>
-       <div className="table-scroll"><table><thead><tr><th>Allocation</th><th>Nature</th><th>TCAM historique</th><th>Score scénario</th><th>Volatilité</th><th>Drawdown annuel</th><th>Pondérations</th></tr></thead><tbody>{rows.map(row => <tr key={row.label}><td>{row.label}</td><td>{row.type}{row.note && <small className="table-note">{row.note}</small>}</td><td>{formatPercent(row.stats?.cagr)}</td><td>{row.label === "Robustesse" ? formatPercent(robustOptimization.scenarioSummary?.quantileCagr) : row.label === "Objectif patrimonial" ? goalOptimization.goalSummary ? `${goalOptimization.goalSummary.probabilityPct.toFixed(1)} % de réussite` : "n.d." : "n.a."}</td><td>{formatPercent(row.stats?.volatility)}</td><td>{formatPercent(row.stats?.maxDrawdown)}</td><td>{row.label === "MSCI World" ? row.stats ? "100 % MSCI World" : "n.d." : allocationLabel(assets, row.weights)}</td></tr>)}</tbody></table></div>
+       <div className="table-scroll"><table><thead><tr><th>Allocation</th><th>Nature</th><th>TCAM historique</th><th>Score scénario</th><th>Volatilité</th><th>Drawdown annuel</th><th>Pondérations</th></tr></thead><tbody>{rows.map(row => <tr key={row.label}><td>{row.label}</td><td>{row.type}{row.note && <small className="table-note">{row.note}</small>}</td><td>{formatPercent(row.stats?.cagr)}</td><td>{row.label === "Robustesse" ? robustOptimization.prospectiveSummary ? robustOptimization.prospectiveSummary.objective==="regret" ? `${Math.abs(robustOptimization.prospectiveSummary.score).toFixed(2)} pts de regret` : formatPercent(robustOptimization.prospectiveSummary.score) : formatPercent(robustOptimization.scenarioSummary?.quantileCagr) : row.label === "Objectif patrimonial" ? goalOptimization.goalSummary ? `${goalOptimization.goalSummary.probabilityPct.toFixed(1)} % de réussite` : "n.d." : "n.a."}</td><td>{formatPercent(row.stats?.volatility)}</td><td>{formatPercent(row.stats?.maxDrawdown)}</td><td>{row.label === "MSCI World" ? row.stats ? "100 % MSCI World" : "n.d." : allocationLabel(assets, row.weights)}</td></tr>)}</tbody></table></div>
     </section>
     <section className="insight-card comparison-reading">
       <div className="card-heading compact"><div className="heading-icon cool"><CircleHelp size={17} /></div><div><h2>Lire cette comparaison</h2><p>Une bonne performance historique ne constitue pas une prévision.</p></div></div>

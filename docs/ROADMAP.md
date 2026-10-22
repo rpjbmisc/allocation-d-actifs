@@ -285,3 +285,27 @@ Ces sujets doivent être tranchés **avant le codage de la phase concernée**, o
 - Avertissements : probabilité conditionnelle au modèle historique, sans frais, fiscalité, ni risque intra-annuel ; précision limitée par les séries.
 - Tests unitaires ajoutés dans `src/tests/goal.test.ts`.
 - **État de la PR** : en revue ; ne cocher « terminé » qu'après exécution des tests et fusion.
+
+
+## Extension après phase 5 — Phase 4 bis : robustesse prospective (PR #8)
+
+- Branche `feature/phase-4b-prospective-robustness` : **en revue**, ne pas déclarer fusionnée avant approbation.
+- Construction > Robustesse : choix **Historique** (algorithme existant) ou **Futurs possibles** (nouveau).
+- Quatre scénarios illustratifs : domination US, rotation internationale, inflation durable, crise prolongée. Ajustements de rendement **en points par année** par actif, modifiables. Multiplicateurs de fluctuations et choc commun sur expositions risquées sont des **heuristiques non calibrées**, pas des estimations macroéconomiques validées.
+- Trois critères : croissance médiane moyenne des régimes (régimes équipondérés), meilleure performance dans le régime le plus difficile, ou regret maximal minimisé face au meilleur portefeuille admissible de chaque régime.
+- Même rééchantillonnage conjoint annuel de base pour tous les régimes afin de rendre les comparaisons plus cohérentes. Période, devise et nominal/réel sont ceux sélectionnés dans l'application.
+- Même contraintes de risque historique que les autres optimiseurs ; les contraintes de drawdown n'offrent pas de garantie prospective et ne sont **pas** évaluées sur les trajectoires macro.
+- Recherche sur grille plafonnée à 700 candidats pour protéger la réactivité. Les allocations ne sont pas des optima continus garantis ; avec plusieurs actifs la grille peut rater l'optimum.
+- Le walk-forward existant reste celui des **stratégies historiques**, sans rétrospection artificielle des convictions macro formulées aujourd'hui. Vérifier manuellement sensibilité des résultats aux hypothèses.
+- Pas de données mensuelles requises. Les ajustements par défaut **ne sont ni des prévisions ni des recommandations de poids**.
+
+### Critères de réception phase 4 bis
+
+- [x] Moteur pur, paramétrable, quatre régimes macro et comparaison de trois objectifs.
+- [x] UI de Construction conservant le mode Robustesse historique et les pondérations manuelles.
+- [x] Scénarios modifiables, rendements prospectifs distingués des résultats historiques.
+- [x] Tests unitaires de déterminisme, modification d'hypothèses et contrainte de poids ajoutés.
+- [ ] CI build et tests verts sur la Pull Request.
+- [ ] Relecture de l'interface et fusion approuvée dans main.
+
+**Ne pas confondre** : les scénarios ci-dessus sont des hypothèses de stress. Aucun modèle n'est calibré pour prédire les régimes de marché. Pour un usage décisionnel, réaliser des analyses de sensibilité et substituer des hypothèses sourcées.
