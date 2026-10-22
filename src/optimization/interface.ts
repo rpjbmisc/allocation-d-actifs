@@ -4,6 +4,7 @@ import { optimizeGoal } from "./goal";
 import type { GoalSettings, GoalSummary } from "./goal";
 import type { Mode, PortfolioStats, Row } from "../domain/types";
 import type { ScenarioSettings, ScenarioSummary } from "../scenarios/generator";
+import type { ProspectiveSummary } from "./prospective";
 
 export type StrategyId = "growth" | "robust" | "goal";
 
@@ -41,6 +42,7 @@ export interface OptimizationResult {
   gridStepPct: number | null;
   scoreLabel?: string;
   scenarioSummary?: ScenarioSummary | null;
+  prospectiveSummary?: ProspectiveSummary | null;
   goalSummary?: GoalSummary | null;
 }
 
