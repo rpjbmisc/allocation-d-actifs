@@ -66,7 +66,7 @@ export interface PortfolioCandidate {
   diversificationRatio?: number | null;
 }
 
-export type PortfolioOptimizationProfile = "growth" | "robust";
+export type PortfolioOptimizationProfile = "growth" | "robust" | "goal";
 
 export interface PortfolioOptimizationResults {
   returnCandidate: PortfolioCandidate | null;
