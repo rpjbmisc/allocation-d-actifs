@@ -13,3 +13,6 @@ export * from "./format";
 export * from "./domain/series";
 export * from "./validation/walkForward";
 export * from "./scenarios/generator";
+
+export { DEFAULT_GOAL_SETTINGS, validateGoalSettings, terminalGoalCapital, summarizeGoal } from "./optimization/goal";
+export type { GoalSettings, GoalSummary } from "./optimization/goal";
