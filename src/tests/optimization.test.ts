@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { optimize } from "../analytics";
+import { computePortfolio, optimize } from "../analytics";
+import { searchGrid, validateOptimizationConfiguration } from "../optimization/growth";
 import { rows } from "./fixtures";
 
 function inputs(data: Record<string, ReturnType<typeof rows>>) {
@@ -14,6 +15,19 @@ function inputs(data: Record<string, ReturnType<typeof rows>>) {
 }
 
 describe("growth optimization contract", () => {
+  it.each(["nominal", "real"] as const)("preserves exact candidate statistics and subset baseline years in %s mode", mode => {
+    const data = { a: rows([Number.NaN, 10, -20]), b: rows([5, -10, 30]), c: rows([2, 2, -100]) };
+    const configuration = validateOptimizationConfiguration(Object.keys(data), { longOnly: true, gridStepPct: 10 });
+    if ("diagnostics" in configuration) throw new Error(configuration.diagnostics.join(" "));
+    let checked = 0;
+    searchGrid({ ...inputs(data), returnMode: mode }, Object.keys(data), configuration.value, (weights, stats) => {
+      expect(stats).toEqual(computePortfolio(data, weights, 2000, 2002, mode));
+      checked += 1;
+      return { score: stats.cagr! };
+    });
+    expect(checked).toBe(66);
+  });
+
   it("finds the known CAGR optimum under an explicit per-asset cap", () => {
     const data = { a: rows([10, 10, 10]), b: rows([5, 5, 5]), c: rows([0, 0, 0]) };
     const constraints = {

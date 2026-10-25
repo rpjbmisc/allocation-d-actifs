@@ -48,7 +48,9 @@ import {
   OptimizationResult,
   returnValue,
   Row,
-  runWalkForward,
+  runWalkForwardOptimized,
+  runWalkForwardFixed,
+  combineWalkForwardResults,
   WalkForwardResult,
   WalkForwardSettings,
   weightStabilityLabel,
@@ -187,6 +189,7 @@ function App() {
   const [range, setRange] = useState<[number, number]>([Number(initialParams.get("start")) || 1970, Number(initialParams.get("end")) || 2025]);
   const [commonPeriod, setCommonPeriod] = useState(initialParams.get("common") !== "false");
   const [activeTab, setActiveTab] = useState<Tab>(readTab(initialParams.get("tab")));
+  const [portfolioSpace, setPortfolioSpace] = useState<PortfolioSpace>("construction");
   const [configurationOpen, setConfigurationOpen] = useState(false);
   const [assetSearch, setAssetSearch] = useState("");
   const [assetCategoryFilter, setAssetCategoryFilter] = useState<AssetCategory>("Tous");
@@ -251,6 +254,10 @@ function App() {
     window.history.replaceState(null, "", `${window.location.pathname}?${params.toString()}`);
   }, [activeTab, commonPeriod, currency, isCorrelationPage, loading, mode, range, selected]);
 
+  useEffect(() => {
+    if (activeTab !== "portfolio") setPortfolioSpace("construction");
+  }, [activeTab]);
+
   const selectedAssets = useMemo(() => assets.filter((asset) => selected.includes(asset.id) && data[asset.id]?.length), [assets, data, selected]);
   const commonBounds = selectedAssets.map((asset) => dataBounds(data[asset.id], [asset.startYear, asset.endYear]));
   const commonStart = selectedAssets.length ? Math.max(...commonBounds.map(([start]) => start)) : 1970;
@@ -258,12 +265,13 @@ function App() {
   const effectiveRange: [number, number] = commonPeriod ? [commonStart, commonEnd] : range;
   const [start, end] = effectiveRange;
   const duration = Math.max(0, end - start + 1);
+  const portfolioVisible = !loading && !error && !isCorrelationPage && activeTab === "portfolio";
 
   const stats = useMemo(() => Object.fromEntries(selectedAssets.map((asset) => [asset.id, computeStats(data[asset.id], start, end, mode)])), [data, end, mode, selectedAssets, start]);
   // The search space grows exponentially, so use a coarser deterministic grid for larger selections.
   const automaticSearchStep = selectedAssets.length >= 7 ? 20 : selectedAssets.length >= 5 ? 10 : 5;
   const growthOptimization = useMemo<OptimizationResult>(() => {
-    if (activePreset !== "custom" || selectedAssets.length === 0 || end <= start) {
+    if (!portfolioVisible || activePreset !== "custom" || selectedAssets.length === 0 || end <= start) {
       return {
         strategy: "growth",
         weights: null,
@@ -291,9 +299,9 @@ function App() {
       gridStepPct: automaticSearchStep,
       maxEvaluations: 100_000,
     });
-  }, [activePreset, automaticSearchStep, data, end, growthConstraints, mode, selectedAssets, start]);
+  }, [portfolioVisible, activePreset, automaticSearchStep, data, end, growthConstraints, mode, selectedAssets, start]);
   const robustOptimization = useMemo<OptimizationResult>(() => {
-    if (activePreset !== "custom" || selectedAssets.length === 0 || end <= start) {
+    if (!portfolioVisible || prospectiveSettings.enabled || activePreset !== "custom" || selectedAssets.length === 0 || end <= start) {
       return {
         strategy: "robust",
         weights: null,
@@ -324,9 +332,9 @@ function App() {
       gridStepPct: automaticSearchStep,
       maxEvaluations: 100_000,
     });
-  }, [activePreset, automaticSearchStep, data, end, growthConstraints, mode, robustScenarioSettings, selectedAssets, start]);
+  }, [portfolioVisible, prospectiveSettings.enabled, activePreset, automaticSearchStep, data, end, growthConstraints, mode, robustScenarioSettings, selectedAssets, start]);
   const prospectiveOptimization = useMemo<ProspectiveResult>(() => {
-    if (activePreset !== "custom" || !selectedAssets.length || end <= start || !prospectiveSettings.enabled) return {
+    if (!portfolioVisible || activePreset !== "custom" || !selectedAssets.length || end <= start || !prospectiveSettings.enabled) return {
       strategy:"robust",weights:null,feasible:false,diagnostics:[],score:null,stats:null,evaluatedCandidates:0,gridStepPct:automaticSearchStep,prospectiveSummary:null
     };
     const assetIds=selectedAssets.map(a=>a.id);
@@ -336,10 +344,10 @@ function App() {
       maxAnnualVolatilityPct:growthConstraints.maxAnnualVolatilityPct,
       gridStepPct:automaticSearchStep,maxEvaluations:700
     },prospectiveSettings);
-  },[activePreset,selectedAssets,end,start,prospectiveSettings,automaticSearchStep,data,mode,robustScenarioSettings,growthConstraints]);
+  },[portfolioVisible,activePreset,selectedAssets,end,start,prospectiveSettings,automaticSearchStep,data,mode,robustScenarioSettings,growthConstraints]);
   const activeRobustOptimization = prospectiveSettings.enabled ? prospectiveOptimization : robustOptimization;
   const goalOptimization = useMemo<OptimizationResult>(() => {
-    if (activePreset !== "custom" || !selectedAssets.length || end <= start) return {
+    if (!portfolioVisible || activePreset !== "custom" || !selectedAssets.length || end <= start) return {
       strategy: "goal", weights: null, feasible: false, diagnostics: [], score: null, stats: null, evaluatedCandidates: 0, gridStepPct: automaticSearchStep,
     };
     const assetIds = selectedAssets.map(asset => asset.id);
@@ -352,7 +360,7 @@ function App() {
       maxAnnualVolatilityPct: growthConstraints.maxAnnualVolatilityPct,
       gridStepPct: automaticSearchStep, maxEvaluations: 100_000,
     });
-  }, [activePreset, selectedAssets, end, start, automaticSearchStep, data, mode, robustScenarioSettings, goalSettings, growthConstraints]);
+  }, [portfolioVisible, activePreset, selectedAssets, end, start, automaticSearchStep, data, mode, robustScenarioSettings, goalSettings, growthConstraints]);
   const optimizationResult = optimizationProfile === "robust" ? activeRobustOptimization : optimizationProfile === "goal" ? goalOptimization : growthOptimization;
   const automaticCandidate = useMemo(
     () => optimizationResult.weights
@@ -362,20 +370,20 @@ function App() {
   );
 
   useEffect(() => {
-    if (loading || activePreset !== "custom") return;
+    if (!portfolioVisible || activePreset !== "custom") return;
     if (!automaticCandidate) {
       setAutomaticWeights(false);
       return;
     }
     // A manual edit must remain in place until the user explicitly reapplies a profile.
     if (automaticCandidateInitialized.current && !automaticWeights) return;
-    setWeights((current) => selectedAssets.reduce(
-      (next, asset) => ({ ...next, [asset.id]: automaticCandidate[asset.id] ?? 0 }),
-      { ...current },
-    ));
+    setWeights((current) => {
+      if (selectedAssets.every(asset => current[asset.id] === (automaticCandidate[asset.id] ?? 0))) return current;
+      return { ...current, ...automaticCandidate };
+    });
     setAutomaticWeights(true);
     automaticCandidateInitialized.current = true;
-  }, [activePreset, automaticCandidate, automaticWeights, loading, selectedAssets]);
+  }, [activePreset, automaticCandidate, automaticWeights, portfolioVisible, selectedAssets]);
 
   const years = useMemo(() => {
     const allYears = new Set<number>();
@@ -392,14 +400,14 @@ function App() {
     return point;
   }), [data, mode, selectedAssets, years]);
 
-  const growthData = useMemo(() => computeGrowthData(data, selectedAssets.map(a => a.id), start, end, mode), [data, selectedAssets, start, end, mode]);
-  const decadeData = useMemo(() => computeDecadeData(data, selectedAssets.map(a => a.id), start, end, mode), [data, selectedAssets, start, end, mode]);
+  const growthData = useMemo(() => activeTab === "growth" && !isCorrelationPage ? computeGrowthData(data, selectedAssets.map(a => a.id), start, end, mode) : [], [activeTab, isCorrelationPage, data, selectedAssets, start, end, mode]);
+  const decadeData = useMemo(() => activeTab === "decades" && !isCorrelationPage ? computeDecadeData(data, selectedAssets.map(a => a.id), start, end, mode) : [], [activeTab, isCorrelationPage, data, selectedAssets, start, end, mode]);
 
   const visiblePhases = historicalPhases.filter((phase) => phase.start >= start && phase.end <= end);
 
   const portfolioWeights = useMemo(() => Object.fromEntries(selectedAssets.map((asset) => [asset.id, weights[asset.id] ?? 0])), [selectedAssets, weights]);
-  const portfolio = useMemo(() => computePortfolio(data, portfolioWeights, start, end, mode), [data, end, mode, portfolioWeights, start]);
-  const usdPortfolio = useMemo(() => currency === "eur" ? computePortfolio(usdData, portfolioWeights, start, end, mode) : null, [currency, end, mode, portfolioWeights, start, usdData]);
+  const portfolio = useMemo(() => portfolioVisible ? computePortfolio(data, portfolioWeights, start, end, mode) : null, [portfolioVisible, data, end, mode, portfolioWeights, start]);
+  const usdPortfolio = useMemo(() => portfolioVisible && currency === "eur" ? computePortfolio(usdData, portfolioWeights, start, end, mode) : null, [portfolioVisible, currency, end, mode, portfolioWeights, start, usdData]);
   const currencyComparison: CurrencyComparison | null = currency === "eur" && portfolio && usdPortfolio
     ? {
         usd: usdPortfolio,
@@ -424,29 +432,35 @@ function App() {
     () => data.msci_world ? computePortfolio(data, { msci_world: 100 }, start, end, mode) : null,
     [data, end, mode, start],
   );
-  const walkForward = useMemo<WalkForwardResult>(() => {
+  const walkForwardInput = useMemo(() => {
     const assetIds = selectedAssets.map((asset) => asset.id);
-    return runWalkForward({
+    return {
       data,
       assetIds,
       periodStart: start,
       periodEnd: end,
       returnMode: mode,
-      customWeights: portfolioWeights,
       settings: validationSettings,
       benchmarkAssetId: data.msci_world ? "msci_world" : null,
       scenarioSettings: robustScenarioSettings,
       goalSettings,
       constraints: {
-        longOnly: true,
+        longOnly: true as const,
         maxWeightByAsset: Object.fromEntries(assetIds.map((id) => [id, growthConstraints.maxWeightPct / 100])),
         maxAnnualCloseDrawdownPct: growthConstraints.maxAnnualCloseDrawdownPct,
         maxAnnualVolatilityPct: growthConstraints.maxAnnualVolatilityPct,
         gridStepPct: automaticSearchStep,
         maxEvaluations: 100_000,
       },
-    });
-  }, [automaticSearchStep, data, end, growthConstraints, mode, portfolioWeights, robustScenarioSettings, goalSettings, selectedAssets, start, validationSettings]);
+    };
+  }, [automaticSearchStep, data, end, growthConstraints, mode, robustScenarioSettings, goalSettings, selectedAssets, start, validationSettings]);
+  const validationVisible = portfolioVisible && portfolioSpace === "validation";
+  const optimizedWalkForward = useMemo(() => validationVisible ? runWalkForwardOptimized(walkForwardInput) : null, [validationVisible, walkForwardInput]);
+  const fixedWalkForward = useMemo(() => validationVisible ? runWalkForwardFixed({ ...walkForwardInput, customWeights: portfolioWeights }) : null, [validationVisible, walkForwardInput, portfolioWeights]);
+  const walkForward = useMemo<WalkForwardResult>(() => optimizedWalkForward && fixedWalkForward
+    ? combineWalkForwardResults(optimizedWalkForward, fixedWalkForward)
+    : { settings: validationSettings, windows: [], strategies: [], diagnostics: [], uncertainty: "insuffisante" },
+  [optimizedWalkForward, fixedWalkForward, validationSettings]);
   const correlations = useMemo(() => computeCorrelationMatrix(data, selectedAssets.map((asset) => asset.id), start, end, mode), [data, end, mode, selectedAssets, start]);
   const availableAssets = assets.filter((asset) => data[asset.id]?.length);
   const periodRestricted = !commonPeriod;
@@ -460,10 +474,10 @@ function App() {
   const chartObservationCount = selectedAssets.reduce((sum, asset) => sum + data[asset.id].filter((row) => row.year >= start && row.year <= end && returnValue(row, mode) !== null).length, 0);
   const periodGap = selectedAssets.length ? commonStart - Math.min(...selectedAssets.map((asset) => asset.startYear)) : 0;
   const limitingAssets = selectedAssets.filter((asset) => asset.startYear === commonStart);
-  const decisionStats = selectedAssets.map((asset) => {
+  const decisionStats = useMemo(() => selectedAssets.map((asset) => {
     const stat = stats[asset.id];
     return stat ? { asset, stat, drawdown: maxDrawdown(data[asset.id], start, end, mode) } : null;
-  }).filter((entry): entry is { asset: Asset; stat: NonNullable<typeof stats[string]>; drawdown: number | null } => Boolean(entry));
+  }).filter((entry): entry is { asset: Asset; stat: NonNullable<typeof stats[string]>; drawdown: number | null } => Boolean(entry)), [selectedAssets, stats, data, start, end, mode]);
   const bestAsset = [...decisionStats].sort((left, right) => (mode === "nominal" ? right.stat.cagrNominal ?? -Infinity : right.stat.cagrReal ?? -Infinity) - (mode === "nominal" ? left.stat.cagrNominal ?? -Infinity : left.stat.cagrReal ?? -Infinity))[0];
   const worstReturnAsset = [...decisionStats].sort((left, right) => (mode === "nominal" ? left.stat.cagrNominal ?? Infinity : left.stat.cagrReal ?? Infinity) - (mode === "nominal" ? right.stat.cagrNominal ?? Infinity : right.stat.cagrReal ?? Infinity))[0];
   const lowestRiskAsset = [...decisionStats].sort((left, right) => left.stat.volatility - right.stat.volatility)[0];
@@ -697,6 +711,8 @@ function App() {
                      robustScenarioSettings={robustScenarioSettings}
                      benchmarkPortfolio={benchmarkPortfolio}
                     walkForward={walkForward}
+                    space={portfolioSpace}
+                    onSpaceChange={setPortfolioSpace}
                     validationSettings={validationSettings}
                     onWeightChange={updateWeight}
                     onNormalize={normalizeWeights}
@@ -959,6 +975,8 @@ function PortfolioView({
   onProspectiveSettingsChange,
   benchmarkPortfolio,
   walkForward,
+  space,
+  onSpaceChange,
   validationSettings,
   onWeightChange,
   onNormalize,
@@ -995,6 +1013,8 @@ function PortfolioView({
   onProspectiveSettingsChange: (next: ProspectiveSettings) => void;
   benchmarkPortfolio: PortfolioStats | null;
   walkForward: WalkForwardResult;
+  space: PortfolioSpace;
+  onSpaceChange: (space: PortfolioSpace) => void;
   validationSettings: WalkForwardSettings;
   onWeightChange: (id: string, value: number) => void;
   onNormalize: () => void;
@@ -1003,7 +1023,6 @@ function PortfolioView({
   onRobustScenarioSettingsChange: (next: Partial<ScenarioSettings>) => void;
   onValidationSettingsChange: (next: Partial<WalkForwardSettings>) => void;
 }) {
-  const [space, setSpace] = useState<PortfolioSpace>("construction");
   const totalWeight = assets.reduce((sum, asset) => sum + (weights[asset.id] ?? 0), 0);
   const fractions = normalizeAllocationWeights(Object.fromEntries(assets.map(asset => [asset.id, weights[asset.id] ?? 0])));
   const normalizedWeights = Object.fromEntries(assets.map(asset => [asset.id, (fractions?.[asset.id] ?? 0) * 100]));
@@ -1024,7 +1043,7 @@ function PortfolioView({
     <nav className="portfolio-spaces" aria-label="Espaces du portefeuille" role="tablist">
       {([[
         "construction", "Construction",
-      ], ["comparison", "Comparaison"], ["validation", "Validation"]] as Array<[PortfolioSpace, string]>).map(([id, label]) => <button key={id} role="tab" aria-selected={space === id} className={space === id ? "active" : ""} onClick={() => setSpace(id)}>{label}</button>)}
+      ], ["comparison", "Comparaison"], ["validation", "Validation"]] as Array<[PortfolioSpace, string]>).map(([id, label]) => <button key={id} role="tab" aria-selected={space === id} className={space === id ? "active" : ""} onClick={() => onSpaceChange(id)}>{label}</button>)}
     </nav>
     {space === "construction" && <div className="portfolio-layout">
     <section className="portfolio-controls">

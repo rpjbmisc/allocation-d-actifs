@@ -6,6 +6,8 @@ import { readFile } from "node:fs/promises";
 import App from "../App";
 import { historicalData } from "./fixtures";
 import { computePortfolio, formatPercent } from "../analytics";
+import * as optimization from "../optimization/interface";
+import * as validation from "../validation/walkForward";
 
 beforeEach(() => {
   window.history.replaceState({}, "", "/?tab=portfolio&assets=msci_world,gold,us_lt_govt_bonds&start=1970&end=2025&common=false&currency=usd");
@@ -15,11 +17,13 @@ beforeEach(() => {
   });
   vi.stubGlobal("ResizeObserver", class { observe() {} unobserve() {} disconnect() {} });
 });
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 const UI_TEST_TIMEOUT = 15_000;
 
 it("preserves portfolio controls, manual weights, normalization and selection tabs", async () => {
+  const validationSpy = vi.spyOn(validation, "runWalkForwardOptimized");
+  const optimizationSpy = vi.spyOn(optimization, "optimize");
   const user = userEvent.setup();
   render(<App />);
   const input = await screen.findByRole("spinbutton", { name: "Poids saisi pour MSCI World" });
@@ -31,6 +35,7 @@ it("preserves portfolio controls, manual weights, normalization and selection ta
   fireEvent.change(screen.getByRole("spinbutton", { name: "Poids saisi pour Or" }), { target: { value: "30" } });
   fireEvent.change(screen.getByRole("spinbutton", { name: "Poids saisi pour Obligations d'État US (long terme)" }), { target: { value: "30" } });
   const before = currentMetrics();
+  const optimizationCount = optimizationSpy.mock.calls.length;
   expect(before).toBeTruthy();
   fireEvent.change(input, { target: { value: "40" } });
   expect((slider as HTMLInputElement).value).toBe("40");
@@ -40,6 +45,8 @@ it("preserves portfolio controls, manual weights, normalization and selection ta
   expect(currentMetrics()).not.toBe(before);
   const expected = computePortfolio(historicalData("usd"), { msci_world: 60, gold: 30, us_lt_govt_bonds: 30 }, 1970, 2025, "nominal")!;
   expect(document.querySelector(".portfolio-kpi strong")?.textContent).toBe(formatPercent(expected.cagr));
+  expect(validationSpy).not.toHaveBeenCalled();
+  expect(optimizationSpy).toHaveBeenCalledTimes(optimizationCount);
   await user.click(screen.getByRole("button", { name: "Normaliser à 100 %" }));
   const total = screen.getAllByRole("spinbutton", { name: /Poids saisi pour/ }).reduce((sum, e) => sum + Number((e as HTMLInputElement).value), 0);
   expect(total).toBeCloseTo(100, 0);
@@ -49,6 +56,26 @@ it("preserves portfolio controls, manual weights, normalization and selection ta
   await waitFor(() => expect(screen.getByText("Corrélation moyenne des paires")).toBeTruthy());
   await user.click(screen.getByRole("tab", { name: "Portefeuille" }));
   expect((screen.getByRole("spinbutton", { name: "Poids saisi pour MSCI World" }) as HTMLInputElement).value).not.toBe("60");
+}, UI_TEST_TIMEOUT);
+
+it("defers portfolio optimizations outside the portfolio tab and preserves the goal profile", async () => {
+  const user = userEvent.setup();
+  const optimizeSpy = vi.spyOn(optimization, "optimize");
+  const validationSpy = vi.spyOn(validation, "runWalkForwardOptimized");
+  window.history.replaceState({}, "", window.location.href.replace("tab=portfolio", "tab=overview"));
+  render(<App />);
+  await screen.findByRole("tab", { name: "Portefeuille" });
+  expect(optimizeSpy).not.toHaveBeenCalled();
+  expect(validationSpy).not.toHaveBeenCalled();
+  await user.click(screen.getByRole("tab", { name: "Portefeuille" }));
+  await user.click(screen.getByRole("button", { name: /^Objectif patrimonial/ }));
+  const initialCapital = screen.getByRole("spinbutton", { name: "Capital initial" });
+  expect(screen.getByRole("spinbutton", { name: "Capital cible" })).toBeTruthy();
+  expect(screen.getByRole("spinbutton", { name: "Horizon patrimonial" })).toBeTruthy();
+  fireEvent.change(initialCapital, { target: { value: "50000" } });
+  expect((initialCapital as HTMLInputElement).value).toBe("50000");
+  expect(screen.getByText(/des simulations atteignent l'objectif/)).toBeTruthy();
+  expect(validationSpy).not.toHaveBeenCalled();
 }, UI_TEST_TIMEOUT);
 
 it("shows an explicit load error if a historical series is unavailable", async () => {

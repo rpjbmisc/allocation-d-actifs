@@ -250,18 +250,32 @@ function uncertainty(windowCount: number): string {
   return "indicative · à interpréter avec prudence";
 }
 
-export function runWalkForward(input: WalkForwardInput): WalkForwardResult {
+function walkForwardBase(input: WalkForwardInput): Omit<WalkForwardResult, "strategies"> {
   const settings = normalizedSettings(input.settings) ?? DEFAULT_SETTINGS;
   const diagnostics: string[] = [];
   if (!normalizedSettings(input.settings)) diagnostics.push("Les paramètres de fenêtres sont invalides ; les valeurs par défaut 20 ans / 5 ans sont utilisées.");
   if (!input.assetIds.length || new Set(input.assetIds).size !== input.assetIds.length) diagnostics.push("L'univers de validation est vide ou contient des doublons.");
 
   const windows = buildWalkForwardWindows(input.data, input.assetIds, input.periodStart, input.periodEnd, input.returnMode, settings);
+  return { settings, windows, diagnostics: uniqueDiagnostics(diagnostics), uncertainty: uncertainty(windows.length) };
+}
+
+export function runWalkForwardOptimized(input: Omit<WalkForwardInput, "customWeights">): WalkForwardResult {
+  const fullInput = { ...input, customWeights: {} };
+  const base = walkForwardBase(fullInput);
+  const { windows } = base;
+  return { ...base, strategies: [
+    strategyResult("growth", "Croissance", windows, optimizationEvaluations(fullInput, windows, "growth")),
+    strategyResult("robust", "Robustesse", windows, optimizationEvaluations(fullInput, windows, "robust")),
+    strategyResult("goal", "Objectif patrimonial", windows, optimizationEvaluations(fullInput, windows, "goal")),
+  ] };
+}
+
+export function runWalkForwardFixed(input: WalkForwardInput): WalkForwardResult {
+  const base = walkForwardBase(input);
+  const { windows } = base;
   const customWeights = normalizeWeights(Object.fromEntries(input.assetIds.map(id => [id, input.customWeights[id] ?? 0])));
   const equalWeights = normalizeWeights(Object.fromEntries(input.assetIds.map(id => [id, 1])));
-  const growth = strategyResult("growth", "Croissance", windows, optimizationEvaluations(input, windows, "growth"));
-  const robust = strategyResult("robust", "Robustesse", windows, optimizationEvaluations(input, windows, "robust"));
-  const goal = strategyResult("goal", "Objectif patrimonial", windows, optimizationEvaluations(input, windows, "goal"));
   const custom = strategyResult("custom", "Personnalisée", windows, windows.map(window => fixedEvaluation(input.data, input.returnMode, window, customWeights)), ["Poids cibles choisis aujourd'hui, appliqués rétrospectivement ; ce n'est pas une stratégie réoptimisée."]);
   const equal = strategyResult("equal", "Équipondérée", windows, windows.map(window => fixedEvaluation(input.data, input.returnMode, window, equalWeights)));
 
@@ -271,10 +285,15 @@ export function runWalkForward(input: WalkForwardInput): WalkForwardResult {
     : strategyResult("benchmark", "MSCI World", windows, [], ["Benchmark indépendant indisponible dans les données chargées."]);
 
   return {
-    settings,
-    windows,
-    strategies: [growth, robust, goal, custom, equal, benchmark],
-    diagnostics: uniqueDiagnostics(diagnostics),
-    uncertainty: uncertainty(windows.length),
+    ...base,
+    strategies: [custom, equal, benchmark],
   };
+}
+
+export function combineWalkForwardResults(optimized: WalkForwardResult, fixed: WalkForwardResult): WalkForwardResult {
+  return { ...optimized, strategies: [...optimized.strategies, ...fixed.strategies] };
+}
+
+export function runWalkForward(input: WalkForwardInput): WalkForwardResult {
+  return combineWalkForwardResults(runWalkForwardOptimized(input), runWalkForwardFixed(input));
 }

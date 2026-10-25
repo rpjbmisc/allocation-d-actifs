@@ -143,8 +143,7 @@ export function generateJointScenarios(input: ScenarioInput, rawSettings?: Parti
   return { settings, historicalYears: aligned.years, scenarios, diagnostics: [] };
 }
 
-function empiricalQuantile(values: number[], quantilePct: number): number {
-  const sorted = [...values].sort((left, right) => left - right);
+function empiricalQuantileSorted(sorted: number[], quantilePct: number): number {
   if (sorted.length === 1) return sorted[0];
   const position = (sorted.length - 1) * quantilePct / 100;
   const lower = Math.floor(position);
@@ -156,9 +155,13 @@ function empiricalQuantile(values: number[], quantilePct: number): number {
 export function scenarioPortfolioCagr(scenario: JointScenario, weights: Record<string, number>): number | null {
   const normalized = normalizeWeights(weights);
   if (!normalized) return null;
+  return scenarioCagrWithEntries(scenario, Object.entries(normalized));
+}
+
+function scenarioCagrWithEntries(scenario: JointScenario, entries: Array<[string, number]>): number | null {
   const horizon = Object.values(scenario.annualReturns)[0]?.length ?? 0;
-  if (!horizon || Object.keys(normalized).some(id => (scenario.annualReturns[id]?.length ?? 0) !== horizon)) return null;
-  const returns = Array.from({ length: horizon }, (_, index) => Object.entries(normalized).reduce(
+  if (!horizon || entries.some(([id]) => (scenario.annualReturns[id]?.length ?? 0) !== horizon)) return null;
+  const returns = Array.from({ length: horizon }, (_, index) => entries.reduce(
     (total, [id, weight]) => total + weight * scenario.annualReturns[id][index],
     0,
   ));
@@ -170,11 +173,15 @@ export function summarizeScenarioPortfolio(
   weights: Record<string, number>,
   settings: ScenarioSettings,
 ): ScenarioSummary | null {
-  const cagrs = scenarios.map(scenario => scenarioPortfolioCagr(scenario, weights));
+  const normalized = normalizeWeights(weights);
+  if (!normalized) return null;
+  const entries = Object.entries(normalized);
+  const cagrs = scenarios.map(scenario => scenarioCagrWithEntries(scenario, entries));
   if (!cagrs.length || cagrs.some(cagr => cagr === null || !Number.isFinite(cagr))) return null;
   const values = cagrs as number[];
-  const quantileCagr = empiricalQuantile(values, settings.quantilePct);
-  const medianCagr = empiricalQuantile(values, 50);
+  const sorted = [...values].sort((left, right) => left - right);
+  const quantileCagr = empiricalQuantileSorted(sorted, settings.quantilePct);
+  const medianCagr = empiricalQuantileSorted(sorted, 50);
   return {
     scenarioCount: values.length,
     horizonYears: settings.horizonYears,

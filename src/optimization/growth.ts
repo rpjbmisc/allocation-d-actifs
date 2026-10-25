@@ -1,6 +1,7 @@
 import { alignAnnualSeries } from "../domain/data";
-import { computePortfolio } from "../domain/portfolio";
-import { validateWeights } from "../domain/constraints";
+import { summarizePortfolioReturns } from "../domain/portfolio";
+import { normalizeWeights, validateWeights } from "../domain/constraints";
+import { returnValue } from "../domain/returns";
 import type { PortfolioStats } from "../domain/types";
 import type { AllocationInput, OptimizationResult, PortfolioConstraints } from "./interface";
 
@@ -126,6 +127,31 @@ export function searchGrid<Metadata = undefined>(
   const state: GridSearchState<Metadata> = { best: null, evaluatedCandidates: 0, stoppedByBudget: false };
   const mode = inputs.returnMode ?? "nominal";
 
+  // Keep alignment local to this search. A zero-weight asset must not affect
+  // baseline-year handling, so cache each active subset independently.
+  const preparedBySubset = new Map<string, { years: number[]; returns: number[][] } | null>();
+  const evaluate = (weights: Record<string, number>): PortfolioStats | null => {
+    const normalized = normalizeWeights(weights);
+    if (!normalized) return null;
+    const entries = Object.entries(normalized).filter(([, weight]) => weight > 0);
+    const ids = entries.map(([id]) => id);
+    const key = JSON.stringify(ids);
+    if (!preparedBySubset.has(key)) {
+      const aligned = alignAnnualSeries(inputs.data, ids, inputs.trainStart, inputs.trainEnd, mode);
+      preparedBySubset.set(key, aligned.ok ? {
+        years: aligned.years,
+        returns: aligned.years.map(year => ids.map(id => returnValue(aligned.rowsByAsset[id].get(year)!, mode) as number)),
+      } : null);
+    }
+    const prepared = preparedBySubset.get(key);
+    if (!prepared) return null;
+    return summarizePortfolioReturns(prepared.years.map((year, index) => ({
+      year,
+      // Preserve the original asset order and floating-point operation order.
+      return: entries.reduce((sum, [, weight], assetIndex) => sum + weight * prepared.returns[index][assetIndex], 0),
+    })));
+  };
+
   const visit = (index: number, remainingUnits: number, units: number[]) => {
     if (state.evaluatedCandidates >= constraints.maxEvaluations) {
       state.stoppedByBudget = true;
@@ -145,7 +171,7 @@ export function searchGrid<Metadata = undefined>(
         return [id, Object.is(weight, -0) ? 0 : weight];
       }));
       state.evaluatedCandidates += 1;
-      const stats = computePortfolio(inputs.data, weights, inputs.trainStart, inputs.trainEnd, mode);
+      const stats = evaluate(weights);
        if (!stats || !candidateRespectsConstraints(weights, stats, assetIds, constraints)) return;
        const score = scoreCandidate(weights, stats);
        if (!score || !Number.isFinite(score.score)) return;

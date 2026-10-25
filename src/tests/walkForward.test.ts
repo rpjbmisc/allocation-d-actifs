@@ -1,6 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import * as optimization from "../optimization/interface";
 import { rows } from "./fixtures";
-import { buildWalkForwardWindows, calculateWeightStability, runWalkForward, weightStabilityLabel } from "../analytics";
+import { buildWalkForwardWindows, calculateWeightStability, combineWalkForwardResults, runWalkForward, runWalkForwardOptimized, runWalkForwardFixed, weightStabilityLabel } from "../analytics";
 
 const constraints = {
   longOnly: true as const,
@@ -11,6 +12,26 @@ const constraints = {
 };
 
 describe("walk-forward validation", () => {
+  it("updates custom validation without rerunning optimizers and retains the goal strategy", () => {
+    const input = {
+      data: { a: rows([10, 10, 10, 5, 5]), b: rows([5, 5, 5, 10, 10]) },
+      assetIds: ["a", "b"], periodStart: 2000, periodEnd: 2004,
+      returnMode: "nominal" as const, customWeights: { a: 100, b: 0 },
+      settings: { minTrainYears: 3, testYears: 2, expanding: true }, constraints,
+      scenarioSettings: { scenarioCount: 20, horizonYears: 4, blockYears: 1, seed: 99, quantilePct: 20 },
+    };
+    const optimized = runWalkForwardOptimized(input);
+    const spy = vi.spyOn(optimization, "optimize");
+    try {
+      const fixed = runWalkForwardFixed({ ...input, customWeights: { a: 0, b: 100 } });
+      expect(spy).not.toHaveBeenCalled();
+      const combined = combineWalkForwardResults(optimized, fixed);
+      expect(combined.strategies.map(strategy => strategy.id)).toEqual(["growth", "robust", "goal", "custom", "equal", "benchmark"]);
+      expect(combined.strategies.find(strategy => strategy.id === "custom")!.stats!.points.map(point => point.return)).toEqual([10, 10]);
+      expect(combined.strategies.find(strategy => strategy.id === "goal")).toEqual(optimized.strategies.find(strategy => strategy.id === "goal"));
+    } finally { spy.mockRestore(); }
+  });
+
   it("calculates weight rotation in percentage points and classifies stability", () => {
     const result = calculateWeightStability([
       { stocks: 0.8, gold: 0.2 },

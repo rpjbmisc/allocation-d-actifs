@@ -39,6 +39,27 @@ describe("joint historical scenarios", () => {
     });
   });
 
+  it("preserves exact summary values after reusing normalized weights and sorted quantiles", () => {
+    const settings = { scenarioCount: 13, horizonYears: 9, blockYears: 2, seed: 123, quantilePct: 17 };
+    const generated = generateJointScenarios(input, settings);
+    const weights = { b: 63.2, a: 36.9 };
+    const values = generated.scenarios.map(scenario => scenarioPortfolioCagr(scenario, weights)!);
+    const quantile = (pct: number) => {
+      const sorted = [...values].sort((a, b) => a - b);
+      const position = (sorted.length - 1) * pct / 100;
+      const lower = Math.floor(position), upper = Math.ceil(position);
+      return lower === upper ? sorted[lower] : sorted[lower] + (sorted[upper] - sorted[lower]) * (position - lower);
+    };
+    expect(summarizeScenarioPortfolio(generated.scenarios, weights, settings)).toEqual({
+      ...settings,
+      quantileCagr: quantile(settings.quantilePct),
+      medianCagr: quantile(50),
+      worstCagr: Math.min(...values),
+      bestCagr: Math.max(...values),
+      fragilityCagr: quantile(50) - quantile(settings.quantilePct),
+    });
+  });
+
   it("composes a scenario portfolio with annual rebalancing", () => {
     const scenario = {
       index: 0,
