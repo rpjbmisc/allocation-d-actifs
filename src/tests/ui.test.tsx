@@ -91,11 +91,12 @@ it("exposes comparison and walk-forward spaces without removing manual construct
   render(<App />);
   await screen.findByRole("spinbutton", { name: "Poids saisi pour MSCI World" });
 
-  await user.click(screen.getByRole("button", { name: /^Robustesse/ }));
-  expect(screen.getByText("Visualiser les scénarios")).toBeTruthy();
-  const advanced = screen.getByText("Réglages avancés (facultatifs)");
+  await user.click(screen.getByRole("button", { name: /^Tout-terrain/ }));
+  expect(screen.getByText("1. Quatre futurs économiques à explorer")).toBeTruthy();
+  expect(screen.getByText("2. Croissance contre Tout-terrain")).toBeTruthy();
+  const advanced = screen.getByText("Paramètres avancés : modifier les quatre futurs et leurs hypothèses");
   fireEvent.click(advanced);
-  fireEvent.change(screen.getByRole("spinbutton", { name: "Nombre de scénarios" }), { target: { value: "40" } });
+  fireEvent.change(screen.getByRole("spinbutton", { name: "Simulations par régime" }), { target: { value: "40" } });
   fireEvent.change(screen.getByRole("spinbutton", { name: "Poids saisi pour MSCI World" }), { target: { value: "37" } });
   expect((screen.getByRole("spinbutton", { name: "Poids saisi pour MSCI World" }) as HTMLInputElement).value).toBe("37");
   expect(screen.getByText(/Pondérations personnalisées/)).toBeTruthy();
@@ -114,22 +115,23 @@ it("exposes comparison and walk-forward spaces without removing manual construct
   expect(screen.getByText(/Légende :/)).toBeTruthy();
 }, UI_TEST_TIMEOUT);
 
-it("explains all three prospective optimization choices in clear language", async () => {
+it("shows a single understandable Tout-terrain comparison with four futures and no historical selector", async () => {
   const user = userEvent.setup();
   render(<App />);
   await screen.findByRole("spinbutton", { name: "Poids saisi pour MSCI World" });
-  await user.click(screen.getByRole("button", { name: /^Robustesse/ }));
-  await user.click(screen.getByRole("radio", { name: /Futurs possibles/ }));
-  for (const choice of ["Limiter les mauvaises surprises", "Mieux résister au pire scénario", "Chercher le meilleur rendement moyen"]) {
-    const radio = screen.getByRole("radio", { name: choice });
-    expect(radio).toBeTruthy();
-    const tip = screen.getByRole("button", { name: `Comprendre : ${choice}` });
-    expect(tip).toBeTruthy();
-    await user.click(tip);
-    expect(tip.getAttribute("aria-expanded")).toBe("true");
-    await user.click(radio);
-    expect((radio as HTMLInputElement).checked).toBe(true);
-  }
+  await user.click(screen.getByRole("button", { name: /^Tout-terrain/ }));
+  expect(screen.queryByRole("radio", { name: /Futurs possibles/ })).toBeNull();
+  expect(screen.queryByRole("radio", { name: /Historique/ })).toBeNull();
+  expect(screen.queryByRole("radio", { name: /Limiter les mauvaises surprises/ })).toBeNull();
+  expect(screen.getByText("1. Quatre futurs économiques à explorer")).toBeTruthy();
+  expect(screen.getByText("2. Croissance contre Tout-terrain")).toBeTruthy();
+  expect(screen.getByText("3. Ce que tu gagnes — et ce que tu sacrifies")).toBeTruthy();
+  expect(screen.getAllByText("Croissance américaine").length).toBeGreaterThan(0);
+  expect(screen.getAllByText("Inflation durable").length).toBeGreaterThan(0);
+  expect(screen.getAllByText("Crise prolongée").length).toBeGreaterThan(0);
+  expect(document.querySelector(".terrain-table")).toBeTruthy();
+  await user.click(screen.getByText("Paramètres avancés : modifier les quatre futurs et leurs hypothèses"));
+  expect(screen.getByRole("spinbutton", { name: /Ajustement Inflation durable MSCI World/ })).toBeTruthy();
 }, UI_TEST_TIMEOUT);
 
 it("keeps partially covered assets selected outside the portfolio and excludes them only from strict portfolio calculations", async () => {
@@ -170,7 +172,7 @@ it("allows direct selection of assets with no preset-mode selector", async () =>
 
   // Portfolio optimization methods remain available, independent of asset selection.
   expect(screen.getByRole("group", { name: "Profils d'optimisation" })).toBeTruthy();
-  expect(screen.getByRole("button", { name: /^Robustesse/ })).toBeTruthy();
+  expect(screen.getByRole("button", { name: /^Tout-terrain/ })).toBeTruthy();
 }, UI_TEST_TIMEOUT);
 
 it("keeps custom weights and selected assets across automatic profiles and reloads", async () => {
@@ -179,7 +181,7 @@ it("keeps custom weights and selected assets across automatic profiles and reloa
   const weight = await screen.findByRole("spinbutton", { name: "Poids saisi pour MSCI World" });
   fireEvent.change(weight, { target: { value: "43" } });
   expect(screen.getByText(/Pondérations personnalisées : ton allocation/)).toBeTruthy();
-  await user.click(screen.getByRole("button", { name: /^Robustesse/ }));
+  await user.click(screen.getByRole("button", { name: /^Tout-terrain/ }));
   await user.click(screen.getByRole("button", { name: /^Objectif patrimonial/ }));
   await user.click(screen.getByRole("button", { name: /^Croissance/ }));
   await user.click(screen.getByRole("button", { name: /^Personnalisé/ }));
