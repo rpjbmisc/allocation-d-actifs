@@ -35,6 +35,7 @@ const countries: Record<string, { name: string; zone: string }> = {
   US:{name:"États-Unis",zone:"Amérique du Nord"},
   CA:{name:"Canada",zone:"Amérique du Nord"},
   JP:{name:"Japon",zone:"Japon"},
+  IL:{name:"Israël",zone:"Autres marchés développés"},
   AU:{name:"Australie",zone:"Asie-Pacifique développée hors Japon"},
   NZ:{name:"Nouvelle-Zélande",zone:"Asie-Pacifique développée hors Japon"},
   SG:{name:"Singapour",zone:"Asie-Pacifique développée hors Japon"},
