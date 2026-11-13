@@ -18,36 +18,73 @@
     "msci_world": {
       "kind": "equity",
       "countries": {
-        "US": 72.77,
-        "JP": 5.72,
-        "GB": 3.52,
-        "CA": 3.44,
-        "CH": 2.34,
-        "OTHER": 12.21
+        "US": 72.88,
+        "JP": 5.49,
+        "GB": 3.55,
+        "CA": 3.47,
+        "CH": 2.37,
+        "FR": 2.27,
+        "DE": 2.14,
+        "AU": 1.56,
+        "NL": 1.26,
+        "ES": 0.92,
+        "SE": 0.85,
+        "IT": 0.77,
+        "HK": 0.43,
+        "DK": 0.41,
+        "SG": 0.4,
+        "BE": 0.28,
+        "IL": 0.26,
+        "FI": 0.26,
+        "NO": 0.16,
+        "IE": 0.1,
+        "AT": 0.08,
+        "PT": 0.05,
+        "NZ": 0.04
       },
       "sizes": {
         "large_mid": 100
       },
       "factor": "none",
-      "source": "https://www.msci.com/documents/10199/178e6643-6ae6-47b9-82be-e1fc565ededb",
-      "asOf": "2026-10-30"
+      "source": "https://www.ssga.com/fr/en_gb/intermediary/etfs/state-street-spdr-msci-world-ucits-etf-acc-sppw-gy",
+      "asOf": "2026-11-04",
+      "basis": "proxy_etf",
+      "note": "Proxy ETF State Street SPDR MSCI World : 23 pays répliquant le MSCI World, données du 4 novembre 2026. Écart de 0,01 point dû aux arrondis publiés."
     },
     "msci_world_ex_usa": {
       "kind": "equity",
       "countries": {
-        "JP": 21.84,
-        "GB": 12.61,
-        "CA": 12.17,
-        "FR": 8.27,
-        "CH": 7.92,
-        "OTHER": 37.19
+        "JP": 20.243362831858406,
+        "GB": 13.089970501474923,
+        "CA": 12.794985250737462,
+        "CH": 8.738938053097343,
+        "FR": 8.370206489675516,
+        "DE": 7.890855457227137,
+        "AU": 5.752212389380531,
+        "NL": 4.646017699115044,
+        "ES": 3.392330383480825,
+        "SE": 3.134218289085545,
+        "IT": 2.839233038348082,
+        "HK": 1.585545722713864,
+        "DK": 1.5117994100294982,
+        "SG": 1.4749262536873153,
+        "BE": 1.0324483775811208,
+        "IL": 0.958702064896755,
+        "FI": 0.958702064896755,
+        "NO": 0.5899705014749261,
+        "IE": 0.36873156342182883,
+        "AT": 0.29498525073746307,
+        "PT": 0.18436578171091442,
+        "NZ": 0.14749262536873153
       },
       "sizes": {
         "large_mid": 100
       },
       "factor": "none",
-      "source": "https://www.msci.com/documents/10199/255599/msci-world-ex-usa-index-price-usd.pdf",
-      "asOf": "2026-09-30"
+      "source": "https://www.ssga.com/fr/en_gb/intermediary/etfs/state-street-spdr-msci-world-ucits-etf-acc-sppw-gy",
+      "asOf": "2026-11-04",
+      "basis": "proxy_etf",
+      "note": "Estimation dérivée de la ventilation pays de l'ETF SPDR MSCI World au 4 novembre 2026 : exclusion des États-Unis et renormalisation du reste. Ce n'est pas la composition publiée directement par MSCI World ex USA."
     },
     "msci_world_small_cap_value": {
       "kind": "equity",
