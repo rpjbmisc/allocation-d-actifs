@@ -547,7 +547,7 @@ function App() {
     const proposal = profile === "growth" ? growthOptimization : profile === "robust" ? activeRobustOptimization : goalOptimization;
     if (!proposal.weights) return;
     setOptimizationProfile(profile);
-    setAllocationIntent(profile === "growth" ? "growth" : profile);
+    setAllocationIntent(profile === "growth" && allocationIntent === "controlled" ? "controlled" : profile);
     setAutomaticWeights(true);
     setWeights((current) => selectedAssets.reduce(
       (next, asset) => ({ ...next, [asset.id]: (proposal.weights?.[asset.id] ?? 0) * 100 }),
