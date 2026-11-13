@@ -723,6 +723,8 @@ function App() {
                     diversificationRatio={diversificationRatio}
                     mode={mode}
                     automaticWeights={automaticWeights}
+                     hasCustomAllocation={customAllocation !== null}
+                     onCopyToCustom={copyCurrentToCustom}
                      optimizationProfile={optimizationProfile}
                      growthConstraints={growthConstraints}
                      growthOptimization={optimizationResult}
@@ -952,11 +954,11 @@ function correlationColor(value: number | null, diagonal: boolean): string {
 }
 
 function optimizationProfileLabel(profile: PortfolioOptimizationProfile): string {
-  return profile === "growth" ? "Croissance" : profile === "robust" ? "Robustesse" : "Objectif patrimonial";
+  return profile === "growth" ? "Croissance" : profile === "robust" ? "Robustesse" : profile === "goal" ? "Objectif patrimonial" : "Personnalisé";
 }
 
 function optimizationProfileDescription(profile: PortfolioOptimizationProfile): string {
-  return profile === "growth" ? "meilleur TCAM historique sous contraintes configurables" : profile === "robust" ? "quantile défavorable du TCAM simulé" : "probabilité d’atteindre un capital cible";
+  return profile === "growth" ? "meilleur TCAM historique sous contraintes configurables" : profile === "robust" ? "quantile défavorable du TCAM simulé" : profile === "goal" ? "probabilité d’atteindre un capital cible" : "pondérations enregistrées";
 }
 
 function PortfolioView({
@@ -973,6 +975,8 @@ function PortfolioView({
   diversificationRatio,
   mode,
   automaticWeights,
+  hasCustomAllocation,
+  onCopyToCustom,
   optimizationProfile,
   growthConstraints,
   growthOptimization,
@@ -1009,6 +1013,8 @@ function PortfolioView({
   diversificationRatio: number | null;
   mode: Mode;
   automaticWeights: boolean;
+  hasCustomAllocation: boolean;
+  onCopyToCustom: () => void;
   optimizationProfile: PortfolioOptimizationProfile;
   growthConstraints: GrowthConstraintSettings;
   growthOptimization: OptimizationResult;
@@ -1046,6 +1052,7 @@ function PortfolioView({
     { id: "growth", label: "Croissance", shortDescription: growthProposal.feasible ? "TCAM historique maximal" : "Aucune solution faisable" },
     { id: "robust", label: "Robustesse", shortDescription: robustProposal.feasible ? "Mieux résister aux années difficiles" : "Aucune solution possible" },
     { id: "goal", label: "Objectif patrimonial", shortDescription: goalProposal.feasible ? "Atteindre un capital cible" : "Aucune solution possible" },
+    { id: "custom", label: "Personnalisé", shortDescription: hasCustomAllocation ? "Retrouver mes poids sauvegardés" : "Définir mes propres poids" },
   ];
 
   return <div className="portfolio-view">
@@ -1058,15 +1065,18 @@ function PortfolioView({
     <section className="portfolio-controls">
       <div className="card-heading compact">
         <div className="heading-icon"><SlidersHorizontal size={17} /></div>
-        <div><h2>Construire une allocation</h2><p>{automaticWeights ? growthOptimization.feasible ? `Proposition automatique : ${optimizationProfileDescription(optimizationProfile)}. Tu peux modifier les pondérations.` : "Aucune allocation ne respecte les contraintes choisies." : growthOptimization.feasible ? `Pondérations personnalisées. Profil sélectionné : ${optimizationProfileLabel(optimizationProfile)}.` : "Aucune allocation historique ne peut être calculée sur cette configuration."}</p></div>
+        <div><h2>Construire une allocation</h2><p>{optimizationProfile === "custom" ? "Pondérations personnalisées : ton allocation est enregistrée sur cet appareil." : automaticWeights ? `Proposition automatique : ${optimizationProfileDescription(optimizationProfile)}. Modifier les poids crée une allocation personnalisée.` : `Profil : ${optimizationProfileLabel(optimizationProfile)}. Choisis une proposition ou modifie les poids.`}</p></div>
       </div>
       <div className="optimization-profiles">
-        <div className="optimization-profiles-heading"><span>Proposition automatique</span><small>Calculée sur la configuration actuelle</small></div>
+        <div className="optimization-profiles-heading"><span>Mode d’allocation</span><small>Trois propositions et ton allocation</small></div>
         <div className="optimization-profile-list" role="group" aria-label="Profils d'optimisation">
-          {profileOptions.map((profile) => <button key={profile.id} className={`optimization-profile ${optimizationProfile === profile.id ? "active" : ""}`} disabled={profile.id === "growth" ? !growthProposal.feasible : profile.id === "robust" ? !robustProposal.feasible : !goalProposal.feasible} onClick={() => onOptimizationProfileChange(profile.id)} title={(profile.id === "growth" ? growthProposal : profile.id === "robust" ? robustProposal : goalProposal).feasible ? profile.shortDescription : "Aucune allocation ne respecte les contraintes choisies"}>
+          {profileOptions.map((profile) => <button key={profile.id} className={`optimization-profile ${optimizationProfile === profile.id ? "active" : ""}`} disabled={profile.id === "growth" ? !growthProposal.feasible : profile.id === "robust" ? !robustProposal.feasible : profile.id === "goal" ? !goalProposal.feasible : false} onClick={() => onOptimizationProfileChange(profile.id)} title={profile.shortDescription}>
             <strong>{profile.label}</strong><span>{profile.shortDescription}</span>
           </button>)}
         </div>
+        {optimizationProfile === "custom"
+          ? <p className="custom-profile-explanation">Tes poids et ta sélection d'actifs sont sauvegardés dans ce navigateur. Explore les autres modes puis reviens ici à tout moment.</p>
+          : <button type="button" className="copy-custom-button" onClick={onCopyToCustom}>{hasCustomAllocation ? "Remplacer mon allocation personnalisée…" : "Copier dans Personnalisé"}</button>}
         {optimizationProfile === "goal" && <div className="robust-settings" aria-label="Réglages de l'objectif patrimonial">
           <div className="robust-simple-heading"><strong>Quel capital souhaites-tu atteindre ?</strong><p>Les simulations utilisent les rendements annuels historiques dans la devise et le mode nominal/réel affichés.</p></div>
           <div className="robust-settings-grid">
@@ -1154,14 +1164,14 @@ function PortfolioView({
           </details>
         </>}
         </div>}
-        <div className="growth-constraints" aria-label="Contraintes du profil Croissance">
+        {optimizationProfile !== "custom" && <div className="growth-constraints" aria-label="Contraintes des profils automatiques">
           <div className="growth-constraints-heading"><span>Contraintes de recherche</span><small>Les valeurs sont modifiables et ne constituent pas des normes universelles.</small></div>
           <label>Plafond par actif <input aria-label="Plafond de poids par actif" type="number" min="0" max="100" step="1" value={growthConstraints.maxWeightPct} onChange={(event) => onGrowthConstraintsChange({ maxWeightPct: Math.max(0, Math.min(100, Number(event.target.value))) })} /> <span>%</span></label>
           <label><input aria-label="Activer le budget de drawdown annuel" type="checkbox" checked={growthConstraints.maxAnnualCloseDrawdownPct !== null} onChange={(event) => onGrowthConstraintsChange({ maxAnnualCloseDrawdownPct: event.target.checked ? 40 : null })} /> Drawdown maximal de clôture annuelle <input aria-label="Budget de drawdown annuel" type="number" min="0" max="100" step="1" value={growthConstraints.maxAnnualCloseDrawdownPct ?? ""} disabled={growthConstraints.maxAnnualCloseDrawdownPct === null} onChange={(event) => onGrowthConstraintsChange({ maxAnnualCloseDrawdownPct: Math.max(0, Math.min(100, Number(event.target.value))) })} /> <span>%</span></label>
           <label><input aria-label="Activer le budget de volatilité annuelle" type="checkbox" checked={growthConstraints.maxAnnualVolatilityPct !== null} onChange={(event) => onGrowthConstraintsChange({ maxAnnualVolatilityPct: event.target.checked ? 20 : null })} /> Volatilité annuelle maximale <input aria-label="Budget de volatilité annuelle" type="number" min="0" step="1" value={growthConstraints.maxAnnualVolatilityPct ?? ""} disabled={growthConstraints.maxAnnualVolatilityPct === null} onChange={(event) => onGrowthConstraintsChange({ maxAnnualVolatilityPct: Math.max(0, Number(event.target.value)) })} /> <span>%</span></label>
         </div>
          {growthOptimization.diagnostics.length > 0 && <p className="optimization-profile-note">{growthOptimization.diagnostics.join(" ")}</p>}
-      </div>
+      </div>}
       <div className="weight-list">
         {assets.map((asset) => {
           const enteredWeight = weights[asset.id] ?? 0;
