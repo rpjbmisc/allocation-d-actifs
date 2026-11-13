@@ -148,5 +148,65 @@
     "kpiNomClass": "text-violet-600",
     "startYear": 1925,
     "endYear": 2025
+  },
+  {
+    "id": "msci_pacific_ex_japan_imi",
+    "name": "MSCI Pacific ex Japan IMI",
+    "csvFile": "CAGR_msci-pacific-ex-japan-imi_ntr.csv",
+    "accentColor": "#0D9488",
+    "headingClass": "text-teal-700",
+    "kpiNomClass": "text-teal-600",
+    "startYear": 1994,
+    "endYear": 2025
+  },
+  {
+    "id": "msci_em_asia",
+    "name": "MSCI Emerging Markets Asia",
+    "csvFile": "CAGR_msciem-asia_ntr.csv",
+    "accentColor": "#BE123C",
+    "headingClass": "text-teal-700",
+    "kpiNomClass": "text-teal-600",
+    "startYear": 2000,
+    "endYear": 2025
+  },
+  {
+    "id": "msci_japan",
+    "name": "MSCI Japan",
+    "csvFile": "CAGR_msci-japan_ntr.csv",
+    "accentColor": "#B91C1C",
+    "headingClass": "text-teal-700",
+    "kpiNomClass": "text-teal-600",
+    "startYear": 1995,
+    "endYear": 2025
+  },
+  {
+    "id": "msci_europe_small_cap_weighted",
+    "name": "MSCI Europe Small Cap Weighted",
+    "csvFile": "CAGR_msci-europe-small-cap-weighted_ntr.csv",
+    "accentColor": "#16A34A",
+    "headingClass": "text-teal-700",
+    "kpiNomClass": "text-teal-600",
+    "startYear": 1994,
+    "endYear": 2025
+  },
+  {
+    "id": "msci_usa_small_cap_weighted",
+    "name": "MSCI USA Small Cap Weighted",
+    "csvFile": "CAGR_msci-usa-small-cap-weighted_ntr.csv",
+    "accentColor": "#65A30D",
+    "headingClass": "text-teal-700",
+    "kpiNomClass": "text-teal-600",
+    "startYear": 1994,
+    "endYear": 2025
+  },
+  {
+    "id": "msci_europe",
+    "name": "MSCI Europe",
+    "csvFile": "CAGR_msci-europe_ntr.csv",
+    "accentColor": "#0891B2",
+    "headingClass": "text-teal-700",
+    "kpiNomClass": "text-teal-600",
+    "startYear": 1995,
+    "endYear": 2025
   }
 ]

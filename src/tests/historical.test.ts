@@ -16,7 +16,7 @@ describe("historical input audit", () => {
   });
   it("loads the real registry, CSV series, FX, CPI and static presets", async () => {
     const loaded = await loadHistoricalData("/", diskFetch);
-    expect(loaded.assets).toHaveLength(15); expect(Object.keys(loaded.rawData)).toHaveLength(15); expect(loaded.presets.length).toBeGreaterThan(0);
+    expect(loaded.assets).toHaveLength(21); expect(Object.keys(loaded.rawData)).toHaveLength(21); expect(loaded.presets.length).toBeGreaterThan(0);
     expect(loaded.currencyContext.usdPerEur[2000]).toBeGreaterThan(0);
   });
   it("reports missing files rather than silently loading an empty asset", async () => {
