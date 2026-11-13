@@ -83,6 +83,18 @@ export function assetCoversPeriod(rows: Row[] | undefined, start: number, end: n
   return alignAnnualSeries({ asset: rows ?? [] }, ["asset"], start, end, mode).ok;
 }
 
+/** Individual analyses use only the intersection with the requested interval.
+ * Unlike portfolio alignment, partial histories are allowed, but never gaps or invented returns. */
+export function assetAnalysisWindow(
+  rows: Row[] | undefined, start: number, end: number, mode: Mode = "nominal",
+): [number, number] | null {
+  if (!rows?.length || !Number.isInteger(start) || !Number.isInteger(end) || start > end) return null;
+  const years = rows.map(row => row.year);
+  const from = Math.max(start, Math.min(...years));
+  const to = Math.min(end, Math.max(...years));
+  return from <= to && assetCoversPeriod(rows, from, to, mode) ? [from, to] : null;
+}
+
 export function dataBounds(rows: Row[] | undefined, fallback: [number, number]): [number, number] {
   const years = rows?.map(row => row.year).filter(Number.isFinite) ?? [];
   return years.length ? [Math.min(...years), Math.max(...years)] : fallback;

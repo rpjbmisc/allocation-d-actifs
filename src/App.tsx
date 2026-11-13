@@ -30,6 +30,7 @@ import {
   normalizeWeights as normalizeAllocationWeights,
   maxDrawdown,
   assetCoversPeriod,
+  assetAnalysisWindow,
   dataBounds,
   computeGrowthData,
   computeDecadeData,
@@ -258,16 +259,27 @@ function App() {
     if (activeTab !== "portfolio") setPortfolioSpace("construction");
   }, [activeTab]);
 
-  const selectedAssets = useMemo(() => assets.filter((asset) => selected.includes(asset.id) && data[asset.id]?.length), [assets, data, selected]);
-  const commonBounds = selectedAssets.map((asset) => dataBounds(data[asset.id], [asset.startYear, asset.endYear]));
-  const commonStart = selectedAssets.length ? Math.max(...commonBounds.map(([start]) => start)) : 1970;
-  const commonEnd = selectedAssets.length ? Math.min(...commonBounds.map(([, end]) => end)) : 2025;
+  const allSelectedAssets = useMemo(() => assets.filter((asset) => selected.includes(asset.id) && data[asset.id]?.length), [assets, data, selected]);
+  const commonBounds = allSelectedAssets.map((asset) => dataBounds(data[asset.id], [asset.startYear, asset.endYear]));
+  const commonStart = allSelectedAssets.length ? Math.max(...commonBounds.map(([start]) => start)) : 1970;
+  const commonEnd = allSelectedAssets.length ? Math.min(...commonBounds.map(([, end]) => end)) : 2025;
   const effectiveRange: [number, number] = commonPeriod ? [commonStart, commonEnd] : range;
   const [start, end] = effectiveRange;
+  // Only portfolio calculations require every constituent to cover the complete interval.
+  // Keep the global selection intact when navigating between tabs.
+  const selectedAssets = useMemo(() => activeTab === "portfolio"
+    ? allSelectedAssets.filter((asset) => assetCoversPeriod(data[asset.id], start, end, mode))
+    : allSelectedAssets.filter((asset) => assetAnalysisWindow(data[asset.id], start, end, mode)),
+    [activeTab, allSelectedAssets, data, start, end, mode]);
+  const excludedPortfolioAssets = activeTab === "portfolio"
+    ? allSelectedAssets.filter((asset) => !selectedAssets.includes(asset)) : [];
   const duration = Math.max(0, end - start + 1);
   const portfolioVisible = !loading && !error && !isCorrelationPage && activeTab === "portfolio";
 
-  const stats = useMemo(() => Object.fromEntries(selectedAssets.map((asset) => [asset.id, computeStats(data[asset.id], start, end, mode)])), [data, end, mode, selectedAssets, start]);
+  const stats = useMemo(() => Object.fromEntries(selectedAssets.map((asset) => {
+    const window = activeTab === "portfolio" ? [start, end] : assetAnalysisWindow(data[asset.id], start, end, mode);
+    return [asset.id, window ? computeStats(data[asset.id], window[0], window[1], mode) : null];
+  })), [activeTab, data, end, mode, selectedAssets, start]);
   // The search space grows exponentially, so use a coarser deterministic grid for larger selections.
   const automaticSearchStep = selectedAssets.length >= 7 ? 20 : selectedAssets.length >= 5 ? 10 : 5;
   const growthOptimization = useMemo<OptimizationResult>(() => {
@@ -463,7 +475,7 @@ function App() {
   [optimizedWalkForward, fixedWalkForward, validationSettings]);
   const correlations = useMemo(() => computeCorrelationMatrix(data, selectedAssets.map((asset) => asset.id), start, end, mode), [data, end, mode, selectedAssets, start]);
   const availableAssets = assets.filter((asset) => data[asset.id]?.length);
-  const periodRestricted = !commonPeriod;
+  const periodRestricted = !commonPeriod && activeTab === "portfolio";
   const periodEligibleAssets = useMemo(() => new Set(assets.filter((asset) => assetCoversPeriod(data[asset.id], range[0], range[1])).map((asset) => asset.id)), [assets, data, range]);
   const visibleChartAssets = selectedAssets.filter((asset) => !hiddenAssets.includes(asset.id));
   const filteredAssets = assets.filter((asset) => {
@@ -476,7 +488,8 @@ function App() {
   const limitingAssets = selectedAssets.filter((asset) => asset.startYear === commonStart);
   const decisionStats = useMemo(() => selectedAssets.map((asset) => {
     const stat = stats[asset.id];
-    return stat ? { asset, stat, drawdown: maxDrawdown(data[asset.id], start, end, mode) } : null;
+    const window = assetAnalysisWindow(data[asset.id], start, end, mode);
+    return stat && window ? { asset, stat, drawdown: maxDrawdown(data[asset.id], window[0], window[1], mode) } : null;
   }).filter((entry): entry is { asset: Asset; stat: NonNullable<typeof stats[string]>; drawdown: number | null } => Boolean(entry)), [selectedAssets, stats, data, start, end, mode]);
   const bestAsset = [...decisionStats].sort((left, right) => (mode === "nominal" ? right.stat.cagrNominal ?? -Infinity : right.stat.cagrReal ?? -Infinity) - (mode === "nominal" ? left.stat.cagrNominal ?? -Infinity : left.stat.cagrReal ?? -Infinity))[0];
   const worstReturnAsset = [...decisionStats].sort((left, right) => (mode === "nominal" ? left.stat.cagrNominal ?? Infinity : left.stat.cagrReal ?? Infinity) - (mode === "nominal" ? right.stat.cagrNominal ?? Infinity : right.stat.cagrReal ?? Infinity))[0];
@@ -515,6 +528,7 @@ function App() {
 
   const toggleAsset = (id: string) => {
     if (activePreset !== "custom") return;
+    if (!selected.includes(id) && periodRestricted && !periodEligibleAssets.has(id)) return;
     setOptimizationProfile("growth");
     setSelected((current) => {
       if (current.includes(id)) return current.length > 1 ? current.filter((item) => item !== id) : current;
@@ -635,7 +649,7 @@ function App() {
                          const isSelected = selected.includes(asset.id);
                          const hasData = Boolean(data[asset.id]?.length);
                          const availableForPeriod = !periodRestricted || periodEligibleAssets.has(asset.id);
-                          return <button key={asset.id} className={`asset-chip ${isSelected ? "selected" : ""} ${!hasData || !availableForPeriod ? "unavailable" : ""}`} style={{ "--asset-color": asset.accentColor } as React.CSSProperties} onClick={() => toggleAsset(asset.id)} disabled={!hasData || (periodRestricted && !availableForPeriod) || activePreset !== "custom" || (!isSelected && selected.length >= MAX_SELECTED_ASSETS)} title={!hasData ? "Données indisponibles" : !availableForPeriod ? `Indice non disponible sur ${range[0]}–${range[1]}` : undefined} aria-pressed={isSelected}>
+                          return <button key={asset.id} className={`asset-chip ${isSelected ? "selected" : ""} ${!hasData || !availableForPeriod ? "unavailable" : ""}`} style={{ "--asset-color": asset.accentColor } as React.CSSProperties} onClick={() => toggleAsset(asset.id)} disabled={!hasData || (periodRestricted && !availableForPeriod && !isSelected) || activePreset !== "custom" || (!isSelected && selected.length >= MAX_SELECTED_ASSETS)} title={!hasData ? "Données indisponibles" : !availableForPeriod ? `Indice non disponible sur ${range[0]}–${range[1]}` : undefined} aria-pressed={isSelected}>
                            <span className="chip-dot" /> <span>{asset.name}</span><small>{asset.startYear}–{asset.endYear}</small>{!hasData && <small>indisponible</small>}{hasData && !availableForPeriod && <small>hors période</small>}
                          </button>;
                       })}
@@ -653,7 +667,7 @@ function App() {
                        {!commonPeriod && <label className="range-control">De <input type="number" value={range[0]} onChange={(event) => { setOptimizationProfile("growth"); setRange([Number(event.target.value), range[1]]); }} /> à <input type="number" value={range[1]} onChange={(event) => { setOptimizationProfile("growth"); setRange([range[0], Number(event.target.value)]); }} /></label>}
                      </div>
                       <PeriodSelector start={range[0]} end={range[1]} onChange={(nextStart, nextEnd) => { setOptimizationProfile("growth"); setCommonPeriod(false); setRange([nextStart, nextEnd]); }} />
-                    <p className="period-explanation">{commonPeriod ? selectedCount ? `La période s'ajuste automatiquement aux années disponibles pour les ${selectedCount} actifs sélectionnés. Elle sera recalculée à chaque changement.` : "Sélectionne au moins un actif pour calculer la période commune." : "Chaque actif est analysé sur la période saisie, lorsque ses données sont disponibles. Les actifs dont les données CSV ne couvrent pas toute la plage sont désactivés."}</p>
+                    <p className="period-explanation">{commonPeriod ? selectedCount ? `La période s'ajuste automatiquement aux années disponibles pour les ${selectedCount} actifs sélectionnés. Elle sera recalculée à chaque changement.` : "Sélectionne au moins un actif pour calculer la période commune." : "Hors Portefeuille, chaque actif est analysé sur ses années disponibles dans la plage choisie. Dans Portefeuille, seuls les actifs couvrant toute la plage sont utilisés."}</p>
                  </section>
 
                   <section className="configuration-step">
@@ -671,20 +685,21 @@ function App() {
                </div>}
              </section>
 
-             {selectedCount > 0 && <>
+             {allSelectedAssets.length > 0 && <>
              <section className="signal-strip">
               <div><span className="strip-label">Fenêtre analysée</span><strong>{start} <span>→</span> {end}</strong><small>{duration} années</small></div>
                <div><span className="strip-label">Lecture courante</span><strong>{currency === "eur" ? "EUR non couvert" : "USD"} · {mode === "nominal" ? "Nominaux" : "Après inflation"}</strong><small>Dividendes réinvestis quand disponibles</small></div>
                <div><span className="strip-label">Actifs actifs</span><strong>{selectedCount}</strong><small>{activePreset === "custom" ? `Maximum ${MAX_SELECTED_ASSETS} séries` : "Ventilation de la candidate"}</small></div>
              </section>
 
+              {excludedPortfolioAssets.length > 0 && <div className="context-warning" role="status"><AlertTriangle size={15} /><span>Exclus du calcul du portefeuille (historique incomplet sur {start}–{end}) : <strong>{excludedPortfolioAssets.map((asset) => asset.name).join(", ")}</strong>. Ils restent sélectionnés et visibles dans les autres onglets.</span></div>}
               <DecisionSummary bestAsset={bestAsset} worstReturnAsset={worstReturnAsset} lowestRiskAsset={lowestRiskAsset} worstDrawdownAsset={worstDrawdownAsset} mode={mode} />
 
              <nav className="tabs" aria-label="Vues d'analyse" role="tablist">{chartTabs.map((tab) => <button key={tab.id} role="tab" aria-selected={activeTab === tab.id} className={activeTab === tab.id ? "active" : ""} onClick={() => setActiveTab(tab.id)}>{tab.label}</button>)}<button role="tab" aria-selected={activeTab === "portfolio"} className={activeTab === "portfolio" ? "active" : ""} onClick={() => setActiveTab("portfolio")}>Portefeuille</button><button role="tab" aria-selected={activeTab === "correlations"} className={activeTab === "correlations" ? "active" : ""} onClick={() => setActiveTab("correlations")}>Corrélations de la sélection</button></nav>
 
-            {activeTab === "overview" && <Overview assets={selectedAssets} stats={stats} mode={mode} start={start} end={end} />}
+            {activeTab === "overview" && <Overview assets={selectedAssets} stats={stats} data={data} mode={mode} start={start} end={end} />}
               {activeTab === "returns" && <ChartCard title={`Rendements annuels ${activeLabel}s`} subtitle="Les années positives et négatives sont affichées côte à côte pour faire ressortir les régimes de marché." icon={<BarChart3 size={18} />} data={annualData} columns={chartColumns} format="percent" legend={<AssetLegend assets={selectedAssets} hiddenAssets={hiddenAssets} onToggle={toggleHiddenAsset} />} metadata={{ unit: "% par an", source: "Corpus historique consolidé", period: `${start}–${end}`, observations: chartObservationCount }}><ResponsiveContainer width="100%" height={390}><BarChart data={annualData}><ChartGrid /><XAxis dataKey="year" {...axisProps} /><YAxis {...axisProps} tickFormatter={(value) => `${value}%`} /><Tooltip content={<ChartTooltip assets={assets} type="percent" />} /><ReferenceLine y={0} stroke="#18324a" />{crisisMarkers.filter((marker) => marker.year >= start && marker.year <= end).map((marker) => <ReferenceLine key={marker.year} x={marker.year} stroke="#a6b3bb" strokeDasharray="4 4" label={{ value: marker.label, position: "insideTop", fill: "#718290", fontSize: 10 }} />)}{visibleChartAssets.map((asset) => <Bar key={asset.id} dataKey={asset.id} fill={asset.accentColor} radius={[3, 3, 0, 0]} />)}</BarChart></ResponsiveContainer></ChartCard>}
-              {activeTab === "growth" && <ChartCard title={`100 $ investis en ${start}`} subtitle={`Croissance cumulée en termes ${activeLabel}s, avec réinvestissement des rendements disponibles.`} icon={<Activity size={18} />} data={growthData} columns={chartColumns} format="money" legend={<AssetLegend assets={selectedAssets} hiddenAssets={hiddenAssets} onToggle={toggleHiddenAsset} />} metadata={{ unit: "Valeur de 100 $ · échelle logarithmique", source: "Corpus historique consolidé", period: `${start}–${end}`, observations: chartObservationCount }}><ResponsiveContainer width="100%" height={390}><AreaChart data={growthData}><ChartGrid /><XAxis dataKey="year" {...axisProps} /><YAxis scale="log" domain={["auto", "auto"]} {...axisProps} tickFormatter={formatMoney} /><Tooltip content={<ChartTooltip assets={assets} type="money" />} />{crisisMarkers.filter((marker) => marker.year >= start && marker.year <= end).map((marker) => <ReferenceLine key={marker.year} x={marker.year} stroke="#a6b3bb" strokeDasharray="4 4" label={{ value: marker.label, position: "insideTop", fill: "#718290", fontSize: 10 }} />)}{visibleChartAssets.map((asset) => <Area key={asset.id} type="monotone" dataKey={asset.id} stroke={asset.accentColor} fill={asset.accentColor} fillOpacity={0.08} strokeWidth={2.5} connectNulls={false} />)}</AreaChart></ResponsiveContainer></ChartCard>}
+              {activeTab === "growth" && <ChartCard title="100 $ investis · départ propre à chaque actif" subtitle={`Croissance cumulée en termes ${activeLabel}s, avec réinvestissement des rendements disponibles.`} icon={<Activity size={18} />} data={growthData} columns={chartColumns} format="money" legend={<AssetLegend assets={selectedAssets} hiddenAssets={hiddenAssets} onToggle={toggleHiddenAsset} />} metadata={{ unit: "Valeur de 100 $ · échelle logarithmique", source: "Corpus historique consolidé", period: `${start}–${end}`, observations: chartObservationCount }}><ResponsiveContainer width="100%" height={390}><AreaChart data={growthData}><ChartGrid /><XAxis dataKey="year" {...axisProps} /><YAxis scale="log" domain={["auto", "auto"]} {...axisProps} tickFormatter={formatMoney} /><Tooltip content={<ChartTooltip assets={assets} type="money" />} />{crisisMarkers.filter((marker) => marker.year >= start && marker.year <= end).map((marker) => <ReferenceLine key={marker.year} x={marker.year} stroke="#a6b3bb" strokeDasharray="4 4" label={{ value: marker.label, position: "insideTop", fill: "#718290", fontSize: 10 }} />)}{visibleChartAssets.map((asset) => <Area key={asset.id} type="monotone" dataKey={asset.id} stroke={asset.accentColor} fill={asset.accentColor} fillOpacity={0.08} strokeWidth={2.5} connectNulls={false} />)}</AreaChart></ResponsiveContainer></ChartCard>}
               {activeTab === "decades" && <ChartCard title={`TCAM par décennie · ${activeLabel}`} subtitle="Moyenne géométrique des rendements annuels disponibles dans chaque décennie." icon={<CalendarDays size={18} />} data={decadeData} columns={decadeColumns} format="percent" legend={<AssetLegend assets={selectedAssets} hiddenAssets={hiddenAssets} onToggle={toggleHiddenAsset} />} metadata={{ unit: "% annualisé par décennie", source: "Corpus historique consolidé", period: `${start}–${end}`, observations: chartObservationCount }}><ResponsiveContainer width="100%" height={390}><BarChart data={decadeData}><ChartGrid /><XAxis dataKey="decade" {...axisProps} /><YAxis {...axisProps} tickFormatter={(value) => `${value}%`} /><Tooltip content={<ChartTooltip assets={assets} type="percent" />} /><ReferenceLine y={0} stroke="#18324a" />{visibleChartAssets.map((asset) => <Bar key={asset.id} dataKey={asset.id} fill={asset.accentColor} radius={[3, 3, 0, 0]} />)}</BarChart></ResponsiveContainer></ChartCard>}
 
                   {activeTab === "portfolio" && <PortfolioView
@@ -797,18 +812,10 @@ function CorrelationView({
     ? assets.filter((asset) => data[asset.id]?.length)
     : assets.filter((asset) => selectedIds.includes(asset.id) && data[asset.id]?.length), [assets, data, embedded, selectedIds]);
 
-  const periodRestricted = !embedded && !commonPeriod;
+  const periodRestricted = false; // Pairwise correlations use overlapping observations, not complete coverage.
   const periodEligibleAssets = useMemo(() => new Set(assets.filter((asset) => assetCoversPeriod(data[asset.id], range[0], range[1])).map((asset) => asset.id)), [assets, data, range]);
 
-  useEffect(() => {
-    if (!periodRestricted) return;
-    setSelectedIds((current) => {
-      const next = current.filter((id) => periodEligibleAssets.has(id));
-      return next.length === current.length ? current : next;
-    });
-  }, [periodEligibleAssets, periodRestricted]);
-
-  useEffect(() => {
+   useEffect(() => {
     if (embedded || !selectedAssets.length) return;
     const params = new URLSearchParams(window.location.search);
     params.set(MATRIX_ASSETS_PARAM, selectedIds.join(","));
@@ -833,7 +840,8 @@ function CorrelationView({
   );
 
   const performanceData = useMemo(() => selectedAssets.map((asset) => {
-    const stat = computeStats(data[asset.id], start, end, mode);
+    const window = assetAnalysisWindow(data[asset.id], start, end, mode);
+    const stat = window ? computeStats(data[asset.id], window[0], window[1], mode) : null;
     return { asset, cagr: mode === "nominal" ? stat?.cagrNominal ?? null : stat?.cagrReal ?? null, observations: stat?.count ?? 0 };
   }).sort((left, right) => (right.cagr ?? -Infinity) - (left.cagr ?? -Infinity)), [data, end, mode, selectedAssets, start]);
 
@@ -868,7 +876,7 @@ function CorrelationView({
     <section className={`correlation-controls ${embedded ? "embedded" : ""}`}>
       <div className="card-heading compact">
         <div className="heading-icon"><Activity size={17} /></div>
-         <div><h2>{embedded ? "Corrélations de la sélection" : "Univers de corrélation"}</h2><p>{embedded ? "Lecture des actifs sélectionnés dans l'analyse principale, avec la même période et le même mode." : "Les actifs disponibles sur toute la période sont inclus par défaut. Les cellules utilisent uniquement les années communes à chaque paire."}</p></div>
+         <div><h2>{embedded ? "Corrélations de la sélection" : "Univers de corrélation"}</h2><p>{embedded ? "Lecture des actifs sélectionnés dans l'analyse principale, avec la même période et le même mode." : "Les actifs peuvent avoir des historiques différents. Chaque corrélation utilise uniquement les années communes à la paire."}</p></div>
       </div>
       {!embedded && <>
         <div className="correlation-assets">
@@ -1418,9 +1426,9 @@ function ChartCard({ title, subtitle, icon, children, data, columns, format = "n
   return <section className="chart-card"><div className="card-heading"><div className="heading-icon">{icon}</div><div><h2>{title}</h2><p>{subtitle}</p></div><div className="chart-actions"><button className="icon-button" title="Exporter les données CSV" aria-label="Exporter les données CSV" onClick={() => data && columns && exportChartData(data, columns, title)} disabled={!data || !columns}><Download size={16} /></button></div></div><div className="chart-wrap">{children}</div>{legend && <div className="chart-legend">{legend}</div>}{metadata && <div className="chart-metadata"><span>Unité <b>{metadata.unit}</b></span><span>Source <b>{metadata.source}</b></span><span>Période <b>{metadata.period}</b></span><span>Observations <b>{metadata.observations}</b></span></div>}{data && columns && <details className="chart-data"><summary>Voir les données du graphique</summary><div className="table-scroll"><table><caption>{title} · données tabulaires</caption><thead><tr>{columns.map((column) => <th key={column.key}>{column.label}</th>)}</tr></thead><tbody>{data.map((row, index) => <tr key={`${String(row[columns[0].key])}-${index}`}>{columns.map((column) => <td key={column.key}>{formatCell(row[column.key])}</td>)}</tr>)}</tbody></table></div></details>}</section>;
 }
 
-function Overview({ assets, stats, mode, start, end }: { assets: Asset[]; stats: Record<string, ReturnType<typeof computeStats>>; mode: Mode; start: number; end: number }) {
+function Overview({ assets, stats, data, mode, start, end }: { assets: Asset[]; stats: Record<string, ReturnType<typeof computeStats>>; data: Dataset; mode: Mode; start: number; end: number }) {
   return <>
-     <section className="kpi-grid">{assets.map((asset) => { const stat = stats[asset.id]; if (!stat) return null; return <article className="asset-card" key={asset.id} style={{ "--asset-color": asset.accentColor } as React.CSSProperties}><div className="asset-card-top"><span className="asset-badge">{asset.name}</span><span className="asset-period">{start}–{end}</span></div><div className="main-kpi"><span>TCAM annualisé · {mode === "nominal" ? "nominal" : "réel"}</span><strong>{formatPercent(mode === "nominal" ? stat.cagrNominal : stat.cagrReal)}</strong><small>Performance moyenne par an, composée.</small></div><div className="metric-grid"><Metric label="Volatilité" value={formatPercent(stat.volatility, 1)} description="Variation annuelle des rendements." /><Metric label="Années positives" value={`${stat.positiveRate.toFixed(0)} %`} description="Part des années au-dessus de 0 %." /><Metric label="Meilleure année" value={stat.best ? `${stat.best.year} · ${formatPercent(returnValue(stat.best, mode))}` : "n.d."} description="Rendement annuel le plus élevé." positive /><Metric label="Pire année" value={stat.worst ? `${stat.worst.year} · ${formatPercent(returnValue(stat.worst, mode))}` : "n.d."} description="Rendement annuel le plus faible." negative /></div></article>; })}</section>
+     <section className="kpi-grid">{assets.map((asset) => { const stat = stats[asset.id]; if (!stat) return null; return <article className="asset-card" key={asset.id} style={{ "--asset-color": asset.accentColor } as React.CSSProperties}><div className="asset-card-top"><span className="asset-badge">{asset.name}</span><span className="asset-period">{assetAnalysisWindow(data[asset.id], start, end, mode)?.join("–") ?? "n.d."}</span></div><div className="main-kpi"><span>TCAM annualisé · {mode === "nominal" ? "nominal" : "réel"}</span><strong>{formatPercent(mode === "nominal" ? stat.cagrNominal : stat.cagrReal)}</strong><small>Performance moyenne par an, composée.</small></div><div className="metric-grid"><Metric label="Volatilité" value={formatPercent(stat.volatility, 1)} description="Variation annuelle des rendements." /><Metric label="Années positives" value={`${stat.positiveRate.toFixed(0)} %`} description="Part des années au-dessus de 0 %." /><Metric label="Meilleure année" value={stat.best ? `${stat.best.year} · ${formatPercent(returnValue(stat.best, mode))}` : "n.d."} description="Rendement annuel le plus élevé." positive /><Metric label="Pire année" value={stat.worst ? `${stat.worst.year} · ${formatPercent(returnValue(stat.worst, mode))}` : "n.d."} description="Rendement annuel le plus faible." negative /></div></article>; })}</section>
     <section className="insight-grid"><div className="insight-card"><div className="card-heading compact"><div className="heading-icon warm"><ArrowUpRight size={17} /></div><div><h2>Les meilleures années</h2><p>Top 5 · lecture {mode === "nominal" ? "nominale" : "réelle"}</p></div></div><RankingTable assets={assets} stats={stats} mode={mode} best /></div><div className="insight-card"><div className="card-heading compact"><div className="heading-icon cool"><ArrowDownRight size={17} /></div><div><h2>Les années difficiles</h2><p>Bottom 5 · lecture {mode === "nominal" ? "nominale" : "réelle"}</p></div></div><RankingTable assets={assets} stats={stats} mode={mode} best={false} /></div></section>
   </>;
 }

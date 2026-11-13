@@ -5,7 +5,7 @@ import {
   cagr, geometricMean, volatility, computePortfolio, normalizeWeights, validateWeights,
   computeCorrelationDetails, computeDiversificationMetrics, covariance,
   searchPortfolioCandidates, searchPortfolioOptimizationProfiles, searchPortfolioAcrossWindows,
-  computeGrowthData, computeDecadeData,
+  computeGrowthData, computeDecadeData, assetAnalysisWindow,
 } from "../analytics";
 
 describe("annual data contract", () => {
@@ -148,4 +148,23 @@ it("does not turn invalid source returns or missing conversion/inflation into a 
   expect(computeStats(missingInflation, 2000, 2001, "real")).toBeNull();
   const missingFx = localizeRows(rows([10, 10]), "eur", { usdPerEur: { 2000: 1, 2001: 1 }, frenchInflation: { 2000: 0, 2001: 0 } });
   expect(computeStats(missingFx, 2000, 2001, "nominal")).toBeNull();
+});
+
+it("uses partial contiguous histories per asset without shortening portfolio calculations", () => {
+  const full = rows([10, 20, 30, 40, 50, 60]);
+  const later = rows([NaN, 10, 20]).map(row => ({ ...row, year: row.year + 3 }));
+  const data = { full, later };
+  expect(assetAnalysisWindow(later, 2000, 2005)).toEqual([2003, 2005]);
+  expect(assetAnalysisWindow(later, 2000, 2002)).toBeNull();
+  expect(computeStats(later, 2000, 2005, "nominal")).toBeNull();
+  expect(computeStats(later, 2003, 2005, "nominal")?.count).toBe(2);
+  expect(computePortfolio(data, { full: 50, later: 50 }, 2000, 2005, "nominal")).toBeNull();
+  const growth = computeGrowthData(data, ["full", "later"], 2000, 2005, "nominal");
+  expect(growth[0]).toEqual({ year: 1999, full: 100, later: null });
+  expect(growth.find(point => point.year === 2003)?.later).toBe(100);
+  expect(growth.find(point => point.year === 2005)?.later).toBeCloseTo(132);
+  expect(computeDecadeData(data, ["full", "later"], 2000, 2005, "nominal")[0].later).toBeCloseTo(Math.expm1((Math.log1p(.1) + Math.log1p(.2)) / 2) * 100);
+  const gapped = later.filter(row => row.year !== 2004);
+  expect(assetAnalysisWindow(gapped, 2000, 2005)).toBeNull();
+  expect(computeGrowthData({ later: gapped }, ["later"], 2000, 2005, "nominal")).toEqual([]);
 });
