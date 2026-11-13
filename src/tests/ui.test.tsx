@@ -95,7 +95,7 @@ it("exposes comparison and walk-forward spaces without removing manual construct
   expect(screen.getByText("1. Quatre futurs économiques à explorer")).toBeTruthy();
   expect(screen.getByText("2. Croissance contre Tout-terrain")).toBeTruthy();
   expect(screen.getByText(/sur 25 ans/)).toBeTruthy();
-  const advanced = screen.getByText("Paramètres avancés : modifier les quatre futurs et leurs hypothèses");
+  const advanced = screen.getByText("Paramètres avancés : horizon et hypothèses des quatre futurs");
   fireEvent.click(advanced);
   const horizon = screen.getByRole("spinbutton", { name: "Horizon des scénarios économiques" }) as HTMLInputElement;
   expect(horizon.value).toBe("25");
@@ -133,7 +133,7 @@ it("shows a single understandable Tout-terrain comparison with four futures and 
   expect(screen.getAllByText("Inflation durable").length).toBeGreaterThan(0);
   expect(screen.getAllByText("Crise prolongée").length).toBeGreaterThan(0);
   expect(document.querySelector(".terrain-table")).toBeTruthy();
-  await user.click(screen.getByText("Paramètres avancés : modifier les quatre futurs et leurs hypothèses"));
+  await user.click(screen.getByText("Paramètres avancés : horizon et hypothèses des quatre futurs"));
   expect(screen.getByRole("spinbutton", { name: /Ajustement Inflation durable MSCI World/ })).toBeTruthy();
 }, UI_TEST_TIMEOUT);
 
