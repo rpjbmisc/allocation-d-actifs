@@ -37,7 +37,7 @@ export function ExposurePanel({weights,registry}:{weights:Record<string,number>;
   if(!registry)return <section className="table-card exposure-panel"><h2>Composition de l'allocation</h2><p>Données de composition indisponibles. Les performances restent accessibles.</p></section>;
   const report=calculatePortfolioExposure(weights,registry);
   return <section className="table-card exposure-panel" aria-label="Composition du portefeuille">
-    <div className="card-heading compact"><div><h2>Composition du portefeuille</h2><p>Photographie des expositions des indices, indépendante des rendements historiques.</p></div></div>
+    <div className="card-heading compact"><div><h2>Composition du portefeuille</h2><p>Photographie des compositions disponibles, parfois estimées via un ETF répliquant l’indice, indépendante des rendements historiques.</p></div></div>
     {report?<><Coverage report={report}/><div className="exposure-dimension-tabs" role="group" aria-label="Dimensions de composition">
       {dims.map(d=><button type="button" key={d.id} className={dimension===d.id?"active":""} onClick={()=>setDimension(d.id)} aria-pressed={dimension===d.id}>{d.label}</button>)}
     </div>
@@ -48,7 +48,7 @@ export function ExposurePanel({weights,registry}:{weights:Record<string,number>;
       {report.notes.map(n=><p key={n}>{n}</p>)}
       <ul className="exposure-source-list">{Object.entries(weights).filter(([id,w])=>w>0&&registry.assets[id]?.kind==="equity").map(([id])=>{
         const entry=registry.assets[id];
-        return <li key={id}>{entry.source?<a href={entry.source} target="_blank" rel="noopener noreferrer">{id}</a>:id} · {entry.asOf??"date non attestée"}{entry.countries?" · pays documentés":" · pays non détaillés"}</li>;
+        return <li key={id}>{entry.source?<a href={entry.source} target="_blank" rel="noopener noreferrer">{id}</a>:id} · {entry.asOf??"date non attestée"}{entry.basis==="proxy_etf"?" · proxy ETF répliquant l'indice":entry.countries?" · pays documentés":" · pays non détaillés"}</li>;
       })}</ul>
       <p>La couverture « précision pays » exclut les groupes Autres. Les styles correspondent à des orientations d'indices, pas à une classification ligne par ligne. Les REIT et infrastructures sont comptabilisés en dehors de la poche actions dans cette première version.</p>
     </details></>:<p>Renseigne des pondérations pour afficher la composition.</p>}
