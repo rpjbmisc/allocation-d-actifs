@@ -1230,13 +1230,6 @@ function InfoTip({ label, children }: { label: string; children: React.ReactNode
   </span>;
 }
 
-function WeightStabilityCell({ strategy }: { strategy: WalkForwardResult["strategies"][number] }) {
-  if (strategy.id !== "growth" && strategy.id !== "robust" && strategy.id !== "goal") return <span className="fixed-weight-label">Poids fixes</span>;
-  const label = weightStabilityLabel(strategy.weightStabilityPct);
-  if (!label) return <span>n.d.</span>;
-  return <><strong className="stability-label">{label}</strong><small className="table-note">{strategy.weightStabilityPct!.toFixed(0)} % · rotation {strategy.averageTurnoverPct?.toFixed(1) ?? "n.d."} pts</small></>;
-}
-
 function WalkForwardView({
   assets,
   result,
@@ -1250,35 +1243,127 @@ function WalkForwardView({
   robustScenarioSettings: ScenarioSettings;
   onSettingsChange: (next: Partial<WalkForwardSettings>) => void;
 }) {
+  const byId = (id: WalkForwardResult["strategies"][number]["id"]) => result.strategies.find(strategy => strategy.id === id);
+  const growth = byId("growth");
+  const terrain = byId("robust");
+  const tested = result.windows.length;
+  const first = result.windows[0];
+  const highlightedIds = ["growth", "robust", "custom", "benchmark"] as const;
+  const chartRows = result.windows.map(window => {
+    const values: Record<string, string | number | null> = {
+      period: `${window.testStart}–${window.testEnd}`,
+    };
+    highlightedIds.forEach(id => {
+      const evaluation = byId(id)?.windows[window.index];
+      values[id] = evaluation?.feasible ? evaluation.testStats?.cagr ?? null : null;
+    });
+    return values;
+  });
+  const deltaCagr = growth?.stats?.cagr != null && terrain?.stats?.cagr != null
+    ? terrain.stats.cagr - growth.stats.cagr : null;
+  const deltaDrawdown = growth?.stats?.maxDrawdown != null && terrain?.stats?.maxDrawdown != null
+    ? terrain.stats.maxDrawdown - growth.stats.maxDrawdown : null;
+  const trend = deltaCagr === null ? null : deltaCagr > 0.05 ? "supérieur" : deltaCagr < -0.05 ? "inférieur" : "proche";
+  const drop = deltaDrawdown === null ? null : deltaDrawdown > 0.1 ? "plus faible" : deltaDrawdown < -0.1 ? "plus forte" : "similaire";
+  const performanceAvailable = tested > 0 && growth?.feasible && terrain?.feasible && deltaCagr !== null && deltaDrawdown !== null;
+
+  const focusedRows = highlightedIds.map(id => byId(id)).filter((strategy): strategy is WalkForwardResult["strategies"][number] => Boolean(strategy));
+  const dynamicResults = result.strategies.filter(strategy => !highlightedIds.includes(strategy.id as typeof highlightedIds[number]));
+
   return <div className="validation-layout">
     <section className="validation-controls-card">
-      <div className="card-heading compact"><div className="heading-icon cool"><CalendarDays size={17} /></div><div><h2>Validation walk-forward</h2><p>Les allocations sont apprises avant chaque test, puis gelées sur des rendements annuels hors échantillon.</p></div></div>
-      <div className="validation-controls">
-        <label>Apprentissage minimal <input aria-label="Années d'apprentissage" type="number" min="1" max="100" step="1" value={settings.minTrainYears} onChange={event => onSettingsChange({ minTrainYears: Math.max(1, Number(event.target.value) || 1) })} /> <span>ans</span></label>
-        <label>Test par fenêtre <input aria-label="Années de test" type="number" min="1" max="30" step="1" value={settings.testYears} onChange={event => onSettingsChange({ testYears: Math.max(1, Number(event.target.value) || 1) })} /> <span>ans</span></label>
-        <label className="validation-expanding"><input type="checkbox" checked={settings.expanding} disabled readOnly /> Apprentissage expansif</label>
-      </div>
-       <p className="method-note">Fenêtres de test non chevauchantes · rééquilibrage annuel vers les poids cibles · aucune donnée de test utilisée pour l'optimisation. L'apprentissage roulant sera ajouté ultérieurement.</p>
-       <p className="method-note">Robustesse : {robustScenarioSettings.scenarioCount} scénarios · horizon {robustScenarioSettings.horizonYears} ans · blocs de {robustScenarioSettings.blockYears} an{robustScenarioSettings.blockYears > 1 ? "s" : ""} · graine {robustScenarioSettings.seed} · quantile {robustScenarioSettings.quantilePct} %. Ces hypothèses sont calibrées séparément dans chaque apprentissage.</p>
+      <div className="card-heading compact"><div className="heading-icon cool"><CalendarDays size={17} /></div><div>
+        <h2>Les stratégies fonctionnent-elles sur des périodes qu'elles ne connaissent pas ?</h2>
+        <p>On construit chaque allocation avec le passé disponible, puis on la teste sur les années qui suivent, jamais utilisées pour choisir ses poids.</p>
+      </div></div>
+      {first ? <div className="validation-explainer">
+        <strong>Un exemple parmi les tests historiques</strong>
+        <div className="validation-timeline" role="img" aria-label={`Apprentissage de ${first.trainStart} à ${first.trainEnd}, puis test indépendant de ${first.testStart} à ${first.testEnd}`}>
+          <div className="validation-timeline-train"><strong>{first.trainStart}–{first.trainEnd}</strong><span>On construit le portefeuille</span></div>
+          <div className="validation-timeline-test"><strong>{first.testStart}–{first.testEnd}</strong><span>On teste les poids obtenus</span></div>
+        </div>
+        <p>On répète ensuite ce principe en intégrant les années passées à l'apprentissage. Le portefeuille est rééquilibré chaque année vers ses poids cibles pendant le test.</p>
+      </div> : <p className="method-note">Aucune période de test complète avec ces paramètres et ces actifs.</p>}
     </section>
 
-    <section className="validation-summary-card">
-      <div className="validation-summary-heading"><strong>{result.windows.length}</strong><span>fenêtre{result.windows.length > 1 ? "s" : ""} testée{result.windows.length > 1 ? "s" : ""}</span><small>incertitude {result.uncertainty}</small></div>
-      {result.windows.length === 0 && <div className="configuration-message warning"><AlertTriangle size={16} /> Validation indisponible / insuffisante : il faut au moins une période complète d'apprentissage et de test.</div>}
+    <section className="validation-summary-card" aria-label="Fiabilité des tests">
+      <div className="validation-summary-heading"><strong>{tested}</strong><span>période{tested > 1 ? "s" : ""} de test de {settings.testYears} ans</span></div>
+      {tested === 0
+        ? <p className="validation-caution">Historique insuffisant. Réduis la durée d'apprentissage ou de test dans les paramètres avancés.</p>
+        : tested < 4
+          ? <p className="validation-caution">Interprétation prudente : {tested} période{tested > 1 ? "s" : ""} seulement. Les résultats restent très sensibles au choix des dates et des actifs.</p>
+          : <p>Plusieurs périodes indépendantes des apprentissages ont été testées, mais les résultats restent historiques et non prédictifs.</p>}
+      {settings.minTrainYears < 10 && <p className="validation-caution">Apprentissage inférieur à 10 ans : davantage de fenêtres, mais plus de risque de calibrer les poids sur un échantillon trop court.</p>}
       {result.diagnostics.map(diagnostic => <p className="optimization-profile-note" key={diagnostic}>{diagnostic}</p>)}
-      {result.strategies.filter(strategy => !strategy.feasible).flatMap(strategy => strategy.diagnostics.map(diagnostic => <p className="optimization-profile-note" key={`${strategy.id}-${diagnostic}`}>{strategy.label} : {diagnostic}</p>))}
     </section>
 
     <section className="table-card validation-results-card">
-      <div className="card-heading compact"><div className="heading-icon"><Activity size={17} /></div><div><h2>Résultats hors échantillon</h2><p>Le TCAM est composé sur les seules années de test ; il ne s'agit pas d'une moyenne de TCAM par fenêtre.</p></div></div>
-       <div className="table-scroll"><table><thead><tr><th>Allocation</th><th>TCAM OOS <InfoTip label="Comprendre le TCAM OOS">OOS signifie « hors échantillon ». Les poids sont choisis sur l'apprentissage, puis testés uniquement sur les années suivantes. Le TCAM est composé sur ces années de test.</InfoTip></th><th>Volatilité</th><th>Drawdown annuel</th><th>Fenêtres valides</th><th>Stabilité des poids <InfoTip label="Comprendre la stabilité des poids">Pour Croissance, cet indicateur compare les pondérations recalculées entre les fenêtres. Robustesse utilise le même diagnostic entre ses fenêtres. Stable signifie que les recommandations changent peu ; variable ou instable signifie qu'elles dépendent davantage de la période historique. Personnalisée, Équipondérée et MSCI World ont des poids fixes.<br /><br /><strong>Légende :</strong> Très stable 80–100 % · Stable 60–79 % · Variable 40–59 % · Instable 20–39 % · Très instable 0–19 %.</InfoTip></th></tr></thead><tbody>{result.strategies.map(strategy => <tr key={strategy.id}><td>{strategy.label}</td><td>{strategy.feasible ? formatPercent(strategy.stats?.cagr) : "n.d."}</td><td>{strategy.feasible ? formatPercent(strategy.stats?.volatility) : "n.d."}</td><td>{strategy.feasible ? formatPercent(strategy.stats?.maxDrawdown) : "n.d."}</td><td>{strategy.validWindowCount} / {strategy.plannedWindowCount}</td><td><WeightStabilityCell strategy={strategy} /></td></tr>)}</tbody></table></div>
-      <p className="method-note">Personnalisée signifie ici les poids choisis aujourd'hui, appliqués rétrospectivement. Ce test ne prétend pas représenter une sélection historiquement disponible.</p>
+      <div className="card-heading compact"><div className="heading-icon"><Activity size={17} /></div><div>
+        <h2>1. Bilan des années de test</h2>
+        <p>Rendement annuel composé calculé uniquement sur les années hors apprentissage, puis pertes maximales entre clôtures annuelles de ces périodes.</p>
+      </div></div>
+      <div className="table-scroll"><table className="validation-main-table">
+        <thead><tr><th>Allocation</th><th>Rendement/an testé</th><th>Baisse maximale observée</th><th>Périodes disponibles</th></tr></thead>
+        <tbody>{focusedRows.map(strategy => <tr key={strategy.id}>
+          <th scope="row">{strategy.label}</th>
+          <td>{strategy.feasible ? formatPercent(strategy.stats?.cagr) : "Données insuffisantes"}</td>
+          <td>{strategy.feasible ? formatPercent(strategy.stats?.maxDrawdown) : "—"}</td>
+          <td>{strategy.validWindowCount} / {strategy.plannedWindowCount}</td>
+        </tr>)}</tbody>
+      </table></div>
+      <p className="method-note">La ligne « Personnalisée » applique les poids choisis aujourd'hui aux périodes passées. Elle ne prouve pas que ces poids auraient réellement été sélectionnés à l'époque.</p>
     </section>
 
-    {result.windows.length > 0 && <section className="table-card validation-windows-card">
-       <div className="card-heading compact"><div className="heading-icon warm"><SlidersHorizontal size={17} /></div><div><h2>Fenêtres et décisions</h2><p>Les poids de Croissance et Robustesse visibles dans chaque ligne proviennent uniquement de la période d'apprentissage correspondante.</p></div></div>
-       <div className="table-scroll"><table><thead><tr><th>Fenêtre</th><th>Apprentissage</th><th>Test</th><th>Poids Croissance</th><th>Score TCAM</th><th>Poids Robustesse</th><th>Score quantile</th><th>Poids Objectif</th><th>Réussite simulée</th></tr></thead><tbody>{result.windows.map(window => { const growth = result.strategies.find(strategy => strategy.id === "growth")?.windows[window.index]; const robust = result.strategies.find(strategy => strategy.id === "robust")?.windows[window.index]; const goal = result.strategies.find(strategy => strategy.id === "goal")?.windows[window.index]; return <tr key={window.index}><td>{String(window.index + 1).padStart(2, "0")}</td><td>{window.trainStart}–{window.trainEnd}</td><td>{window.testStart}–{window.testEnd}</td><td>{walkForwardWeights(assets, growth?.weights ?? null)}</td><td>{growth?.score === null || growth?.score === undefined ? "n.d." : formatPercent(growth.score)}</td><td>{walkForwardWeights(assets, robust?.weights ?? null)}</td><td>{robust?.score === null || robust?.score === undefined ? "n.d." : formatPercent(robust.score)}</td><td>{walkForwardWeights(assets, goal?.weights ?? null)}</td><td>{goal?.score === null || goal?.score === undefined ? "n.d." : `${goal.score.toFixed(1)} %`}</td></tr>; })}</tbody></table></div>
+    {tested > 0 && <section className="table-card validation-chart-card">
+      <div className="card-heading compact"><div className="heading-icon warm"><BarChart3 size={17} /></div><div>
+        <h2>2. Rendement dans chaque période de test</h2>
+        <p>Les barres représentent le rendement annuel composé sur chaque bloc de {settings.testYears} ans. Elles permettent de voir si un résultat global dépend d'une seule période.</p>
+      </div></div>
+      <ResponsiveContainer width="100%" height={290}><BarChart data={chartRows} margin={{ top: 10, right: 10, bottom: 12, left: -12 }}>
+        <CartesianGrid vertical={false} stroke="#e5e9ec" />
+        <XAxis dataKey="period" tick={{ fontSize: 10 }} />
+        <YAxis tickFormatter={value => `${value}%`} tick={{ fontSize: 10 }} />
+        <Tooltip formatter={value => typeof value === "number" ? formatPercent(value) : "n.d."} />
+        <ReferenceLine y={0} stroke="#18324a" />
+        <Bar dataKey="growth" name="Croissance" fill="#3b78b0" radius={[2,2,0,0]} />
+        <Bar dataKey="robust" name="Tout-terrain" fill="#2a9d8f" radius={[2,2,0,0]} />
+        <Bar dataKey="custom" name="Personnalisée" fill="#e9a23b" radius={[2,2,0,0]} />
+        <Bar dataKey="benchmark" name="MSCI World" fill="#9376bf" radius={[2,2,0,0]} />
+      </BarChart></ResponsiveContainer>
+      <div className="validation-chart-legend"><span> <i style={{background:"#3b78b0"}}/> Croissance</span><span><i style={{background:"#2a9d8f"}}/> Tout-terrain</span><span><i style={{background:"#e9a23b"}}/> Personnalisée</span><span><i style={{background:"#9376bf"}}/> MSCI World</span></div>
     </section>}
+
+    <section className="validation-summary-card validation-conclusion-card">
+      <h2>3. Que nous apprennent ces résultats ?</h2>
+      {performanceAvailable
+        ? <p>Sur ces périodes historiques restées inconnues au moment du choix des poids, <strong>Tout-terrain a obtenu un rendement {trend} à Croissance</strong> ({formatPercent(terrain.stats?.cagr)} contre {formatPercent(growth.stats?.cagr)} par an), avec une <strong>baisse maximale {drop}</strong> ({formatPercent(terrain.stats?.maxDrawdown)} contre {formatPercent(growth.stats?.maxDrawdown)}).</p>
+        : <p>Les résultats disponibles ne permettent pas de comparer valablement Croissance et Tout-terrain sur l'ensemble des périodes.</p>}
+      <p className="method-note">{tested < 4 ? "Cette comparaison est particulièrement fragile : trop peu de périodes de test." : "Il s'agit d'une observation historique, non d'une preuve de performance future."} Une meilleure performance ne signifie pas systématiquement un risque plus faible.</p>
+    </section>
+
+    <details className="validation-advanced">
+      <summary>Comprendre et ajuster les tests</summary>
+      <div className="validation-controls">
+        <label>Années d'apprentissage <input aria-label="Années d'apprentissage" type="number" min="1" max="100" step="1" value={settings.minTrainYears} onChange={event => onSettingsChange({ minTrainYears: Math.max(1, Number(event.target.value) || 1) })} /> ans</label>
+        <label>Durée de chaque test <input aria-label="Années de test" type="number" min="1" max="30" step="1" value={settings.testYears} onChange={event => onSettingsChange({ testYears: Math.max(1, Number(event.target.value) || 1) })} /> ans</label>
+      </div>
+      <p className="method-note">Par défaut : 15 ans d'apprentissage puis des tests de 5 ans non chevauchants. Avec des données de 1995 à 2025, cela produit trois périodes complètes de test. Réduire l'apprentissage augmente leur nombre, mais peut rendre les allocations optimisées moins fiables.</p>
+      <p className="method-note">Les années d'apprentissage s'accumulent au fil des tests. Aucun rendement des années de test n'est utilisé pour recalculer les poids avant cette période.</p>
+      <p className="method-note">Tout-terrain est recalculé à chaque période sur les quatre futurs économiques configurés, avec {robustScenarioSettings.horizonYears} ans par trajectoire simulée. Les hypothèses sont définies à l'avance et ne représentent pas des prévisions.</p>
+      <h3>Autres allocations</h3>
+      <div className="table-scroll"><table>
+        <thead><tr><th>Allocation</th><th>Rendement annualisé testé</th><th>Baisse max.</th><th>Stabilité des poids</th></tr></thead>
+        <tbody>{[...result.strategies].map(strategy => <tr key={strategy.id}><td>{strategy.label}</td><td>{strategy.feasible ? formatPercent(strategy.stats?.cagr) : "n.d."}</td><td>{strategy.feasible ? formatPercent(strategy.stats?.maxDrawdown) : "n.d."}</td><td>{strategy.id === "growth" || strategy.id === "robust" || strategy.id === "goal" ? weightStabilityLabel(strategy.weightStabilityPct) ?? "n.d." : "Poids fixes"}</td></tr>)}</tbody>
+      </table></div>
+      <h3>Détail des décisions</h3>
+      <div className="table-scroll"><table>
+        <thead><tr><th>Apprentissage</th><th>Test</th><th>Poids Croissance</th><th>Poids Tout-terrain</th><th>Poids Objectif patrimonial</th></tr></thead>
+        <tbody>{result.windows.map(window => <tr key={window.index}><td>{window.trainStart}–{window.trainEnd}</td><td>{window.testStart}–{window.testEnd}</td><td>{walkForwardWeights(assets, growth?.windows[window.index]?.weights ?? null)}</td><td>{walkForwardWeights(assets, terrain?.windows[window.index]?.weights ?? null)}</td><td>{walkForwardWeights(assets, byId("goal")?.windows[window.index]?.weights ?? null)}</td></tr>)}</tbody>
+      </table></div>
+      {dynamicResults.length > 0 && <p className="method-note">Autres références disponibles : {dynamicResults.map(strategy => strategy.label).join(", ")}.</p>}
+      {result.strategies.flatMap(strategy => strategy.diagnostics.map(message => `${strategy.label} : ${message}`)).map(message => <p className="optimization-profile-note" key={message}>{message}</p>)}
+      <p className="method-note">Les rendements sont calculés hors frais et fiscalité. Les drawdowns intra-annuels, les opérations réelles et les décisions de sélection historiquement disponibles ne sont pas reconstruits. Le test utilise la période commune disponible pour les actifs retenus.</p>
+    </details>
   </div>;
 }
 
