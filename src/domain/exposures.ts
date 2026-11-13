@@ -12,6 +12,7 @@ export interface AssetExposure {
   assetClass?: string;
   source?: string;
   asOf?: string;
+  basis?: "proxy_etf" | "index";
   note?: string;
 }
 export interface ExposureRegistry {
@@ -58,6 +59,25 @@ const countries: Record<string, { name: string; zone: string }> = {
   BR:{name:"Brésil",zone:"Émergents hors Asie"},
   MX:{name:"Mexique",zone:"Émergents hors Asie"},
   ZA:{name:"Afrique du Sud",zone:"Émergents hors Asie"},
+  AT:{name:"Autriche",zone:"Europe"},
+  BE:{name:"Belgique",zone:"Europe"},
+  IE:{name:"Irlande",zone:"Europe"},
+  PT:{name:"Portugal",zone:"Europe"},
+  SA:{name:"Arabie saoudite",zone:"Émergents hors Asie"},
+  AE:{name:"Émirats arabes unis",zone:"Émergents hors Asie"},
+  PL:{name:"Pologne",zone:"Émergents hors Asie"},
+  QA:{name:"Qatar",zone:"Émergents hors Asie"},
+  GR:{name:"Grèce",zone:"Émergents hors Asie"},
+  ID:{name:"Indonésie",zone:"Asie émergente"},
+  KW:{name:"Koweït",zone:"Émergents hors Asie"},
+  PE:{name:"Pérou",zone:"Émergents hors Asie"},
+  CL:{name:"Chili",zone:"Émergents hors Asie"},
+  TR:{name:"Turquie",zone:"Émergents hors Asie"},
+  HU:{name:"Hongrie",zone:"Émergents hors Asie"},
+  PH:{name:"Philippines",zone:"Asie émergente"},
+  CZ:{name:"République tchèque",zone:"Émergents hors Asie"},
+  CO:{name:"Colombie",zone:"Émergents hors Asie"},
+  EG:{name:"Égypte",zone:"Émergents hors Asie"},
 };
 const partialCountries: Record<string, { name:string; zone:string }> = {
   OTHER:{name:"Pays non détaillés",zone:"Zone non détaillée"},
