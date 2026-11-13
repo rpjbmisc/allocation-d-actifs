@@ -155,8 +155,8 @@ it("offers live profile cards instead of frozen historical portfolios", async ()
   expect(screen.getByRole("button", { name: /À la carte/ })).toBeTruthy();
   expect(screen.getByRole("button", { name: /Croissance maximale/ })).toBeTruthy();
   expect(screen.getByRole("button", { name: /Croissance maîtrisée/ })).toBeTruthy();
-  expect(screen.getByRole("button", { name: /Robustesse.*Dynamique/ })).toBeTruthy();
-  expect(screen.getByRole("button", { name: /Objectif patrimonial.*Dynamique/ })).toBeTruthy();
+  expect(screen.getByRole("button", { name: /Robustesse.*Automatique/ })).toBeTruthy();
+  expect(screen.getByRole("button", { name: /Objectif patrimonial.*Automatique/ })).toBeTruthy();
   expect(screen.queryByText("Allocation avec Bitcoin")).toBeNull();
   expect(screen.getByRole("button", { name: /À la carte/ }).getAttribute("aria-pressed")).toBe("true");
 
