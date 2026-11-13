@@ -137,7 +137,7 @@ it("keeps partially covered assets selected outside the portfolio and excludes t
   const cards = [...document.querySelectorAll(".asset-card")];
   expect(cards.some(card => card.textContent?.includes("MSCI Emerging Markets Asia") && card.textContent?.includes("2000–2025"))).toBe(true);
   await user.click(screen.getByRole("tab", { name: "100 $ investis" }));
-  await waitFor(() => expect(screen.getByText(/départ propre à chaque actif/)).toBeTruthy());
+  await waitFor(() => expect(screen.getByRole("heading", { name: /départ propre à chaque actif/ })).toBeTruthy());
   expect(screen.getByRole("button", { name: "MSCI Emerging Markets Asia" })).toBeTruthy();
   await user.click(screen.getByRole("tab", { name: "Portefeuille" }));
   expect(screen.getByText(/Exclus du calcul du portefeuille/)).toBeTruthy();
