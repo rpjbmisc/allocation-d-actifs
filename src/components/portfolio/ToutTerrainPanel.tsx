@@ -15,6 +15,7 @@ type Props = {
   end: number;
   mode: Mode;
   scenarioSettings: ScenarioSettings;
+  onScenarioSettingsChange: (next: Partial<ScenarioSettings>) => void;
   settings: ProspectiveSettings;
   onSettingsChange: (next: ProspectiveSettings) => void;
   growth: OptimizationResult;
@@ -34,7 +35,7 @@ function signedPoints(points: number): string {
 }
 
 /** The two strategies are evaluated on precisely the same deterministic regime draws. */
-export default function ToutTerrainPanel({ assets, data, start, end, mode, scenarioSettings, settings, onSettingsChange, growth, terrain }: Props) {
+export default function ToutTerrainPanel({ assets, data, start, end, mode, scenarioSettings, onScenarioSettingsChange, settings, onSettingsChange, growth, terrain }: Props) {
   const rows = useMemo(() => {
     if (!growth.weights || !terrain.weights || !terrain.prospectiveSummary || assets.length === 0) return null;
     const generated = generateProspectiveScenarios(
@@ -128,7 +129,8 @@ export default function ToutTerrainPanel({ assets, data, start, end, mode, scena
     {terrain.diagnostics.length > 0 && <div className="terrain-diagnostics" role="status">{terrain.diagnostics.map(message => <p key={message}>{message}</p>)}</div>}
 
     <details className="terrain-advanced">
-      <summary>Paramètres avancés : modifier les quatre futurs et leurs hypothèses</summary>
+      <summary>Paramètres avancés : horizon et hypothèses des quatre futurs</summary>
+      <label className="terrain-paths-setting"><span>Horizon des scénarios économiques</span><input aria-label="Horizon des scénarios économiques" type="number" min="1" max="100" step="1" value={scenarioSettings.horizonYears} onChange={event => onScenarioSettingsChange({ horizonYears: Math.min(100, Math.max(1, Number(event.target.value) || 1)) })}/> ans</label>
       <p>Chaque ajustement ajoute ou retire des points de rendement annuel à une série historique ; les fluctuations sont ensuite modifiées selon les paramètres du scénario. Les valeurs par défaut sont purement illustratives.</p>
       <div className="terrain-regime-settings">{settings.regimes.map((regime, index) => <fieldset key={regime.id}>
         <legend>{regime.name}</legend>

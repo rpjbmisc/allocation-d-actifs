@@ -94,8 +94,11 @@ it("exposes comparison and walk-forward spaces without removing manual construct
   await user.click(screen.getByRole("button", { name: /^Tout-terrain/ }));
   expect(screen.getByText("1. Quatre futurs économiques à explorer")).toBeTruthy();
   expect(screen.getByText("2. Croissance contre Tout-terrain")).toBeTruthy();
-  const advanced = screen.getByText("Paramètres avancés : modifier les quatre futurs et leurs hypothèses");
+  expect(screen.getByText(/sur 25 ans/)).toBeTruthy();
+  const advanced = screen.getByText("Paramètres avancés : horizon et hypothèses des quatre futurs");
   fireEvent.click(advanced);
+  const horizon = screen.getByRole("spinbutton", { name: "Horizon des scénarios économiques" }) as HTMLInputElement;
+  expect(horizon.value).toBe("25");
   fireEvent.change(screen.getByRole("spinbutton", { name: "Simulations par régime" }), { target: { value: "40" } });
   fireEvent.change(screen.getByRole("spinbutton", { name: "Poids saisi pour MSCI World" }), { target: { value: "37" } });
   expect((screen.getByRole("spinbutton", { name: "Poids saisi pour MSCI World" }) as HTMLInputElement).value).toBe("37");
@@ -104,15 +107,15 @@ it("exposes comparison and walk-forward spaces without removing manual construct
   await user.click(screen.getByRole("tab", { name: "Comparaison" }));
   expect(screen.getByText("Comparer les allocations")).toBeTruthy();
   await user.click(screen.getByRole("tab", { name: "Validation" }));
-  expect(screen.getByText("Validation walk-forward")).toBeTruthy();
-  expect(screen.getByRole("spinbutton", { name: "Années d'apprentissage" })).toBeTruthy();
-  expect(screen.getByText("Résultats hors échantillon")).toBeTruthy();
-  const stabilityInfo = screen.getByRole("button", { name: "Comprendre la stabilité des poids" });
-  expect(stabilityInfo.getAttribute("aria-expanded")).toBe("false");
-  await user.click(stabilityInfo);
-  expect(stabilityInfo.getAttribute("aria-expanded")).toBe("true");
-  expect(screen.getByText(/Pour Croissance, cet indicateur compare/)).toBeTruthy();
-  expect(screen.getByText(/Légende :/)).toBeTruthy();
+  expect(screen.getByText(/Les stratégies fonctionnent-elles sur des périodes qu'elles ne connaissent pas/)).toBeTruthy();
+  expect(screen.getByText("1. Bilan des années de test")).toBeTruthy();
+  expect(screen.getByText("2. Rendement dans chaque période de test")).toBeTruthy();
+  expect(screen.getByText("3. Que nous apprennent ces résultats ?")).toBeTruthy();
+  await user.click(screen.getByText("Comprendre et ajuster les tests"));
+  const training = screen.getByRole("spinbutton", { name: "Années d'apprentissage" }) as HTMLInputElement;
+  expect(training.value).toBe("15");
+  expect(screen.getByRole("spinbutton", { name: "Années de test" })).toBeTruthy();
+  expect(screen.getByText(/Tout-terrain est recalculé à chaque période/)).toBeTruthy();
 }, UI_TEST_TIMEOUT);
 
 it("shows a single understandable Tout-terrain comparison with four futures and no historical selector", async () => {
@@ -130,7 +133,7 @@ it("shows a single understandable Tout-terrain comparison with four futures and 
   expect(screen.getAllByText("Inflation durable").length).toBeGreaterThan(0);
   expect(screen.getAllByText("Crise prolongée").length).toBeGreaterThan(0);
   expect(document.querySelector(".terrain-table")).toBeTruthy();
-  await user.click(screen.getByText("Paramètres avancés : modifier les quatre futurs et leurs hypothèses"));
+  await user.click(screen.getByText("Paramètres avancés : horizon et hypothèses des quatre futurs"));
   expect(screen.getByRole("spinbutton", { name: /Ajustement Inflation durable MSCI World/ })).toBeTruthy();
 }, UI_TEST_TIMEOUT);
 

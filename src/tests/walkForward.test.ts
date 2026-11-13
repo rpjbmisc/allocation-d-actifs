@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import * as optimization from "../optimization/interface";
+import { defaultProspectiveSettings } from "../scenarios/prospective";
 import { rows } from "./fixtures";
 import { buildWalkForwardWindows, calculateWeightStability, combineWalkForwardResults, runWalkForward, runWalkForwardOptimized, runWalkForwardFixed, weightStabilityLabel } from "../analytics";
 
@@ -30,6 +31,32 @@ describe("walk-forward validation", () => {
       expect(combined.strategies.find(strategy => strategy.id === "custom")!.stats!.points.map(point => point.return)).toEqual([10, 10]);
       expect(combined.strategies.find(strategy => strategy.id === "goal")).toEqual(optimized.strategies.find(strategy => strategy.id === "goal"));
     } finally { spy.mockRestore(); }
+  });
+
+  it("validates the same four-future optimizer as Tout-terrain using training data only", () => {
+    const settings = { ...defaultProspectiveSettings(), pathsPerRegime: 5 };
+    const sample = (secondBlock: number[]) => ({
+      data: {
+        sp500: rows([8, 9, 7, ...secondBlock]),
+        gold: rows([3, 4, 5, 4, 5]),
+      },
+      assetIds: ["sp500", "gold"],
+      periodStart: 2000,
+      periodEnd: 2004,
+      returnMode: "nominal" as const,
+      settings: { minTrainYears: 3, testYears: 2, expanding: true },
+      scenarioSettings: { scenarioCount: 10, horizonYears: 25, blockYears: 1, seed: 42, quantilePct: 20 },
+      prospectiveSettings: settings,
+      constraints,
+    });
+    const first = runWalkForwardOptimized(sample([30, 40]));
+    const second = runWalkForwardOptimized(sample([-30, -40]));
+    const terrain1 = first.strategies.find(strategy => strategy.id === "robust")!;
+    const terrain2 = second.strategies.find(strategy => strategy.id === "robust")!;
+    expect(terrain1.label).toBe("Tout-terrain");
+    expect(terrain1.windows[0].optimization?.prospectiveSummary?.regimeCagrs).toHaveLength(4);
+    expect(terrain1.windows[0].optimization?.scenarioSummary).toBeUndefined();
+    expect(terrain1.windows[0].weights).toEqual(terrain2.windows[0].weights);
   });
 
   it("calculates weight rotation in percentage points and classifies stability", () => {
