@@ -141,7 +141,7 @@ it("keeps partially covered assets selected outside the portfolio and excludes t
   expect(screen.getByRole("button", { name: "MSCI Emerging Markets Asia" })).toBeTruthy();
   await user.click(screen.getByRole("tab", { name: "Portefeuille" }));
   expect(screen.getByText(/Exclus du calcul du portefeuille/)).toBeTruthy();
-  expect(screen.getByText(/MSCI Emerging Markets Asia/)).toBeTruthy();
+  expect(screen.getByRole("status").textContent).toContain("MSCI Emerging Markets Asia");
   await user.click(screen.getByRole("tab", { name: "Vue d'ensemble" }));
   await waitFor(() => expect(document.querySelectorAll(".asset-card")).toHaveLength(2));
 }, UI_TEST_TIMEOUT);
