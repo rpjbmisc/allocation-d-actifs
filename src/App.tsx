@@ -1075,7 +1075,7 @@ function PortfolioView({
         </div>}
         {optimizationProfile === "robust" && <div className="robust-settings" aria-label="Présentation du mode Tout-terrain">
           <ToutTerrainPanel assets={assets} data={data} start={start} end={end} mode={mode}
-            scenarioSettings={robustScenarioSettings} settings={prospectiveSettings}
+            scenarioSettings={robustScenarioSettings} onScenarioSettingsChange={(next) => setRobustScenarioSettings(current => ({ ...current, ...next }))} settings={prospectiveSettings}
             onSettingsChange={onProspectiveSettingsChange} growth={growthProposal} terrain={robustProposal} />
         </div>}
         {optimizationProfile !== "custom" && <div className="growth-constraints" aria-label="Contraintes des profils automatiques">
