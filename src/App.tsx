@@ -259,6 +259,17 @@ function App() {
     ? allSelectedAssets.filter((asset) => !selectedAssets.includes(asset)) : [];
   const duration = Math.max(0, end - start + 1);
   const portfolioVisible = !loading && !error && !isCorrelationPage && activeTab === "portfolio";
+  const suggestedSelection = useMemo(() => selectionMode === "suggested"
+    ? suggestProfileAssets(assets, data, start, end, mode, allocationIntent)
+    : null, [selectionMode, assets, data, start, end, mode, allocationIntent]);
+
+  useEffect(() => {
+    if (!suggestedSelection?.ids.length) return;
+    setSelected(current => current.length === suggestedSelection.ids.length &&
+      current.every((id, index) => id === suggestedSelection.ids[index])
+      ? current : suggestedSelection.ids);
+  }, [suggestedSelection]);
+
 
   const stats = useMemo(() => Object.fromEntries(selectedAssets.map((asset) => {
     const window = activeTab === "portfolio" ? [start, end] : assetAnalysisWindow(data[asset.id], start, end, mode);
@@ -632,6 +643,12 @@ function App() {
                     <p className="preset-description">{selectionMode === "custom"
                       ? "Choisis librement les actifs à comparer. Les profils d'optimisation du Portefeuille peuvent ensuite proposer les pondérations."
                       : "Les actifs sont automatiquement présélectionnés parmi les séries disponibles sur la même période. Sélection heuristique fondée sur rendement, risque et corrélations ; les pondérations sont ensuite optimisées. Pour modifier les actifs, repasse en mode À la carte."}</p>
+                    {selectionMode === "suggested" && suggestedSelection && <div className="configuration-message" role="status">
+                      {suggestedSelection.ids.length
+                        ? `${suggestedSelection.ids.length} actifs présélectionnés parmi ${suggestedSelection.eligibleCount} admissibles sur ${start}–${end}. ${suggestedSelection.excludedCount} séries écartées faute d'historique commun.`
+                        : suggestedSelection.diagnostics.join(" ")}
+                      <span> Sélection indicative : les poids sont ensuite calculés par le moteur d'optimisation.</span>
+                    </div>}
                     <div className="asset-picker-toolbar">
                       <label className="asset-search"><Search size={15} /><span className="sr-only">Rechercher un actif</span><input value={assetSearch} onChange={(event) => setAssetSearch(event.target.value)} placeholder="Rechercher un actif" /></label>
                       <div className="asset-categories" aria-label="Catégories d'actifs">{assetCategories.map((category) => <button key={category} className={assetCategoryFilter === category ? "active" : ""} onClick={() => setAssetCategoryFilter(category)}>{category}</button>)}</div>
