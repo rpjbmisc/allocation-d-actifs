@@ -145,3 +145,22 @@ it("keeps partially covered assets selected outside the portfolio and excludes t
   await user.click(screen.getByRole("tab", { name: "Vue d'ensemble" }));
   await waitFor(() => expect(document.querySelectorAll(".asset-card")).toHaveLength(2));
 }, UI_TEST_TIMEOUT);
+
+it("offers live profile cards instead of frozen historical portfolios", async () => {
+  const user = userEvent.setup();
+  render(<App />);
+  await screen.findByRole("spinbutton", { name: "Poids saisi pour MSCI World" });
+  await user.click(screen.getByRole("button", { name: "Modifier" }));
+  expect(screen.getByRole("group", { name: "Objectifs d'optimisation" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: /Croissance maximale/ })).toBeTruthy();
+  expect(screen.getByRole("button", { name: /Croissance maîtrisée/ })).toBeTruthy();
+  expect(screen.getByRole("button", { name: /Robustesse.*Dynamique/ })).toBeTruthy();
+  expect(screen.getByRole("button", { name: /Objectif patrimonial.*Dynamique/ })).toBeTruthy();
+  expect(screen.queryByText("Allocation avec Bitcoin")).toBeNull();
+
+  await user.click(screen.getByRole("button", { name: /Croissance maximale/ }));
+  expect((screen.getByRole("checkbox", { name: "Activer le budget de drawdown annuel" }) as HTMLInputElement).checked).toBe(false);
+  await user.click(screen.getByRole("button", { name: /Croissance maîtrisée/ }));
+  expect((screen.getByRole("checkbox", { name: "Activer le budget de drawdown annuel" }) as HTMLInputElement).checked).toBe(true);
+  expect((screen.getByRole("spinbutton", { name: "Plafond de poids par actif" }) as HTMLInputElement).value).toBe("50");
+}, UI_TEST_TIMEOUT);

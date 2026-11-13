@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { loadHistoricalData } from "./data/load";
+import { allocationProfiles, defaultConstraintsForProfile, DEFAULT_ALLOCATION_PROFILE } from "./optimization/profiles";
+import type { AllocationProfileId } from "./optimization/profiles";
 import { defaultProspectiveSettings } from "./scenarios/prospective";
 import type { ProspectiveSettings } from "./scenarios/prospective";
 import { optimizeProspective } from "./optimization/prospective";
@@ -63,8 +65,8 @@ import {
 
 type Tab = "overview" | "returns" | "growth" | "decades" | "portfolio" | "correlations";
 type PortfolioSpace = "construction" | "comparison" | "validation";
+type PresetId = "custom";
 type Dataset = Record<string, Row[]>;
-type PresetId = "custom" | "pure" | "constrained" | "robust" | "bitcoin";
 type ChartRow = Record<string, number | string | null>;
 type ChartColumn = { key: string; label: string };
 type AssetCategory = "Tous" | "Actions" | "Obligations" | "Immobilier" | "Métaux" | "Alternatives";
@@ -85,14 +87,6 @@ type CurrencyComparisonPoint = {
 };
 type CurrencyComparison = { points: CurrencyComparisonPoint[]; usd: PortfolioStats };
 
-interface CandidatePreset {
-  id: Exclude<PresetId, "custom">;
-  label: string;
-  description: string;
-  weights: Record<string, number>;
-  start: number;
-  end: number;
-}
 
 type HistoricalPhase = { id: string; name: string; start: number; end: number; color: string };
 
@@ -128,12 +122,7 @@ const crisisMarkers = [
   { year: 2008, label: "2008" },
   { year: 2020, label: "2020" },
 ];
-const defaultGrowthConstraints: GrowthConstraintSettings = {
-  // The historical 40% limit remains the editable starting point, not a universal rule.
-  maxAnnualCloseDrawdownPct: 40,
-  maxAnnualVolatilityPct: null,
-  maxWeightPct: 100,
-};
+const defaultGrowthConstraints: GrowthConstraintSettings = defaultConstraintsForProfile(DEFAULT_ALLOCATION_PROFILE);
 const defaultValidationSettings: WalkForwardSettings = {
   minTrainYears: 20,
   testYears: 5,
@@ -155,12 +144,6 @@ function assetUnit(id: string): string {
   return "Indice / USD";
 }
 
-function candidateRisk(id: string): string {
-  if (id === "bitcoin") return "Très élevé";
-  if (id === "pure") return "Élevé";
-  if (id === "constrained") return "Encadré";
-  return "Modéré";
-}
 
 function readTab(value: string | null): Tab {
   return value && tabIds.has(value as Tab) ? value as Tab : "overview";
@@ -197,15 +180,15 @@ function App() {
   const [hiddenAssets, setHiddenAssets] = useState<string[]>([]);
   const [weights, setWeights] = useState<Record<string, number>>({});
   const [automaticWeights, setAutomaticWeights] = useState(false);
+  const [allocationIntent, setAllocationIntent] = useState<AllocationProfileId>(DEFAULT_ALLOCATION_PROFILE);
   const [optimizationProfile, setOptimizationProfile] = useState<PortfolioOptimizationProfile>("growth");
   const [growthConstraints, setGrowthConstraints] = useState<GrowthConstraintSettings>(defaultGrowthConstraints);
   const [robustScenarioSettings, setRobustScenarioSettings] = useState<ScenarioSettings>(defaultRobustScenarioSettings);
   const [prospectiveSettings, setProspectiveSettings] = useState<ProspectiveSettings>(defaultProspectiveSettings);
   const [goalSettings, setGoalSettings] = useState<GoalSettings>(DEFAULT_GOAL_SETTINGS);
   const [validationSettings, setValidationSettings] = useState<WalkForwardSettings>(defaultValidationSettings);
-  const [activePreset, setActivePreset] = useState<PresetId>("custom");
-  const [presetDefinitions, setPresetDefinitions] = useState<CandidatePreset[]>([]);
-  const [presetModified, setPresetModified] = useState(false);
+  const activePreset = "custom" as const;
+  const presetModified = false;
   const automaticCandidateInitialized = useRef(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -222,10 +205,9 @@ function App() {
     let cancelled = false;
     async function load() {
       try {
-        const { assets: registry, presets, rawData, currencyContext } = await loadHistoricalData<CandidatePreset>(baseUrl);
+        const { assets: registry, rawData, currencyContext } = await loadHistoricalData(baseUrl);
         if (cancelled) return;
         setAssets(registry);
-        setPresetDefinitions(presets);
         setRawData(rawData);
         setCurrencyContext(currencyContext);
         const sharedSelection = selected.filter((id) => registry.some((asset) => asset.id === id));
@@ -281,6 +263,7 @@ function App() {
     return [asset.id, window ? computeStats(data[asset.id], window[0], window[1], mode) : null];
   })), [activeTab, data, end, mode, selectedAssets, start]);
   // The search space grows exponentially, so use a coarser deterministic grid for larger selections.
+  // Grid limitations must remain explicit; a dense 21-asset continuous optimum is not claimed.
   const automaticSearchStep = selectedAssets.length >= 7 ? 20 : selectedAssets.length >= 5 ? 10 : 5;
   const growthOptimization = useMemo<OptimizationResult>(() => {
     if (!portfolioVisible || activePreset !== "custom" || selectedAssets.length === 0 || end <= start) {
@@ -382,7 +365,7 @@ function App() {
   );
 
   useEffect(() => {
-    if (!portfolioVisible || activePreset !== "custom") return;
+    if (!portfolioVisible) return;
     if (!automaticCandidate) {
       setAutomaticWeights(false);
       return;
@@ -504,32 +487,17 @@ function App() {
   const weightedCorrelation = diversificationMetrics.weightedCorrelation;
   const diversificationRatio = diversificationMetrics.diversificationRatio;
 
-  const selectPreset = (presetId: Exclude<PresetId, "custom">) => {
-    const preset = presetDefinitions.find((candidate) => candidate.id === presetId);
-    if (!preset) return;
-    setActivePreset(presetId);
-    setOptimizationProfile("growth");
-    setAutomaticWeights(false);
-    setPresetModified(false);
-    setSelected(Object.keys(preset.weights).filter((id) => preset.weights[id] > 0));
-    setWeights((current) => ({ ...current, ...preset.weights }));
-    setCommonPeriod(false);
-    setRange([preset.start, preset.end]);
+  const selectAllocationIntent = (intent: AllocationProfileId) => {
+    automaticCandidateInitialized.current = false;
+    setAllocationIntent(intent);
+    setGrowthConstraints(defaultConstraintsForProfile(intent));
+    setOptimizationProfile(intent === "controlled" ? "growth" : intent);
+    setAutomaticWeights(true);
     setActiveTab("portfolio");
   };
 
-  const selectCustom = () => {
-    automaticCandidateInitialized.current = false;
-    setActivePreset("custom");
-    setOptimizationProfile("growth");
-    setAutomaticWeights(false);
-    setPresetModified(false);
-  };
-
   const toggleAsset = (id: string) => {
-    if (activePreset !== "custom") return;
     if (!selected.includes(id) && periodRestricted && !periodEligibleAssets.has(id)) return;
-    setOptimizationProfile("growth");
     setSelected((current) => {
       if (current.includes(id)) return current.length > 1 ? current.filter((item) => item !== id) : current;
       if (current.length >= MAX_SELECTED_ASSETS) return current;
@@ -540,13 +508,11 @@ function App() {
 
   const updateWeight = (id: string, value: number) => {
     setAutomaticWeights(false);
-    if (activePreset !== "custom") setPresetModified(true);
     setWeights((current) => ({ ...current, [id]: Math.max(0, Math.min(100, value)) }));
   };
 
   const normalizeWeights = () => {
     setAutomaticWeights(false);
-    if (activePreset !== "custom") setPresetModified(true);
     const total = selectedAssets.reduce((sum, asset) => sum + (weights[asset.id] ?? 0), 0);
     if (total <= 0 && selectedAssets.length > 0) {
       const equalWeight = 100 / selectedAssets.length;
@@ -560,10 +526,10 @@ function App() {
     automaticCandidateInitialized.current = false;
     const initialSelection = preferredIds.filter((id) => availableAssets.some((asset) => asset.id === id));
     const fallbackSelection = initialSelection.length ? initialSelection : availableAssets.slice(0, 3).map((asset) => asset.id);
-    setActivePreset("custom");
     setOptimizationProfile("growth");
+    setAllocationIntent(DEFAULT_ALLOCATION_PROFILE);
+    setGrowthConstraints(defaultConstraintsForProfile(DEFAULT_ALLOCATION_PROFILE));
     setAutomaticWeights(false);
-    setPresetModified(false);
     setSelected(fallbackSelection);
     setWeights(Object.fromEntries(assets.map((asset) => [asset.id, fallbackSelection.includes(asset.id) ? 100 / Math.max(1, fallbackSelection.length) : 0])));
     setCommonPeriod(true);
@@ -581,6 +547,7 @@ function App() {
     const proposal = profile === "growth" ? growthOptimization : profile === "robust" ? activeRobustOptimization : goalOptimization;
     if (!proposal.weights) return;
     setOptimizationProfile(profile);
+    setAllocationIntent(profile === "growth" && allocationIntent === "controlled" ? "controlled" : profile);
     setAutomaticWeights(true);
     setWeights((current) => selectedAssets.reduce(
       (next, asset) => ({ ...next, [asset.id]: (proposal.weights?.[asset.id] ?? 0) * 100 }),
@@ -631,25 +598,28 @@ function App() {
                </div>
                {commonPeriod && periodGap >= 5 && <div className="context-warning"><AlertTriangle size={15} /><span>La période commune est limitée à <strong>{commonStart}–{commonEnd}</strong> par {limitingAssets.map((asset) => asset.name).join(", ")}.</span><button onClick={() => setConfigurationOpen(true)}>Voir pourquoi</button></div>}
                {configurationOpen && <div className="configuration-editor">
-                <div className="control-heading"><div><div className="section-index">Configuration</div><h2>Préparer l'analyse</h2></div><div className="control-heading-actions"><span className="selection-count">{activePreset === "custom" ? `${selectedCount}/${MAX_SELECTED_ASSETS} sélectionnés` : `${presetDefinitions.find((preset) => preset.id === activePreset)?.label ?? "Candidate"}${presetModified ? " · modifiée" : ""}`}</span></div></div>
+                <div className="control-heading"><div><div className="section-index">Configuration</div><h2>Préparer l'analyse</h2></div><div className="control-heading-actions"><span className="selection-count">{selectedCount}/{MAX_SELECTED_ASSETS} sélectionnés</span></div></div>
                <div className="configuration-steps">
                   <section className="configuration-step">
                      <div className="step-heading"><span className="step-number">01</span><div><h3>Actifs</h3><p>Choisis jusqu'à dix séries à comparer.</p></div><strong>{selectedCount}/{MAX_SELECTED_ASSETS}</strong></div>
-                    <div className="candidate-grid">
-                       <button className={`candidate-card custom ${activePreset === "custom" ? "selected" : ""}`} onClick={selectCustom}><div className="candidate-card-heading"><strong>À la carte</strong><span>Libre</span></div><p>Construire une sélection et une allocation personnalisées.</p><div className="candidate-card-footer">Jusqu'à {MAX_SELECTED_ASSETS} actifs</div></button>
-                      {presetDefinitions.map((preset) => <button key={preset.id} className={`candidate-card ${activePreset === preset.id ? "selected" : ""}`} onClick={() => selectPreset(preset.id)}><div className="candidate-card-heading"><strong>{preset.label}</strong><span>Risque {candidateRisk(preset.id)}</span></div><p>{preset.description}</p><div className="candidate-allocation">{Object.entries(preset.weights).filter(([, weight]) => weight > 0).map(([id, weight]) => { const asset = assets.find((candidate) => candidate.id === id); return <span key={id} style={{ width: `${weight}%`, background: asset?.accentColor ?? "#9aa8b0" }} title={`${asset?.name ?? id}: ${weight} %`} />; })}</div><div className="candidate-card-footer">{preset.start}–{preset.end} · {Object.values(preset.weights).filter((weight) => weight > 0).length} actifs</div></button>)}
+                    <div className="candidate-grid" role="group" aria-label="Objectifs d'optimisation">
+                      {allocationProfiles.map((profile) => <button key={profile.id} className={`candidate-card ${allocationIntent === profile.id ? "selected" : ""}`} aria-pressed={allocationIntent === profile.id} onClick={() => selectAllocationIntent(profile.id)}>
+                        <div className="candidate-card-heading"><strong>{profile.label}</strong><span>Dynamique</span></div>
+                        <p>{profile.description}</p>
+                        <div className="candidate-card-footer">{profile.method} · paramètres modifiables</div>
+                      </button>)}
                     </div>
-                    <p className="preset-description">{activePreset === "custom" ? "Sélectionne les actifs à comparer et construis ta propre allocation." : `${presetDefinitions.find((preset) => preset.id === activePreset)?.description ?? "Allocation candidate calculée sur les données historiques."}${presetModified ? " Les pondérations ont été modifiées." : ""}`}</p>
+                    <p className="preset-description">Les profils recalculent les pondérations à partir des actifs sélectionnés et de la période courante. Bitcoin est facultatif, comme tous les autres actifs. Un résultat historique ou simulé n'est pas une prévision.</p>
                     <div className="asset-picker-toolbar">
                       <label className="asset-search"><Search size={15} /><span className="sr-only">Rechercher un actif</span><input value={assetSearch} onChange={(event) => setAssetSearch(event.target.value)} placeholder="Rechercher un actif" /></label>
                       <div className="asset-categories" aria-label="Catégories d'actifs">{assetCategories.map((category) => <button key={category} className={assetCategoryFilter === category ? "active" : ""} onClick={() => setAssetCategoryFilter(category)}>{category}</button>)}</div>
                     </div>
-                    <div className={`asset-chips ${activePreset !== "custom" ? "locked" : ""}`}>
+                    <div className="asset-chips">
                       {filteredAssets.map((asset) => {
                          const isSelected = selected.includes(asset.id);
                          const hasData = Boolean(data[asset.id]?.length);
                          const availableForPeriod = !periodRestricted || periodEligibleAssets.has(asset.id);
-                          return <button key={asset.id} className={`asset-chip ${isSelected ? "selected" : ""} ${!hasData || !availableForPeriod ? "unavailable" : ""}`} style={{ "--asset-color": asset.accentColor } as React.CSSProperties} onClick={() => toggleAsset(asset.id)} disabled={!hasData || (periodRestricted && !availableForPeriod && !isSelected) || activePreset !== "custom" || (!isSelected && selected.length >= MAX_SELECTED_ASSETS)} title={!hasData ? "Données indisponibles" : !availableForPeriod ? `Indice non disponible sur ${range[0]}–${range[1]}` : undefined} aria-pressed={isSelected}>
+                          return <button key={asset.id} className={`asset-chip ${isSelected ? "selected" : ""} ${!hasData || !availableForPeriod ? "unavailable" : ""}`} style={{ "--asset-color": asset.accentColor } as React.CSSProperties} onClick={() => toggleAsset(asset.id)} disabled={!hasData || (periodRestricted && !availableForPeriod && !isSelected) || (!isSelected && selected.length >= MAX_SELECTED_ASSETS)} title={!hasData ? "Données indisponibles" : !availableForPeriod ? `Indice non disponible sur ${range[0]}–${range[1]}` : undefined} aria-pressed={isSelected}>
                            <span className="chip-dot" /> <span>{asset.name}</span><small>{asset.startYear}–{asset.endYear}</small>{!hasData && <small>indisponible</small>}{hasData && !availableForPeriod && <small>hors période</small>}
                          </button>;
                       })}
@@ -689,7 +659,7 @@ function App() {
              <section className="signal-strip">
               <div><span className="strip-label">Fenêtre analysée</span><strong>{start} <span>→</span> {end}</strong><small>{duration} années</small></div>
                <div><span className="strip-label">Lecture courante</span><strong>{currency === "eur" ? "EUR non couvert" : "USD"} · {mode === "nominal" ? "Nominaux" : "Après inflation"}</strong><small>Dividendes réinvestis quand disponibles</small></div>
-               <div><span className="strip-label">Actifs actifs</span><strong>{selectedCount}</strong><small>{activePreset === "custom" ? `Maximum ${MAX_SELECTED_ASSETS} séries` : "Ventilation de la candidate"}</small></div>
+               <div><span className="strip-label">Actifs actifs</span><strong>{selectedCount}</strong><small>{`Maximum ${MAX_SELECTED_ASSETS} séries`}</small></div>
              </section>
 
               {excludedPortfolioAssets.length > 0 && <div className="context-warning" role="status"><AlertTriangle size={15} /><span>Exclus du calcul du portefeuille (historique incomplet sur {start}–{end}) : <strong>{excludedPortfolioAssets.map((asset) => asset.name).join(", ")}</strong>. Ils restent sélectionnés et visibles dans les autres onglets.</span></div>}
