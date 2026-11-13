@@ -209,3 +209,36 @@ it("requires confirmation before replacing existing custom weights from an optim
   await user.click(screen.getByRole("button", { name: /^Personnalisé/ }));
   expect((screen.getByRole("spinbutton", { name: "Poids saisi pour MSCI World" }) as HTMLInputElement).value).toBe("43");
 }, UI_TEST_TIMEOUT);
+
+it("keeps portfolio composition in sync with the active allocation mode", async () => {
+  const user = userEvent.setup();
+  render(<App />);
+  await screen.findByRole("spinbutton", { name: "Poids saisi pour MSCI World" });
+  await waitFor(() => expect(screen.getByRole("region", { name: "Composition du portefeuille" }).textContent).toContain("Précision pays"));
+
+  // An explicit custom all-gold portfolio has no equity exposure.
+  fireEvent.change(screen.getByRole("spinbutton", { name: "Poids saisi pour MSCI World" }), { target: { value: "0" } });
+  fireEvent.change(screen.getByRole("spinbutton", { name: "Poids saisi pour Obligations d'État US (long terme)" }), { target: { value: "0" } });
+  fireEvent.change(screen.getByRole("spinbutton", { name: "Poids saisi pour Or" }), { target: { value: "100" } });
+  const composition = screen.getByRole("region", { name: "Composition du portefeuille" });
+  expect(composition.textContent).toContain("Mode actif : Personnalisé");
+  expect(composition.textContent).toContain("Poche actions : 0,0 %");
+
+  await user.click(screen.getByRole("button", { name: /^Croissance/ }));
+  await waitFor(() => expect(composition.textContent).toContain("Mode actif : Croissance"));
+  // The exposure must describe exactly the same weights as the controls,
+  // regardless of the optimizer's chosen mix.
+  await waitFor(() => {
+    const getWeight = (name: string) => Number((screen.getByRole("spinbutton", { name: `Poids saisi pour ${name}` }) as HTMLInputElement).value);
+    const equities = getWeight("MSCI World");
+    const total = equities + getWeight("Or") + getWeight("Obligations d'État US (long terme)");
+    const expected = (total ? equities / total * 100 : 0).toLocaleString("fr-FR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+    expect(composition.textContent).toContain(`Poche actions : ${expected} %`);
+  });
+
+  await user.click(screen.getByRole("button", { name: /^Personnalisé/ }));
+  await waitFor(() => {
+    expect(composition.textContent).toContain("Mode actif : Personnalisé");
+    expect(composition.textContent).toContain("Poche actions : 0,0 %");
+  });
+}, UI_TEST_TIMEOUT);
