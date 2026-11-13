@@ -1221,9 +1221,9 @@ function PortfolioView({
           <label>Plafond par actif <input aria-label="Plafond de poids par actif" type="number" min="0" max="100" step="1" value={growthConstraints.maxWeightPct} onChange={(event) => onGrowthConstraintsChange({ maxWeightPct: Math.max(0, Math.min(100, Number(event.target.value))) })} /> <span>%</span></label>
           <label><input aria-label="Activer le budget de drawdown annuel" type="checkbox" checked={growthConstraints.maxAnnualCloseDrawdownPct !== null} onChange={(event) => onGrowthConstraintsChange({ maxAnnualCloseDrawdownPct: event.target.checked ? 40 : null })} /> Drawdown maximal de clôture annuelle <input aria-label="Budget de drawdown annuel" type="number" min="0" max="100" step="1" value={growthConstraints.maxAnnualCloseDrawdownPct ?? ""} disabled={growthConstraints.maxAnnualCloseDrawdownPct === null} onChange={(event) => onGrowthConstraintsChange({ maxAnnualCloseDrawdownPct: Math.max(0, Math.min(100, Number(event.target.value))) })} /> <span>%</span></label>
           <label><input aria-label="Activer le budget de volatilité annuelle" type="checkbox" checked={growthConstraints.maxAnnualVolatilityPct !== null} onChange={(event) => onGrowthConstraintsChange({ maxAnnualVolatilityPct: event.target.checked ? 20 : null })} /> Volatilité annuelle maximale <input aria-label="Budget de volatilité annuelle" type="number" min="0" step="1" value={growthConstraints.maxAnnualVolatilityPct ?? ""} disabled={growthConstraints.maxAnnualVolatilityPct === null} onChange={(event) => onGrowthConstraintsChange({ maxAnnualVolatilityPct: Math.max(0, Number(event.target.value)) })} /> <span>%</span></label>
-        </div>
-         {growthOptimization.diagnostics.length > 0 && <p className="optimization-profile-note">{growthOptimization.diagnostics.join(" ")}</p>}
-      </div>}
+        </div>}
+         {growthOptimization.diagnostics.length > 0 && optimizationProfile !== "custom" && <p className="optimization-profile-note">{growthOptimization.diagnostics.join(" ")}</p>}
+      </div>
       <div className="weight-list">
         {assets.map((asset) => {
           const enteredWeight = weights[asset.id] ?? 0;
