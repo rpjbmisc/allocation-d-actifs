@@ -1184,6 +1184,7 @@ function PortfolioView({
       <p className="method-note">Simulation avec rééquilibrage annuel ; risque observé aux clôtures annuelles seulement. Frais, fiscalité et coûts de transaction non pris en compte. Les résultats décrivent un scénario historique, pas une prévision.</p>
     </section>
 
+    <div className="portfolio-results">
     {portfolio ? <>
        <section className="portfolio-summary">
          <div className="portfolio-kpi featured"><span>Rendement annualisé · {mode === "nominal" ? "nominal" : "réel"}</span><strong>{formatPercent(portfolio.cagr)}</strong><small>Performance moyenne par an, composée.</small></div>
@@ -1217,6 +1218,7 @@ function PortfolioView({
         <div className="table-scroll"><table><thead><tr><th>Année</th><th>Rendement</th><th>Valeur cumulée</th><th>Drawdown</th></tr></thead><tbody>{[...portfolioData].sort((a, b) => a.return - b.return).slice(0, 5).map((point) => <tr key={point.year}><td>{point.year}</td><td className={point.return >= 0 ? "positive" : "negative"}>{formatPercent(point.return)}</td><td>{formatNumber(point.value, 1)}</td><td className="negative">{formatPercent(point.drawdown)}</td></tr>)}</tbody></table></div>
       </section>
     </> : <div className="error-panel portfolio-empty">Données insuffisantes ou incohérentes : vérifie les pondérations et les rendements de chaque année de la période. Aucun rendement manquant n’est remplacé par zéro.</div>}
+    </div>
     </div>}
     {space === "comparison" && <PortfolioComparisonDashboard assets={assets} weights={weights} portfolio={portfolio} equalPortfolio={equalPortfolio} benchmarkPortfolio={benchmarkPortfolio} growthOptimization={growthProposal} robustOptimization={robustProposal} goalOptimization={goalProposal} mode={mode} />}
     {space === "validation" && <WalkForwardView assets={assets} result={walkForward} settings={validationSettings} robustScenarioSettings={robustScenarioSettings} onSettingsChange={onValidationSettingsChange} />}
