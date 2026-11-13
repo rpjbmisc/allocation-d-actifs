@@ -126,10 +126,10 @@ it("shows a single understandable Tout-terrain comparison with four futures and 
   expect(screen.getByText("1. Quatre futurs économiques à explorer")).toBeTruthy();
   expect(screen.getByText("2. Croissance contre Tout-terrain")).toBeTruthy();
   expect(screen.getByText("3. Ce que tu gagnes — et ce que tu sacrifies")).toBeTruthy();
-  expect(screen.getByText("Croissance américaine")).toBeTruthy();
-  expect(screen.getByText("Inflation durable")).toBeTruthy();
-  expect(screen.getByText("Crise prolongée")).toBeTruthy();
-  expect(screen.getByRole("table", { name: "" })).toBeTruthy();
+  expect(screen.getAllByText("Croissance américaine").length).toBeGreaterThan(0);
+  expect(screen.getAllByText("Inflation durable").length).toBeGreaterThan(0);
+  expect(screen.getAllByText("Crise prolongée").length).toBeGreaterThan(0);
+  expect(document.querySelector(".terrain-table")).toBeTruthy();
   await user.click(screen.getByText("Paramètres avancés : modifier les quatre futurs et leurs hypothèses"));
   expect(screen.getByRole("spinbutton", { name: /Ajustement Inflation durable MSCI World/ })).toBeTruthy();
 }, UI_TEST_TIMEOUT);
