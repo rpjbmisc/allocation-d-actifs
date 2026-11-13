@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "description": "Photographies partielles de compositions officielles ; ni une série historique, ni une décomposition exhaustive. Les pays non publiés restent non ventilés. Tailles et facteurs distinguent ciblage d'indice et poids réels des sous-jacents.",
+  "description": "Photographies partielles de compositions MSCI par indice (source et date spécifiques) ; seules les parts publiées sont attribuées à un pays. Un reliquat Autres est conservé lorsque la fiche ne ventile pas tous les pays.",
   "updated": "2026-11-13",
   "assets": {
     "sp500": {
@@ -55,8 +55,17 @@
         "Small": 100
       },
       "factor": "value",
-      "note": "Biais Value et univers Small Cap selon le libellé de la série ; fiche de composition exacte non vérifiée (pays non ventilés).",
-      "asOf": "2026-10-30"
+      "note": "Indice MSCI World Small Cap Value (et non MSCI World Small Cap Value Weighted) ; cinq pays détaillés et reliquat Autres.",
+      "asOf": "2026-04-30",
+      "countries": {
+        "US": 61.35,
+        "JP": 12.57,
+        "CA": 4.31,
+        "GB": 3.99,
+        "AU": 3.62,
+        "OTHER": 14.16
+      },
+      "source": "https://www.msci.com/documents/10199/9f8cadb3-5923-442d-96d1-7434b6593416"
     },
     "msci_world_value": {
       "kind": "equity",
@@ -65,7 +74,16 @@
       },
       "factor": "value",
       "source": "https://www.msci.com/indexes/index/105868",
-      "note": "Biais Value identifié par le nom de l'indice ; ventilation pays non attestée."
+      "note": "Composition MSCI World Value : cinq pays détaillés, reliquat Autres.",
+      "countries": {
+        "US": 72.1,
+        "JP": 5.6,
+        "GB": 3.9,
+        "CA": 3.7,
+        "FR": 2.5,
+        "OTHER": 12.2
+      },
+      "asOf": "2026-06-30"
     },
     "msci_em": {
       "kind": "equity",
@@ -114,14 +132,18 @@
     "msci_pacific_ex_japan_imi": {
       "kind": "equity",
       "countries": {
-        "PACIFIC_OTHER": 100
+        "AU": 65.08,
+        "HK": 17.19,
+        "SG": 15.82,
+        "NZ": 1.91
       },
       "sizes": {
         "all_caps": 100
       },
       "factor": "none",
       "source": "https://www.msci.com/documents/10199/ff245708-ddb9-48cd-8da6-c65b1598b227",
-      "note": "Univers Pacifique développé hors Japon confirmé, mais poids des pays non validés."
+      "note": "Les quatre pays constitutifs de l'indice sont entièrement ventilés dans la fiche MSCI du 29 mai 2026.",
+      "asOf": "2026-05-29"
     },
     "msci_em_asia": {
       "kind": "equity",
@@ -178,14 +200,20 @@
     "msci_europe": {
       "kind": "equity",
       "countries": {
-        "EU_OTHER": 100
+        "GB": 22.97,
+        "CH": 15.3,
+        "FR": 14.5,
+        "DE": 13.71,
+        "NL": 8.56,
+        "EU_OTHER": 24.96
       },
       "sizes": {
         "large_mid": 100
       },
       "factor": "none",
       "source": "https://www.msci.com/documents/10199/861bb4d4-7a59-489b-8cef-bb104e152e3c",
-      "note": "Indice 100 % Europe développée, ventilation par pays non confirmée pour cette photographie."
+      "note": "MSCI publie cinq pays détaillés ; les 24,96 % restants couvrent d'autres pays européens et ne sont pas répartis arbitrairement.",
+      "asOf": "2026-10-30"
     },
     "global_infrastructure": {
       "kind": "other",
