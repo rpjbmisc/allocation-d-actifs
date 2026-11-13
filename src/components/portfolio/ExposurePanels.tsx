@@ -46,6 +46,10 @@ export function ExposurePanel({weights,registry}:{weights:Record<string,number>;
     <details className="exposure-sources"><summary>Sources et limites des compositions</summary>
       <p>Photographies des indices à des dates parfois différentes : {report.snapshotDates.length?report.snapshotDates.join(" · "):"dates indisponibles"}. « Pays non détaillés » ne signifie pas exposition nulle.</p>
       {report.notes.map(n=><p key={n}>{n}</p>)}
+      <ul className="exposure-source-list">{Object.entries(weights).filter(([id,w])=>w>0&&registry.assets[id]?.kind==="equity").map(([id])=>{
+        const entry=registry.assets[id];
+        return <li key={id}>{entry.source?<a href={entry.source} target="_blank" rel="noopener noreferrer">{id}</a>:id} · {entry.asOf??"date non attestée"}{entry.countries?" · pays documentés":" · pays non détaillés"}</li>;
+      })}</ul>
       <p>La couverture « précision pays » exclut les groupes Autres. Les styles correspondent à des orientations d'indices, pas à une classification ligne par ligne. Les REIT et infrastructures sont comptabilisés en dehors de la poche actions dans cette première version.</p>
     </details></>:<p>Renseigne des pondérations pour afficher la composition.</p>}
   </section>;
