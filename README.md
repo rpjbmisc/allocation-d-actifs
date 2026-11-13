@@ -34,7 +34,7 @@ L'onglet `Corrélations` affiche tout l'univers des actifs par défaut dans une 
 
 L'onglet `Corrélations` de l'analyse principale utilise les actifs, la période et le mode sélectionnés dans cette analyse. La page `/correlations` propose le même module avec un picker, une période et un mode indépendants.
 
-Le picker propose aussi des allocations candidates calculées sur l'ensemble des actifs disponibles : optimum historique pur et optimum sous drawdown maximal de 40 % sur trois fenêtres communes de 25 ans, allocation robuste basée sur le pire CAGR de ces fenêtres et scénario avec Bitcoin sur 2014–2025. Leurs pondérations sont conservées dans `public/data/candidate_presets.json` et ne sont pas recalculées au chargement. Une candidate charge ses actifs et ses pondérations, verrouille le picker d'actifs et laisse les pourcentages modifiables dans le panneau de construction. Le mode `À la carte` réactive la sélection individuelle et son optimisation dynamique.
+Le sélecteur présente quatre objectifs **dynamiques** : Croissance maximale, Croissance maîtrisée, Robustesse et Objectif patrimonial. Ces objectifs travaillent sur les actifs librement sélectionnés (jusqu'à dix), la devise et la période active ; ils ne chargent pas de pondérations historiques enregistrées. Chaque profil fournit seulement des contraintes initiales éditables. Croissance maximale désactive initialement les budgets de risque ; les autres profils proposent un drawdown de clôture annuelle de 40 %, une volatilité de 25 % et un maximum de 50 % par actif, valeurs illustratives sans garantie. Le Bitcoin reste un actif optionnel du registre. Les anciens préréglages de `candidate_presets.json` sont conservés à titre d'archive mais ne sont plus chargés.
 
 ## Contexte vault
 
