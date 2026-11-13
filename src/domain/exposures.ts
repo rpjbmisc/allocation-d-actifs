@@ -33,11 +33,11 @@ export interface PortfolioExposure {
 const countries: Record<string, { name: string; zone: string }> = {
   US:{name:"États-Unis",zone:"Amérique du Nord"},
   CA:{name:"Canada",zone:"Amérique du Nord"},
-  JP:{name:"Japon",zone:"Asie développée"},
-  AU:{name:"Australie",zone:"Asie développée"},
-  NZ:{name:"Nouvelle-Zélande",zone:"Asie développée"},
-  SG:{name:"Singapour",zone:"Asie développée"},
-  HK:{name:"Hong Kong",zone:"Asie développée"},
+  JP:{name:"Japon",zone:"Japon"},
+  AU:{name:"Australie",zone:"Asie-Pacifique développée hors Japon"},
+  NZ:{name:"Nouvelle-Zélande",zone:"Asie-Pacifique développée hors Japon"},
+  SG:{name:"Singapour",zone:"Asie-Pacifique développée hors Japon"},
+  HK:{name:"Hong Kong",zone:"Asie-Pacifique développée hors Japon"},
   GB:{name:"Royaume-Uni",zone:"Europe"},
   CH:{name:"Suisse",zone:"Europe"},
   FR:{name:"France",zone:"Europe"},
@@ -63,7 +63,7 @@ const partialCountries: Record<string, { name:string; zone:string }> = {
   OTHER:{name:"Pays non détaillés",zone:"Zone non détaillée"},
   EU_OTHER:{name:"Pays européens non détaillés",zone:"Europe"},
   ASIA_EM_OTHER:{name:"Pays asiatiques émergents non détaillés",zone:"Asie émergente"},
-  PACIFIC_OTHER:{name:"Pays du Pacifique développés non détaillés",zone:"Asie développée"},
+  PACIFIC_OTHER:{name:"Pays du Pacifique développés non détaillés",zone:"Asie-Pacifique développée hors Japon"},
 };
 const sizeLabels: Record<string,string> = {
   Large:"Grandes capitalisations",
