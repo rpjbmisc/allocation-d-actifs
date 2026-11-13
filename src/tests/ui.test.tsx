@@ -92,10 +92,10 @@ it("exposes comparison and walk-forward spaces without removing manual construct
 
   await user.click(screen.getByRole("button", { name: /^Robustesse/ }));
   expect(screen.getByText("Visualiser les scénarios")).toBeTruthy();
-  fireEvent.change(screen.getByRole("spinbutton", { name: "Poids saisi pour MSCI World" }), { target: { value: "37" } });
   const advanced = screen.getByText("Réglages avancés (facultatifs)");
   fireEvent.click(advanced);
   fireEvent.change(screen.getByRole("spinbutton", { name: "Nombre de scénarios" }), { target: { value: "40" } });
+  fireEvent.change(screen.getByRole("spinbutton", { name: "Poids saisi pour MSCI World" }), { target: { value: "37" } });
   expect((screen.getByRole("spinbutton", { name: "Poids saisi pour MSCI World" }) as HTMLInputElement).value).toBe("37");
   expect(screen.getByText(/Pondérations personnalisées/)).toBeTruthy();
 
