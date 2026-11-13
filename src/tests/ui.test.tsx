@@ -146,27 +146,25 @@ it("keeps partially covered assets selected outside the portfolio and excludes t
   await waitFor(() => expect(document.querySelectorAll(".asset-card")).toHaveLength(2));
 }, UI_TEST_TIMEOUT);
 
-it("offers live profile cards instead of frozen historical portfolios", async () => {
+it("allows direct selection of assets with no preset-mode selector", async () => {
   const user = userEvent.setup();
   render(<App />);
   await screen.findByRole("spinbutton", { name: "Poids saisi pour MSCI World" });
   await user.click(screen.getByRole("button", { name: "Modifier" }));
-  expect(screen.getByRole("group", { name: "Modes de construction" })).toBeTruthy();
-  expect(screen.getByRole("button", { name: /À la carte/ })).toBeTruthy();
-  expect(screen.getByRole("button", { name: /Croissance maximale/ })).toBeTruthy();
-  expect(screen.getByRole("button", { name: /Croissance maîtrisée/ })).toBeTruthy();
-  expect(screen.getByRole("button", { name: /Robustesse.*Automatique/ })).toBeTruthy();
-  expect(screen.getByRole("button", { name: /Objectif patrimonial.*Automatique/ })).toBeTruthy();
-  expect(screen.queryByText("Allocation avec Bitcoin")).toBeNull();
-  expect(screen.getByRole("button", { name: /À la carte/ }).getAttribute("aria-pressed")).toBe("true");
 
-  await user.click(screen.getByRole("button", { name: /Croissance maximale/ }));
-  expect(screen.getByRole("button", { name: /Croissance maximale/ }).getAttribute("aria-pressed")).toBe("true");
-  expect(screen.getByRole("button", { name: /À la carte/ }).getAttribute("aria-pressed")).toBe("false");
-  expect((screen.getByRole("checkbox", { name: "Activer le budget de drawdown annuel" }) as HTMLInputElement).checked).toBe(false);
-  await user.click(screen.getByRole("button", { name: /Croissance maîtrisée/ }));
-  expect((screen.getByRole("checkbox", { name: "Activer le budget de drawdown annuel" }) as HTMLInputElement).checked).toBe(true);
-  expect((screen.getByRole("spinbutton", { name: "Plafond de poids par actif" }) as HTMLInputElement).value).toBe("50");
-  await user.click(screen.getByRole("button", { name: /À la carte/ }));
-  expect(screen.getByRole("button", { name: /À la carte/ }).getAttribute("aria-pressed")).toBe("true");
+  expect(screen.queryByRole("group", { name: "Modes de construction" })).toBeNull();
+  for (const label of ["À la carte", "Croissance maximale", "Croissance maîtrisée"]) {
+    expect(screen.queryByText(label)).toBeNull();
+  }
+
+  const asset = screen.getByRole("button", { name: /Actions US/ });
+  expect(asset.getAttribute("aria-pressed")).toBe("false");
+  await user.click(asset);
+  expect(asset.getAttribute("aria-pressed")).toBe("true");
+  await user.click(asset);
+  expect(asset.getAttribute("aria-pressed")).toBe("false");
+
+  // Portfolio optimization methods remain available, independent of asset selection.
+  expect(screen.getByRole("group", { name: "Profils d'optimisation" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: /^Robustesse/ })).toBeTruthy();
 }, UI_TEST_TIMEOUT);
