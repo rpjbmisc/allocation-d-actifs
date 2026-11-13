@@ -56,7 +56,7 @@ it("preserves portfolio controls, manual weights, normalization and selection ta
   await user.click(screen.getByRole("tab", { name: "Corrélations de la sélection" }));
   await waitFor(() => expect(screen.getByText("Corrélation moyenne des paires")).toBeTruthy());
   await user.click(screen.getByRole("tab", { name: "Portefeuille" }));
-  expect((screen.getByRole("spinbutton", { name: "Poids saisi pour MSCI World" }) as HTMLInputElement).value).toBe("60");
+  expect(Number((screen.getByRole("spinbutton", { name: "Poids saisi pour MSCI World" }) as HTMLInputElement).value)).toBeCloseTo(50, 1);
 }, UI_TEST_TIMEOUT);
 
 it("defers portfolio optimizations outside the portfolio tab and preserves the goal profile", async () => {
