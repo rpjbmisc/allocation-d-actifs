@@ -1058,7 +1058,8 @@ function PortfolioView({
     const robust = summarizeScenarioPortfolio(scenarios.scenarios, robustProposal.weights, scenarios.settings);
     const growth = summarizeScenarioPortfolio(scenarios.scenarios, growthProposal.weights, scenarios.settings);
     if (!robust || !growth) return null;
-    const all = scenarios.scenarios.map(scenario => scenarioPortfolioCagr(scenario, robustProposal.weights));
+    const robustWeights = robustProposal.weights;
+    const all = scenarios.scenarios.map(scenario => scenarioPortfolioCagr(scenario, robustWeights));
     if (all.some(value => value === null || !Number.isFinite(value))) return null;
     const values = all as number[];
     const min = Math.min(...values), max = Math.max(...values);
