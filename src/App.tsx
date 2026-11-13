@@ -66,7 +66,6 @@ import {
 type Tab = "overview" | "returns" | "growth" | "decades" | "portfolio" | "correlations";
 type PortfolioSpace = "construction" | "comparison" | "validation";
 type Dataset = Record<string, Row[]>;
-type PresetId = "custom";
 type ChartRow = Record<string, number | string | null>;
 type ChartColumn = { key: string; label: string };
 type AssetCategory = "Tous" | "Actions" | "Obligations" | "Immobilier" | "Métaux" | "Alternatives";
@@ -187,7 +186,7 @@ function App() {
   const [prospectiveSettings, setProspectiveSettings] = useState<ProspectiveSettings>(defaultProspectiveSettings);
   const [goalSettings, setGoalSettings] = useState<GoalSettings>(DEFAULT_GOAL_SETTINGS);
   const [validationSettings, setValidationSettings] = useState<WalkForwardSettings>(defaultValidationSettings);
-  const [activePreset, setActivePreset] = useState<PresetId>("custom");
+  const activePreset = "custom" as const;
   const [presetModified, setPresetModified] = useState(false);
   const automaticCandidateInitialized = useRef(false);
   const [loading, setLoading] = useState(true);
@@ -530,7 +529,6 @@ function App() {
     automaticCandidateInitialized.current = false;
     const initialSelection = preferredIds.filter((id) => availableAssets.some((asset) => asset.id === id));
     const fallbackSelection = initialSelection.length ? initialSelection : availableAssets.slice(0, 3).map((asset) => asset.id);
-    setActivePreset("custom");
     setOptimizationProfile("growth");
     setAllocationIntent(DEFAULT_ALLOCATION_PROFILE);
     setGrowthConstraints(defaultConstraintsForProfile(DEFAULT_ALLOCATION_PROFILE));
