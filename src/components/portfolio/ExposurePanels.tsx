@@ -32,12 +32,12 @@ function Coverage({ report }:{report:PortfolioExposure}){
     <span>Précision tailles : {fmt(report.precision.sizes)} des actions</span>
   </div>;
 }
-export function ExposurePanel({weights,registry}:{weights:Record<string,number>;registry:ExposureRegistry|null}){
+export function ExposurePanel({weights,registry,profileLabel}:{weights:Record<string,number>;registry:ExposureRegistry|null;profileLabel:string}){
   const [dimension,setDimension]=useState<ExposureDimension>("zones");
   if(!registry)return <section className="table-card exposure-panel"><h2>Composition de l'allocation</h2><p>Données de composition indisponibles. Les performances restent accessibles.</p></section>;
   const report=calculatePortfolioExposure(weights,registry);
   return <section className="table-card exposure-panel" aria-label="Composition du portefeuille">
-    <div className="card-heading compact"><div><h2>Composition du portefeuille</h2><p>Photographie des compositions disponibles, parfois estimées via un ETF répliquant l’indice, indépendante des rendements historiques.</p></div></div>
+    <div className="card-heading compact"><div><h2>Composition du portefeuille</h2><p>Mode actif : <strong>{profileLabel}</strong> · Photographie des compositions disponibles, parfois estimées via un ETF répliquant l’indice, indépendante des rendements historiques.</p></div></div>
     {report?<><Coverage report={report}/><div className="exposure-dimension-tabs" role="group" aria-label="Dimensions de composition">
       {dims.map(d=><button type="button" key={d.id} className={dimension===d.id?"active":""} onClick={()=>setDimension(d.id)} aria-pressed={dimension===d.id}>{d.label}</button>)}
     </div>
