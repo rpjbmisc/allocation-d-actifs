@@ -40,3 +40,19 @@ L'agrégateur est `src/domain/exposures.ts`, sans React et sans accès réseau ;
 - Les groupes « Autres » peuvent cacher des zones différentes et diminuent la précision géographique affichée.
 - Les données ne sont pas rafraîchies automatiquement et aucun recouvrement ligne par ligne entre indices n'est calculé.
 - Dans Comparaison, Personnalisée prend **les poids sauvegardés** et pas les poids du profil automatiquement affiché.
+
+## Complément du 13 novembre 2026 : détail géographique enrichi
+
+Les fiches MSCI synthétiques ne publient souvent que 5 pays et un agrégat Autres. Pour améliorer la couverture, le fichier d'expositions s'appuie, quand les fiches MSCI ne suffisent pas, sur les **ventilations pays d'ETF qui suivent l'indice concerné**, et porte alors `basis: "proxy_etf"`. Les données sont des estimations très proches mais pas nécessairement identiques aux poids de l'indice (tracking, ajustements, trésorerie, etc.).
+
+- MSCI Pacific ex Japan IMI : les quatre pays directement publiés par MSCI, au 31 juillet 2026.
+- MSCI Europe : proxy ETF State Street SPDR MSCI Europe au 13 octobre 2026, tous les pays détaillés.
+- MSCI Emerging Markets : proxy ETF State Street SPDR MSCI Emerging Markets au 7 août 2026, 26 pays.
+- MSCI World : proxy ETF State Street SPDR MSCI World au 4 novembre 2026, 23 pays.
+- MSCI World ex USA : **calcul dérivé** des poids pays du proxy MSCI World (hors États-Unis, puis renormalisé), à la même date.
+- MSCI World Small Cap Value : pays listés dans la fiche de cet indice (et non de sa variante Value Weighted), au 31 juillet 2026.
+- MSCI World Value : cinq pays fournis dans la composition MSCI au 30 juin 2026.
+
+Le sous-ensemble MSCI Europe Small Cap Weighted reste en bloc Europe : sans confirmation que les rendements correspondent exactement à l'indice *Value Weighted* ou à une autre méthodologie, réutiliser les pondérations du fonds ZPRX serait une extrapolation non justifiée. Des indices multi-pays non complètement documentés peuvent toujours afficher « Autres », de manière intentionnelle.
+
+Le statut `basis` et les notes sources sont affichés dans le volet « Sources et limites ». Les données ne sont pas des expositions géographiques historiques ni une cartographie des ventes géographiques des entreprises.
