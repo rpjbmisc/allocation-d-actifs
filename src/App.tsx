@@ -406,7 +406,15 @@ function App() {
 
   const visiblePhases = historicalPhases.filter((phase) => phase.start >= start && phase.end <= end);
 
-  const portfolioWeights = useMemo(() => Object.fromEntries(selectedAssets.map((asset) => [asset.id, weights[asset.id] ?? 0])), [selectedAssets, weights]);
+  // A single source of truth for every active-mode view, including metrics and exposures.
+  // Automatic profiles are calculated during render and copied into editable state by an effect;
+  // reading only the state can briefly display the previous profile's composition.
+  const activeWeights = useMemo(() => (
+    optimizationProfile !== "custom" && automaticWeights && automaticCandidate
+      ? { ...weights, ...automaticCandidate }
+      : weights
+  ), [optimizationProfile, automaticWeights, automaticCandidate, weights]);
+  const portfolioWeights = useMemo(() => Object.fromEntries(selectedAssets.map((asset) => [asset.id, activeWeights[asset.id] ?? 0])), [selectedAssets, activeWeights]);
   const portfolio = useMemo(() => portfolioVisible ? computePortfolio(data, portfolioWeights, start, end, mode) : null, [portfolioVisible, data, end, mode, portfolioWeights, start]);
   const usdPortfolio = useMemo(() => portfolioVisible && currency === "eur" ? computePortfolio(usdData, portfolioWeights, start, end, mode) : null, [portfolioVisible, currency, end, mode, portfolioWeights, start, usdData]);
   const currencyComparison: CurrencyComparison | null = currency === "eur" && portfolio && usdPortfolio
@@ -695,7 +703,7 @@ function App() {
                     assetCatalog={assets}
                     data={data}
                     phases={visiblePhases}
-                    weights={weights}
+                    weights={activeWeights}
                     portfolio={portfolio}
                     equalPortfolio={equalPortfolio}
                     currencyComparison={currencyComparison}
@@ -1135,7 +1143,7 @@ function PortfolioView({
           <Metric label="Pire année" value={portfolio.worst ? `${portfolio.worst.year} · ${formatPercent(portfolio.worst.return)}` : "n.d."} description="Rendement annuel le plus faible." negative />
           <Metric label="Récupération" value={portfolio.recoveryYears === null ? "n.d." : `${portfolio.recoveryYears} an${portfolio.recoveryYears > 1 ? "s" : ""}`} description="Temps pour retrouver le précédent sommet." />
          </section>
-         <ExposurePanel weights={weights} registry={exposureRegistry} />
+         <ExposurePanel weights={Object.fromEntries(assets.map(asset => [asset.id, weights[asset.id] ?? 0]))} registry={exposureRegistry} profileLabel={optimizationProfileLabel(optimizationProfile)} />
          <PortfolioComparison portfolio={portfolio} equalPortfolio={equalPortfolio} mode={mode} />
          {currencyComparison && <CurrencyEffectCard portfolio={portfolio} comparison={currencyComparison} />}
          <section className="chart-card portfolio-chart">
