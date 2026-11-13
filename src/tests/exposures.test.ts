@@ -70,6 +70,16 @@ describe("photographies réelles du registre",()=>{
       expect(view.breakdown.countries.reduce((a,b)=>a+b.percent,0),id).toBeCloseTo(100,1);
     }
   });
+
+  it("dispose d'une couverture pays élevée pour World et World ex USA",()=>{
+    for(const id of ["msci_world","msci_world_ex_usa"]){
+      const p=calculatePortfolioExposure({[id]:100},real)!;
+      expect(p.precision.countries,id).toBeGreaterThan(99.9);
+      expect(p.breakdown.countries.reduce((n,c)=>n+c.percent,0),id).toBeCloseTo(100,1);
+    }
+    const ex=calculatePortfolioExposure({msci_world_ex_usa:100},real)!;
+    expect(asMap(ex.breakdown.countries)["États-Unis"]??0).toBe(0);
+  });
   it("ventile correctement les marchés d'Europe, du Pacifique et émergents",()=>{
     const p=calculatePortfolioExposure({msci_europe:40,msci_pacific_ex_japan_imi:40,msci_em:20},real)!;
     expect(p.precision.countries).toBeGreaterThan(99);
