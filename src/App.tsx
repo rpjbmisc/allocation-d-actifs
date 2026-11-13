@@ -692,6 +692,7 @@ function App() {
 
                   {activeTab === "portfolio" && <PortfolioView
                     assets={selectedAssets}
+                    assetCatalog={assets}
                     data={data}
                     phases={visiblePhases}
                     weights={weights}
@@ -947,6 +948,7 @@ function optimizationProfileDescription(profile: PortfolioOptimizationProfile): 
 
 function PortfolioView({
   assets,
+  assetCatalog,
   data,
   phases,
   weights,
@@ -988,6 +990,7 @@ function PortfolioView({
   onValidationSettingsChange,
 }: {
   assets: Asset[];
+  assetCatalog: Asset[];
   data: Dataset;
   phases: typeof historicalPhases;
   weights: Record<string, number>;
@@ -1156,7 +1159,7 @@ function PortfolioView({
     </> : <div className="error-panel portfolio-empty">Données insuffisantes ou incohérentes : vérifie les pondérations et les rendements de chaque année de la période. Aucun rendement manquant n’est remplacé par zéro.</div>}
     </div>
     </div>}
-    {space === "comparison" && <PortfolioComparisonDashboard assets={assets} weights={weights} portfolio={portfolio} equalPortfolio={equalPortfolio} benchmarkPortfolio={benchmarkPortfolio} growthOptimization={growthProposal} robustOptimization={robustProposal} goalOptimization={goalProposal} mode={mode} exposureRegistry={exposureRegistry} savedCustomWeights={savedCustomWeights} />}
+    {space === "comparison" && <PortfolioComparisonDashboard assets={assets} weights={weights} portfolio={portfolio} equalPortfolio={equalPortfolio} benchmarkPortfolio={benchmarkPortfolio} growthOptimization={growthProposal} robustOptimization={robustProposal} goalOptimization={goalProposal} mode={mode} exposureRegistry={exposureRegistry} savedCustomWeights={savedCustomWeights} assetCatalog={assetCatalog} data={data} start={start} end={end} />}
     {space === "validation" && <WalkForwardView assets={assets} result={walkForward} settings={validationSettings} robustScenarioSettings={robustScenarioSettings} onSettingsChange={onValidationSettingsChange} />}
   </div>;
 }
@@ -1186,6 +1189,10 @@ function allocationLabel(assets: Asset[], weights: Record<string, number> | null
 
 function PortfolioComparisonDashboard({
   assets,
+  assetCatalog,
+  data,
+  start,
+  end,
   weights,
   portfolio,
   equalPortfolio,
@@ -1198,6 +1205,10 @@ function PortfolioComparisonDashboard({
   savedCustomWeights,
 }: {
   assets: Asset[];
+  assetCatalog: Asset[];
+  data: Dataset;
+  start: number;
+  end: number;
   weights: Record<string, number>;
   portfolio: PortfolioStats | null;
   equalPortfolio: PortfolioStats | null;
@@ -1212,7 +1223,7 @@ function PortfolioComparisonDashboard({
   const rows: Array<{ label: string; type: string; weights: Record<string, number> | null; stats: PortfolioStats | null; note?: string }> = [
     { label: "Croissance", type: "Automatique · in-sample", weights: growthOptimization.weights, stats: growthOptimization.stats, note: "Optimisée sur toute la période affichée." },
     { label: "Tout-terrain", type: "Automatique · 4 futurs", weights: robustOptimization.weights, stats: robustOptimization.stats, note: robustOptimization.prospectiveSummary ? "Hypothèses économiques illustratives, non prédictives." : "Scénarios indisponibles." },
-    { label: "Personnalisée", type: "Poids fixes · in-sample", weights, stats: portfolio, note: "Pondérations modifiables dans Construction." },
+    { label: "Personnalisée", type: "Poids fixes · in-sample", weights: savedCustomWeights, stats: savedCustomWeights ? computePortfolio(data, savedCustomWeights, start, end, mode) : null, note: "Pondérations sauvegardées dans Construction." },
     { label: "Équipondérée", type: "Référence · in-sample", weights: Object.fromEntries(assets.map(asset => [asset.id, 1])), stats: equalPortfolio },
     { label: "MSCI World", type: "Benchmark · in-sample", weights: { msci_world: 1 }, stats: benchmarkPortfolio, note: benchmarkPortfolio ? "Série indépendante si disponible." : "Non comparable sur cette période." },
     { label: "Objectif patrimonial", type: "Automatique · simulation", weights: goalOptimization.weights, stats: goalOptimization.stats, note: goalOptimization.goalSummary ? `Cible atteinte dans ${goalOptimization.goalSummary.probabilityPct.toFixed(1)} % des scénarios ; capital médian ${formatNumber(goalOptimization.goalSummary.medianCapital, 0)}` : "Simulation indisponible." },
@@ -1221,7 +1232,7 @@ function PortfolioComparisonDashboard({
   return <div className="portfolio-space-content">
     <section className="table-card comparison-dashboard">
       <div className="card-heading compact"><div className="heading-icon warm"><BarChart3 size={17} /></div><div><h2>Comparer les allocations</h2><p>Résultats historiques sur la même période, devise, lecture et règles de rééquilibrage. Le hors échantillon est séparé dans Validation.</p></div></div>
-       <div className="table-scroll"><table><thead><tr><th>Allocation</th><th>Nature</th><th>TCAM historique</th><th>Lecture des scénarios</th><th>Volatilité</th><th>Drawdown annuel</th><th>Pondérations</th></tr></thead><tbody>{rows.map(row => <tr key={row.label}><td>{row.label}</td><td>{row.type}{row.note && <small className="table-note">{row.note}</small>}</td><td>{formatPercent(row.stats?.cagr)}</td><td>{row.label === "Tout-terrain" ? robustOptimization.prospectiveSummary ? "4 futurs étudiés" : "n.d." : row.label === "Objectif patrimonial" ? goalOptimization.goalSummary ? `${goalOptimization.goalSummary.probabilityPct.toFixed(1)} % de réussite` : "n.d." : "n.a."}</td><td>{formatPercent(row.stats?.volatility)}</td><td>{formatPercent(row.stats?.maxDrawdown)}</td><td>{row.label === "MSCI World" ? row.stats ? "100 % MSCI World" : "n.d." : allocationLabel(assets, row.weights)}</td></tr>)}</tbody></table></div>
+       <div className="table-scroll"><table><thead><tr><th>Allocation</th><th>Nature</th><th>TCAM historique</th><th>Lecture des scénarios</th><th>Volatilité</th><th>Drawdown annuel</th><th>Pondérations</th></tr></thead><tbody>{rows.map(row => <tr key={row.label}><td>{row.label}</td><td>{row.type}{row.note && <small className="table-note">{row.note}</small>}</td><td>{formatPercent(row.stats?.cagr)}</td><td>{row.label === "Tout-terrain" ? robustOptimization.prospectiveSummary ? "4 futurs étudiés" : "n.d." : row.label === "Objectif patrimonial" ? goalOptimization.goalSummary ? `${goalOptimization.goalSummary.probabilityPct.toFixed(1)} % de réussite` : "n.d." : "n.a."}</td><td>{formatPercent(row.stats?.volatility)}</td><td>{formatPercent(row.stats?.maxDrawdown)}</td><td>{row.label === "MSCI World" ? row.stats ? "100 % MSCI World" : "n.d." : allocationLabel(assetCatalog, row.weights)}</td></tr>)}</tbody></table></div>
     </section>
     <ExposurePairComparison registry={exposureRegistry} candidates={rows.map(row=>({id:row.label,label:row.label,weights:row.label==="Personnalisée"?(savedCustomWeights??null):row.weights}))}/>
     <section className="insight-card comparison-reading">
