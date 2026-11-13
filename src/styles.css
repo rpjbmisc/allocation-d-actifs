@@ -386,3 +386,29 @@ button:disabled, input:disabled { cursor: not-allowed; opacity: .45; }
 .validation-advanced .method-note { line-height: 1.5; }
 .validation-results-card .validation-main-table { min-width: 580px; }
 @media (max-width: 520px) { .validation-timeline { grid-template-columns: minmax(0,2fr) minmax(0,1fr); } }
+
+
+/* Décomposition économique (photographies d'indices, distinctes des rendements). */
+.exposure-panel { padding: 18px 20px; min-width: 0; }
+.exposure-panel .card-heading { margin-bottom: 12px; }
+.exposure-coverage { display: flex; flex-wrap: wrap; gap: 7px 16px; padding: 10px 12px; background: #f1f5f7; color: #536b7a; font-size: 11px; margin: 10px 0 14px; }
+.exposure-coverage strong { color: #17324a; }
+.exposure-dimension-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin: 12px 0 9px; }
+.exposure-dimension-tabs button { border: 1px solid #d6e1e6; border-radius: 4px; padding: 8px 13px; background: #fff; color: #536b7a; font-size: 11px; font-weight: 600; }
+.exposure-dimension-tabs button.active { background: #17324a; border-color: #17324a; color: white; }
+.exposure-panel .method-note { margin: 7px 0 14px; font-size: 11px; line-height: 1.55; }
+.exposure-rows { display: grid; gap: 13px; max-width: 850px; }
+.exposure-row { min-width: 0; }
+.exposure-label { display: flex; gap: 12px; justify-content: space-between; align-items: baseline; color: #536b7a; font-size: 12px; margin-bottom: 4px; }
+.exposure-label strong { color: #17324a; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.exposure-track { width: 100%; background: #eef2f4; height: 10px; border-radius: 4px; overflow: hidden; }
+.exposure-fill { height: 100%; border-radius: 4px; }
+.exposure-sources { border-top: 1px solid #dfe6ea; margin-top: 20px; padding-top: 12px; color: #647784; font-size: 11px; line-height: 1.6; }
+.exposure-sources summary { cursor: pointer; font-weight: 600; color: #3d5b70; }
+.exposure-sources p { margin: 7px 0; }
+.exposure-pair-controls { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 14px; }
+.exposure-pair-controls label { font-size: 11px; color: #536b7a; font-weight: 600; display: grid; gap: 5px; }
+.exposure-pair-controls select { padding: 9px; border: 1px solid #d6e1e6; border-radius: 4px; background: white; color: #17324a; width: 100%; font: inherit; }
+.exposure-pair-table { width: 100%; }
+.exposure-pair-table th,.exposure-pair-table td { font-variant-numeric: tabular-nums; }
+@media(max-width:540px) { .exposure-panel { padding: 14px; }.exposure-pair-controls { grid-template-columns: 1fr; }.exposure-dimension-tabs button { flex: 1 1 70px; padding: 8px 7px; } }
