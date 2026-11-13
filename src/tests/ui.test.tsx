@@ -151,16 +151,22 @@ it("offers live profile cards instead of frozen historical portfolios", async ()
   render(<App />);
   await screen.findByRole("spinbutton", { name: "Poids saisi pour MSCI World" });
   await user.click(screen.getByRole("button", { name: "Modifier" }));
-  expect(screen.getByRole("group", { name: "Objectifs d'optimisation" })).toBeTruthy();
+  expect(screen.getByRole("group", { name: "Modes de construction" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: /À la carte/ })).toBeTruthy();
   expect(screen.getByRole("button", { name: /Croissance maximale/ })).toBeTruthy();
   expect(screen.getByRole("button", { name: /Croissance maîtrisée/ })).toBeTruthy();
-  expect(screen.getByRole("button", { name: /Robustesse.*Dynamique/ })).toBeTruthy();
-  expect(screen.getByRole("button", { name: /Objectif patrimonial.*Dynamique/ })).toBeTruthy();
+  expect(screen.getByRole("button", { name: /Robustesse.*Automatique/ })).toBeTruthy();
+  expect(screen.getByRole("button", { name: /Objectif patrimonial.*Automatique/ })).toBeTruthy();
   expect(screen.queryByText("Allocation avec Bitcoin")).toBeNull();
+  expect(screen.getByRole("button", { name: /À la carte/ }).getAttribute("aria-pressed")).toBe("true");
 
   await user.click(screen.getByRole("button", { name: /Croissance maximale/ }));
+  expect(screen.getByRole("button", { name: /Croissance maximale/ }).getAttribute("aria-pressed")).toBe("true");
+  expect(screen.getByRole("button", { name: /À la carte/ }).getAttribute("aria-pressed")).toBe("false");
   expect((screen.getByRole("checkbox", { name: "Activer le budget de drawdown annuel" }) as HTMLInputElement).checked).toBe(false);
   await user.click(screen.getByRole("button", { name: /Croissance maîtrisée/ }));
   expect((screen.getByRole("checkbox", { name: "Activer le budget de drawdown annuel" }) as HTMLInputElement).checked).toBe(true);
   expect((screen.getByRole("spinbutton", { name: "Plafond de poids par actif" }) as HTMLInputElement).value).toBe("50");
+  await user.click(screen.getByRole("button", { name: /À la carte/ }));
+  expect(screen.getByRole("button", { name: /À la carte/ }).getAttribute("aria-pressed")).toBe("true");
 }, UI_TEST_TIMEOUT);

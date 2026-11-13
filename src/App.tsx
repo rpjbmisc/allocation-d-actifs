@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { loadHistoricalData } from "./data/load";
 import { allocationProfiles, defaultConstraintsForProfile, DEFAULT_ALLOCATION_PROFILE } from "./optimization/profiles";
 import type { AllocationProfileId } from "./optimization/profiles";
+import { suggestProfileAssets } from "./optimization/suggestedAssets";
 import { defaultProspectiveSettings } from "./scenarios/prospective";
 import type { ProspectiveSettings } from "./scenarios/prospective";
 import { optimizeProspective } from "./optimization/prospective";
@@ -181,6 +182,7 @@ function App() {
   const [weights, setWeights] = useState<Record<string, number>>({});
   const [automaticWeights, setAutomaticWeights] = useState(false);
   const [allocationIntent, setAllocationIntent] = useState<AllocationProfileId>(DEFAULT_ALLOCATION_PROFILE);
+  const [selectionMode, setSelectionMode] = useState<"custom" | "suggested">("custom");
   const [optimizationProfile, setOptimizationProfile] = useState<PortfolioOptimizationProfile>("growth");
   const [growthConstraints, setGrowthConstraints] = useState<GrowthConstraintSettings>(defaultGrowthConstraints);
   const [robustScenarioSettings, setRobustScenarioSettings] = useState<ScenarioSettings>(defaultRobustScenarioSettings);
@@ -257,6 +259,17 @@ function App() {
     ? allSelectedAssets.filter((asset) => !selectedAssets.includes(asset)) : [];
   const duration = Math.max(0, end - start + 1);
   const portfolioVisible = !loading && !error && !isCorrelationPage && activeTab === "portfolio";
+  const suggestedSelection = useMemo(() => selectionMode === "suggested"
+    ? suggestProfileAssets(assets, data, start, end, mode, allocationIntent)
+    : null, [selectionMode, assets, data, start, end, mode, allocationIntent]);
+
+  useEffect(() => {
+    if (!suggestedSelection?.ids.length) return;
+    setSelected(current => current.length === suggestedSelection.ids.length &&
+      current.every((id, index) => id === suggestedSelection.ids[index])
+      ? current : suggestedSelection.ids);
+  }, [suggestedSelection]);
+
 
   const stats = useMemo(() => Object.fromEntries(selectedAssets.map((asset) => {
     const window = activeTab === "portfolio" ? [start, end] : assetAnalysisWindow(data[asset.id], start, end, mode);
@@ -488,15 +501,27 @@ function App() {
   const diversificationRatio = diversificationMetrics.diversificationRatio;
 
   const selectAllocationIntent = (intent: AllocationProfileId) => {
-    automaticCandidateInitialized.current = false;
+    const suggestion = suggestProfileAssets(assets, data, start, end, mode, intent);
     setAllocationIntent(intent);
+    setSelectionMode("suggested");
     setGrowthConstraints(defaultConstraintsForProfile(intent));
     setOptimizationProfile(intent === "controlled" ? "growth" : intent);
     setAutomaticWeights(true);
+    automaticCandidateInitialized.current = false;
+    setRange([start, end]);
+    setCommonPeriod(false);
+    if (suggestion.ids.length) setSelected(suggestion.ids);
     setActiveTab("portfolio");
   };
 
+  const selectCustom = () => {
+    setSelectionMode("custom");
+    setAutomaticWeights(false);
+    automaticCandidateInitialized.current = false;
+  };
+
   const toggleAsset = (id: string) => {
+    if (selectionMode === "suggested") return;
     if (!selected.includes(id) && periodRestricted && !periodEligibleAssets.has(id)) return;
     setSelected((current) => {
       if (current.includes(id)) return current.length > 1 ? current.filter((item) => item !== id) : current;
@@ -528,6 +553,7 @@ function App() {
     const fallbackSelection = initialSelection.length ? initialSelection : availableAssets.slice(0, 3).map((asset) => asset.id);
     setOptimizationProfile("growth");
     setAllocationIntent(DEFAULT_ALLOCATION_PROFILE);
+    setSelectionMode("custom");
     setGrowthConstraints(defaultConstraintsForProfile(DEFAULT_ALLOCATION_PROFILE));
     setAutomaticWeights(false);
     setSelected(fallbackSelection);
@@ -547,7 +573,7 @@ function App() {
     const proposal = profile === "growth" ? growthOptimization : profile === "robust" ? activeRobustOptimization : goalOptimization;
     if (!proposal.weights) return;
     setOptimizationProfile(profile);
-    setAllocationIntent(profile === "growth" && allocationIntent === "controlled" ? "controlled" : profile);
+    if (selectionMode === "custom") setAllocationIntent(profile === "growth" && allocationIntent === "controlled" ? "controlled" : profile);
     setAutomaticWeights(true);
     setWeights((current) => selectedAssets.reduce(
       (next, asset) => ({ ...next, [asset.id]: (proposal.weights?.[asset.id] ?? 0) * 100 }),
@@ -602,24 +628,37 @@ function App() {
                <div className="configuration-steps">
                   <section className="configuration-step">
                      <div className="step-heading"><span className="step-number">01</span><div><h3>Actifs</h3><p>Choisis jusqu'à dix séries à comparer.</p></div><strong>{selectedCount}/{MAX_SELECTED_ASSETS}</strong></div>
-                    <div className="candidate-grid" role="group" aria-label="Objectifs d'optimisation">
-                      {allocationProfiles.map((profile) => <button key={profile.id} className={`candidate-card ${allocationIntent === profile.id ? "selected" : ""}`} aria-pressed={allocationIntent === profile.id} onClick={() => selectAllocationIntent(profile.id)}>
-                        <div className="candidate-card-heading"><strong>{profile.label}</strong><span>Dynamique</span></div>
+                    <div className="candidate-grid" role="group" aria-label="Modes de construction">
+                      <button className={selectionMode === "custom" ? "candidate-card custom selected" : "candidate-card custom"} aria-pressed={selectionMode === "custom"} onClick={selectCustom}>
+                        <div className="candidate-card-heading"><strong>À la carte</strong><span>Libre</span></div>
+                        <p>Choisis toi-même les actifs ; l'application peut ensuite optimiser leurs pondérations.</p>
+                        <div className="candidate-card-footer">Jusqu'à {MAX_SELECTED_ASSETS} actifs</div>
+                      </button>
+                      {allocationProfiles.map(profile => <button key={profile.id} className={selectionMode === "suggested" && allocationIntent === profile.id ? "candidate-card selected" : "candidate-card"} aria-pressed={selectionMode === "suggested" && allocationIntent === profile.id} onClick={() => selectAllocationIntent(profile.id)}>
+                        <div className="candidate-card-heading"><strong>{profile.label}</strong><span>Automatique</span></div>
                         <p>{profile.description}</p>
-                        <div className="candidate-card-footer">{profile.method} · paramètres modifiables</div>
+                        <div className="candidate-card-footer">{profile.method} · actifs présélectionnés</div>
                       </button>)}
                     </div>
-                    <p className="preset-description">Les profils recalculent les pondérations à partir des actifs sélectionnés et de la période courante. Bitcoin est facultatif, comme tous les autres actifs. Un résultat historique ou simulé n'est pas une prévision.</p>
+                    <p className="preset-description">{selectionMode === "custom"
+                      ? "Choisis librement les actifs à comparer. Les profils d'optimisation du Portefeuille peuvent ensuite proposer les pondérations."
+                      : "Les actifs sont automatiquement présélectionnés parmi les séries disponibles sur la même période. Sélection heuristique fondée sur rendement, risque et corrélations ; les pondérations sont ensuite optimisées. Pour modifier les actifs, repasse en mode À la carte."}</p>
+                    {selectionMode === "suggested" && suggestedSelection && <div className="configuration-message" role="status">
+                      {suggestedSelection.ids.length
+                        ? `${suggestedSelection.ids.length} actifs présélectionnés parmi ${suggestedSelection.eligibleCount} admissibles sur ${start}–${end}. ${suggestedSelection.excludedCount} séries écartées faute d'historique commun.`
+                        : suggestedSelection.diagnostics.join(" ")}
+                      <span> Sélection indicative : les poids sont ensuite calculés par le moteur d'optimisation.</span>
+                    </div>}
                     <div className="asset-picker-toolbar">
                       <label className="asset-search"><Search size={15} /><span className="sr-only">Rechercher un actif</span><input value={assetSearch} onChange={(event) => setAssetSearch(event.target.value)} placeholder="Rechercher un actif" /></label>
                       <div className="asset-categories" aria-label="Catégories d'actifs">{assetCategories.map((category) => <button key={category} className={assetCategoryFilter === category ? "active" : ""} onClick={() => setAssetCategoryFilter(category)}>{category}</button>)}</div>
                     </div>
-                    <div className="asset-chips">
+                    <div className={selectionMode === "suggested" ? "asset-chips locked" : "asset-chips"}>
                       {filteredAssets.map((asset) => {
                          const isSelected = selected.includes(asset.id);
                          const hasData = Boolean(data[asset.id]?.length);
                          const availableForPeriod = !periodRestricted || periodEligibleAssets.has(asset.id);
-                          return <button key={asset.id} className={`asset-chip ${isSelected ? "selected" : ""} ${!hasData || !availableForPeriod ? "unavailable" : ""}`} style={{ "--asset-color": asset.accentColor } as React.CSSProperties} onClick={() => toggleAsset(asset.id)} disabled={!hasData || (periodRestricted && !availableForPeriod && !isSelected) || (!isSelected && selected.length >= MAX_SELECTED_ASSETS)} title={!hasData ? "Données indisponibles" : !availableForPeriod ? `Indice non disponible sur ${range[0]}–${range[1]}` : undefined} aria-pressed={isSelected}>
+                          return <button key={asset.id} className={`asset-chip ${isSelected ? "selected" : ""} ${!hasData || !availableForPeriod ? "unavailable" : ""}`} style={{ "--asset-color": asset.accentColor } as React.CSSProperties} onClick={() => toggleAsset(asset.id)} disabled={!hasData || selectionMode === "suggested" || (periodRestricted && !availableForPeriod && !isSelected) || (!isSelected && selected.length >= MAX_SELECTED_ASSETS)} title={!hasData ? "Données indisponibles" : !availableForPeriod ? `Indice non disponible sur ${range[0]}–${range[1]}` : undefined} aria-pressed={isSelected}>
                            <span className="chip-dot" /> <span>{asset.name}</span><small>{asset.startYear}–{asset.endYear}</small>{!hasData && <small>indisponible</small>}{hasData && !availableForPeriod && <small>hors période</small>}
                          </button>;
                       })}
