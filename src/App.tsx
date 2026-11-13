@@ -3,6 +3,7 @@ import { loadHistoricalData } from "./data/load";
 import { defaultProspectiveSettings } from "./scenarios/prospective";
 import type { ProspectiveSettings } from "./scenarios/prospective";
 import { optimizeProspective } from "./optimization/prospective";
+import { generateJointScenarios, scenarioPortfolioCagr, summarizeScenarioPortfolio } from "./scenarios/generator";
 import type { ProspectiveResult } from "./optimization/prospective";
 import {
   Area,
@@ -130,6 +131,29 @@ const defaultValidationSettings: WalkForwardSettings = {
   expanding: true,
 };
 const defaultRobustScenarioSettings: ScenarioSettings = DEFAULT_SCENARIO_SETTINGS;
+const CUSTOM_ALLOCATION_KEY = "allocation-d-actifs:custom-portfolio:v1";
+const CUSTOM_ACTIVE_KEY = "allocation-d-actifs:custom-active:v1";
+type CustomAllocation = { selected: string[]; weights: Record<string, number> };
+
+function readSavedCustomAllocation(): CustomAllocation | null {
+  try {
+    const raw = window.localStorage.getItem(CUSTOM_ALLOCATION_KEY);
+    if (!raw) return null;
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") return null;
+    const { selected, weights } = parsed as Partial<CustomAllocation>;
+    if (!Array.isArray(selected) || selected.length < 1 || selected.length > MAX_SELECTED_ASSETS ||
+        !selected.every(id => typeof id === "string") || new Set(selected).size !== selected.length ||
+        !weights || typeof weights !== "object" || Array.isArray(weights)) return null;
+    if (!selected.every(id => typeof weights[id] === "number" && Number.isFinite(weights[id]) && weights[id] >= 0 && weights[id] <= 100)) return null;
+    return { selected, weights: Object.fromEntries(selected.map(id => [id, weights[id]])) };
+  } catch { return null; }
+}
+
+function wasCustomActive(): boolean {
+  try { return window.localStorage.getItem(CUSTOM_ACTIVE_KEY) === "true"; }
+  catch { return false; }
+}
 
 function assetCategory(id: string): AssetCategory {
   if (["sp500", "msci_world", "msci_world_ex_usa", "msci_world_small_cap_value", "msci_world_value", "msci_em", "russell2000", "us_total_market", "global_infrastructure", "msci_pacific_ex_japan_imi", "msci_em_asia", "msci_japan", "msci_europe_small_cap_weighted", "msci_usa_small_cap_weighted", "msci_europe"].includes(id)) return "Actions";
@@ -181,7 +205,10 @@ function App() {
   const [hiddenAssets, setHiddenAssets] = useState<string[]>([]);
   const [weights, setWeights] = useState<Record<string, number>>({});
   const [automaticWeights, setAutomaticWeights] = useState(false);
-  const [optimizationProfile, setOptimizationProfile] = useState<PortfolioOptimizationProfile>("growth");
+  const [customAllocation, setCustomAllocation] = useState<CustomAllocation | null>(readSavedCustomAllocation);
+  const [optimizationProfile, setOptimizationProfile] = useState<PortfolioOptimizationProfile>(
+    () => wasCustomActive() && readSavedCustomAllocation() ? "custom" : "growth",
+  );
   const [growthConstraints, setGrowthConstraints] = useState<GrowthConstraintSettings>(defaultGrowthConstraints);
   const [robustScenarioSettings, setRobustScenarioSettings] = useState<ScenarioSettings>(defaultRobustScenarioSettings);
   const [prospectiveSettings, setProspectiveSettings] = useState<ProspectiveSettings>(defaultProspectiveSettings);
@@ -209,9 +236,14 @@ function App() {
         setRawData(rawData);
         setCurrencyContext(currencyContext);
         const sharedSelection = selected.filter((id) => registry.some((asset) => asset.id === id));
-        const initialSelection = sharedSelection.length ? sharedSelection : preferredIds.filter((id) => registry.some((asset) => asset.id === id));
+        const savedSelection = optimizationProfile === "custom"
+          ? customAllocation?.selected.filter(id => registry.some(asset => asset.id === id)) ?? [] : [];
+        const initialSelection = savedSelection.length ? savedSelection : sharedSelection.length ? sharedSelection : preferredIds.filter((id) => registry.some((asset) => asset.id === id));
         setSelected(initialSelection);
-        setWeights(Object.fromEntries(registry.map((asset) => [asset.id, initialSelection.includes(asset.id) ? 100 / initialSelection.length : 0])));
+        setWeights(Object.fromEntries(registry.map(asset => [asset.id,
+          initialSelection.includes(asset.id)
+            ? savedSelection.length ? customAllocation?.weights[asset.id] ?? 0 : 100 / initialSelection.length : 0,
+        ])));
       } catch (cause) {
         if (!cancelled) setError(cause instanceof Error ? cause.message : "Impossible de charger les données.");
       } finally {
@@ -221,6 +253,14 @@ function App() {
     void load();
     return () => { cancelled = true; };
   }, []);
+
+  useEffect(() => {
+    try {
+      if (customAllocation) window.localStorage.setItem(CUSTOM_ALLOCATION_KEY, JSON.stringify(customAllocation));
+      else window.localStorage.removeItem(CUSTOM_ALLOCATION_KEY);
+      window.localStorage.setItem(CUSTOM_ACTIVE_KEY, String(optimizationProfile === "custom"));
+    } catch { /* Le stockage local peut être indisponible. */ }
+  }, [customAllocation, optimizationProfile]);
 
   useEffect(() => {
     if (loading || isCorrelationPage) return;
@@ -362,7 +402,7 @@ function App() {
   );
 
   useEffect(() => {
-    if (!portfolioVisible) return;
+    if (!portfolioVisible || optimizationProfile === "custom") return;
     if (!automaticCandidate) {
       setAutomaticWeights(false);
       return;
@@ -375,7 +415,7 @@ function App() {
     });
     setAutomaticWeights(true);
     automaticCandidateInitialized.current = true;
-  }, [automaticCandidate, automaticWeights, portfolioVisible, selectedAssets]);
+  }, [automaticCandidate, automaticWeights, optimizationProfile, portfolioVisible, selectedAssets]);
 
   const years = useMemo(() => {
     const allYears = new Set<number>();
@@ -486,28 +526,34 @@ function App() {
 
   const toggleAsset = (id: string) => {
     if (!selected.includes(id) && periodRestricted && !periodEligibleAssets.has(id)) return;
-    setSelected((current) => {
-      if (current.includes(id)) return current.length > 1 ? current.filter((item) => item !== id) : current;
-      if (current.length >= MAX_SELECTED_ASSETS) return current;
-      setWeights((previous) => ({ ...previous, [id]: 0 }));
-      return [...current, id];
-    });
+    const nextSelected = selected.includes(id)
+      ? selected.length > 1 ? selected.filter(item => item !== id) : selected
+      : selected.length < MAX_SELECTED_ASSETS ? [...selected, id] : selected;
+    if (nextSelected === selected) return;
+    const nextWeights = { ...weights, [id]: 0 };
+    setSelected(nextSelected);
+    setWeights(nextWeights);
+    if (optimizationProfile === "custom") setCustomAllocation({ selected: nextSelected, weights: nextWeights });
+  };
+
+  const saveManualWeights = (nextWeights: Record<string, number>) => {
+    setAutomaticWeights(false);
+    setOptimizationProfile("custom");
+    setWeights(nextWeights);
+    setCustomAllocation({ selected: [...selected], weights: nextWeights });
   };
 
   const updateWeight = (id: string, value: number) => {
-    setAutomaticWeights(false);
-    setWeights((current) => ({ ...current, [id]: Math.max(0, Math.min(100, value)) }));
+    saveManualWeights({ ...weights, [id]: Math.max(0, Math.min(100, value)) });
   };
 
   const normalizeWeights = () => {
-    setAutomaticWeights(false);
     const total = selectedAssets.reduce((sum, asset) => sum + (weights[asset.id] ?? 0), 0);
     if (total <= 0 && selectedAssets.length > 0) {
-      const equalWeight = 100 / selectedAssets.length;
-      setWeights((current) => selectedAssets.reduce((next, asset) => ({ ...next, [asset.id]: equalWeight }), { ...current }));
-      return;
+      saveManualWeights(selectedAssets.reduce((next, asset) => ({ ...next, [asset.id]: 100 / selectedAssets.length }), { ...weights }));
+    } else if (total > 0) {
+      saveManualWeights(selectedAssets.reduce((next, asset) => ({ ...next, [asset.id]: (weights[asset.id] ?? 0) / total * 100 }), { ...weights }));
     }
-    setWeights((current) => selectedAssets.reduce((next, asset) => ({ ...next, [asset.id]: (current[asset.id] ?? 0) / total * 100 }), { ...current }));
   };
 
   const resetConfiguration = () => {
@@ -515,6 +561,7 @@ function App() {
     const initialSelection = preferredIds.filter((id) => availableAssets.some((asset) => asset.id === id));
     const fallbackSelection = initialSelection.length ? initialSelection : availableAssets.slice(0, 3).map((asset) => asset.id);
     setOptimizationProfile("growth");
+    setCustomAllocation(null);
     setGrowthConstraints({ ...defaultGrowthConstraints });
     setAutomaticWeights(false);
     setSelected(fallbackSelection);
@@ -531,6 +578,18 @@ function App() {
   };
 
   const applyOptimizationProfile = (profile: PortfolioOptimizationProfile) => {
+    if (profile === "custom") {
+      if (customAllocation) {
+        const available = customAllocation.selected.filter(id => assets.some(asset => asset.id === id));
+        if (available.length) {
+          setSelected(available);
+          setWeights(Object.fromEntries(assets.map(asset => [asset.id, available.includes(asset.id) ? customAllocation.weights[asset.id] ?? 0 : 0])));
+        }
+      } else setCustomAllocation({ selected: [...selected], weights: { ...weights } });
+      setOptimizationProfile("custom");
+      setAutomaticWeights(false);
+      return;
+    }
     const proposal = profile === "growth" ? growthOptimization : profile === "robust" ? activeRobustOptimization : goalOptimization;
     if (!proposal.weights) return;
     setOptimizationProfile(profile);
@@ -541,8 +600,13 @@ function App() {
     ));
   };
 
+  const copyCurrentToCustom = () => {
+    if (customAllocation && !window.confirm("Remplacer ton allocation personnalisée enregistrée par les poids affichés ?")) return;
+    saveManualWeights({ ...weights });
+  };
+
   const toggleHiddenAsset = (id: string) => {
-    setHiddenAssets((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
+    setHiddenAssets((current) => current.includes(id) ? current.filter(item => item !== id) : [...current, id]);
   };
 
   const activeLabel = mode === "nominal" ? "nominal" : "réel";
@@ -610,22 +674,22 @@ function App() {
                  <section className="configuration-step">
                    <div className="step-heading"><span className="step-number">02</span><div><h3>Période</h3><p>Définis la fenêtre historique à analyser.</p></div><strong>{start}–{end}</strong></div>
                    <div className="control-row">
-                      <label className="switch-control"><input type="checkbox" checked={commonPeriod} onChange={(event) => { setOptimizationProfile("growth"); setCommonPeriod(event.target.checked); }} /><span className="switch" /> <span>Utiliser la période commune</span></label>
+                      <label className="switch-control"><input type="checkbox" checked={commonPeriod} onChange={(event) => { setCommonPeriod(event.target.checked); }} /><span className="switch" /> <span>Utiliser la période commune</span></label>
                       {commonPeriod && <strong className="period-value">{selectedCount ? `${commonStart}–${commonEnd}` : "En attente d'actifs"}</strong>}
-                       {!commonPeriod && <label className="range-control">De <input type="number" value={range[0]} onChange={(event) => { setOptimizationProfile("growth"); setRange([Number(event.target.value), range[1]]); }} /> à <input type="number" value={range[1]} onChange={(event) => { setOptimizationProfile("growth"); setRange([range[0], Number(event.target.value)]); }} /></label>}
+                       {!commonPeriod && <label className="range-control">De <input type="number" value={range[0]} onChange={(event) => { setRange([Number(event.target.value), range[1]]); }} /> à <input type="number" value={range[1]} onChange={(event) => { setRange([range[0], Number(event.target.value)]); }} /></label>}
                      </div>
-                      <PeriodSelector start={range[0]} end={range[1]} onChange={(nextStart, nextEnd) => { setOptimizationProfile("growth"); setCommonPeriod(false); setRange([nextStart, nextEnd]); }} />
+                      <PeriodSelector start={range[0]} end={range[1]} onChange={(nextStart, nextEnd) => { setCommonPeriod(false); setRange([nextStart, nextEnd]); }} />
                     <p className="period-explanation">{commonPeriod ? selectedCount ? `La période s'ajuste automatiquement aux années disponibles pour les ${selectedCount} actifs sélectionnés. Elle sera recalculée à chaque changement.` : "Sélectionne au moins un actif pour calculer la période commune." : "Hors Portefeuille, chaque actif est analysé sur ses années disponibles dans la plage choisie. Dans Portefeuille, seuls les actifs couvrant toute la plage sont utilisés."}</p>
                  </section>
 
                   <section className="configuration-step">
                     <div className="step-heading"><span className="step-number">03</span><div><h3>Lecture</h3><p>Choisis l'effet de l'inflation sur les rendements.</p></div><strong>{mode === "nominal" ? "Nominal" : "Réel"}</strong></div>
-                      <div className="mode-toggle"><button className={mode === "nominal" ? "active" : ""} onClick={() => { if (mode !== "nominal") { setOptimizationProfile("growth"); setMode("nominal"); } }}>Nominal</button><button className={mode === "real" ? "active" : ""} onClick={() => { if (mode !== "real") { setOptimizationProfile("growth"); setMode("real"); } }}>Réel</button></div>
+                      <div className="mode-toggle"><button className={mode === "nominal" ? "active" : ""} onClick={() => { if (mode !== "nominal") { setMode("nominal"); } }}>Nominal</button><button className={mode === "real" ? "active" : ""} onClick={() => { if (mode !== "real") { setMode("real"); } }}>Réel</button></div>
                     <p className="period-explanation">Nominal conserve les montants courants ; réel retire l'effet de l'inflation.</p>
                   </section>
                   <section className="configuration-step">
                     <div className="step-heading"><span className="step-number">04</span><div><h3>Devise de référence</h3><p>Le mode EUR convertit les rendements USD sans couverture de change.</p></div><strong>{currency === "eur" ? "EUR" : "USD"}</strong></div>
-                      <div className="mode-toggle"><button className={currency === "usd" ? "active" : ""} onClick={() => { if (currency !== "usd") { setOptimizationProfile("growth"); setCurrency("usd"); } }}>USD historique</button><button className={currency === "eur" ? "active" : ""} onClick={() => { if (currency !== "eur") { setOptimizationProfile("growth"); setCurrency("eur"); } }}>EUR non couvert</button></div>
+                      <div className="mode-toggle"><button className={currency === "usd" ? "active" : ""} onClick={() => { if (currency !== "usd") { setCurrency("usd"); } }}>USD historique</button><button className={currency === "eur" ? "active" : ""} onClick={() => { if (currency !== "eur") { setCurrency("eur"); } }}>EUR non couvert</button></div>
                     <p className="period-explanation">En EUR, la série commence en 1961 et utilise le taux USD/EUR historique puis le taux BCE à partir de 1999.</p>
                   </section>
                </div>
@@ -664,12 +728,16 @@ function App() {
                     diversificationRatio={diversificationRatio}
                     mode={mode}
                     automaticWeights={automaticWeights}
+                     hasCustomAllocation={customAllocation !== null}
+                     onCopyToCustom={copyCurrentToCustom}
                      optimizationProfile={optimizationProfile}
                      growthConstraints={growthConstraints}
                      growthOptimization={optimizationResult}
                      growthProposal={growthOptimization}
                      robustProposal={activeRobustOptimization} prospectiveSettings={prospectiveSettings} onProspectiveSettingsChange={setProspectiveSettings} goalProposal={goalOptimization} goalSettings={goalSettings} onGoalSettingsChange={(next) => setGoalSettings(current => ({ ...current, ...next }))}
                      robustScenarioSettings={robustScenarioSettings}
+                     start={start}
+                     end={end}
                      benchmarkPortfolio={benchmarkPortfolio}
                     walkForward={walkForward}
                     space={portfolioSpace}
@@ -893,11 +961,11 @@ function correlationColor(value: number | null, diagonal: boolean): string {
 }
 
 function optimizationProfileLabel(profile: PortfolioOptimizationProfile): string {
-  return profile === "growth" ? "Croissance" : profile === "robust" ? "Robustesse" : "Objectif patrimonial";
+  return profile === "growth" ? "Croissance" : profile === "robust" ? "Robustesse" : profile === "goal" ? "Objectif patrimonial" : "Personnalisé";
 }
 
 function optimizationProfileDescription(profile: PortfolioOptimizationProfile): string {
-  return profile === "growth" ? "meilleur TCAM historique sous contraintes configurables" : profile === "robust" ? "quantile défavorable du TCAM simulé" : "probabilité d’atteindre un capital cible";
+  return profile === "growth" ? "meilleur TCAM historique sous contraintes configurables" : profile === "robust" ? "quantile défavorable du TCAM simulé" : profile === "goal" ? "probabilité d’atteindre un capital cible" : "pondérations enregistrées";
 }
 
 function PortfolioView({
@@ -914,6 +982,8 @@ function PortfolioView({
   diversificationRatio,
   mode,
   automaticWeights,
+  hasCustomAllocation,
+  onCopyToCustom,
   optimizationProfile,
   growthConstraints,
   growthOptimization,
@@ -925,6 +995,8 @@ function PortfolioView({
   robustScenarioSettings,
   prospectiveSettings,
   onProspectiveSettingsChange,
+  start,
+  end,
   benchmarkPortfolio,
   walkForward,
   space,
@@ -950,6 +1022,8 @@ function PortfolioView({
   diversificationRatio: number | null;
   mode: Mode;
   automaticWeights: boolean;
+  hasCustomAllocation: boolean;
+  onCopyToCustom: () => void;
   optimizationProfile: PortfolioOptimizationProfile;
   growthConstraints: GrowthConstraintSettings;
   growthOptimization: OptimizationResult;
@@ -959,6 +1033,8 @@ function PortfolioView({
   goalSettings: GoalSettings;
   onGoalSettingsChange: (next: Partial<GoalSettings>) => void;
   robustScenarioSettings: ScenarioSettings;
+  start: number;
+  end: number;
   prospectiveSettings: ProspectiveSettings;
   onProspectiveSettingsChange: (next: ProspectiveSettings) => void;
   benchmarkPortfolio: PortfolioStats | null;
@@ -973,6 +1049,29 @@ function PortfolioView({
   onRobustScenarioSettingsChange: (next: Partial<ScenarioSettings>) => void;
   onValidationSettingsChange: (next: Partial<WalkForwardSettings>) => void;
 }) {
+  const robustIllustration = useMemo(() => {
+    if (optimizationProfile !== "robust" || prospectiveSettings.enabled || !robustProposal.weights || !growthProposal.weights || !assets.length) return null;
+    const scenarios = generateJointScenarios(
+      { data, assetIds: assets.map(asset => asset.id), start, end, mode }, robustScenarioSettings,
+    );
+    if (scenarios.diagnostics.length || !scenarios.scenarios.length) return null;
+    const robust = summarizeScenarioPortfolio(scenarios.scenarios, robustProposal.weights, scenarios.settings);
+    const growth = summarizeScenarioPortfolio(scenarios.scenarios, growthProposal.weights, scenarios.settings);
+    if (!robust || !growth) return null;
+    const robustWeights = robustProposal.weights;
+    const all = scenarios.scenarios.map(scenario => scenarioPortfolioCagr(scenario, robustWeights));
+    if (all.some(value => value === null || !Number.isFinite(value))) return null;
+    const values = all as number[];
+    const min = Math.min(...values), max = Math.max(...values);
+    const step = Math.max((max - min) / 10, 0.001);
+    const histogram = Array.from({ length: 10 }, (_, index) => ({
+      range: `${(min + index * step).toFixed(1)} %`,
+      count: values.filter(value => Math.min(9, Math.floor((value - min) / step)) === index).length,
+      difficult: min + (index + 0.5) * step <= robust.quantileCagr,
+    }));
+    return { robust, growth, histogram };
+  }, [assets, data, end, growthProposal.weights, mode, optimizationProfile, prospectiveSettings.enabled, robustProposal.weights, robustScenarioSettings, start]);
+
   const totalWeight = assets.reduce((sum, asset) => sum + (weights[asset.id] ?? 0), 0);
   const fractions = normalizeAllocationWeights(Object.fromEntries(assets.map(asset => [asset.id, weights[asset.id] ?? 0])));
   const normalizedWeights = Object.fromEntries(assets.map(asset => [asset.id, (fractions?.[asset.id] ?? 0) * 100]));
@@ -987,6 +1086,7 @@ function PortfolioView({
     { id: "growth", label: "Croissance", shortDescription: growthProposal.feasible ? "TCAM historique maximal" : "Aucune solution faisable" },
     { id: "robust", label: "Robustesse", shortDescription: robustProposal.feasible ? "Mieux résister aux années difficiles" : "Aucune solution possible" },
     { id: "goal", label: "Objectif patrimonial", shortDescription: goalProposal.feasible ? "Atteindre un capital cible" : "Aucune solution possible" },
+    { id: "custom", label: "Personnalisé", shortDescription: hasCustomAllocation ? "Retrouver mes poids sauvegardés" : "Définir mes propres poids" },
   ];
 
   return <div className="portfolio-view">
@@ -999,15 +1099,18 @@ function PortfolioView({
     <section className="portfolio-controls">
       <div className="card-heading compact">
         <div className="heading-icon"><SlidersHorizontal size={17} /></div>
-        <div><h2>Construire une allocation</h2><p>{automaticWeights ? growthOptimization.feasible ? `Proposition automatique : ${optimizationProfileDescription(optimizationProfile)}. Tu peux modifier les pondérations.` : "Aucune allocation ne respecte les contraintes choisies." : growthOptimization.feasible ? `Pondérations personnalisées. Profil sélectionné : ${optimizationProfileLabel(optimizationProfile)}.` : "Aucune allocation historique ne peut être calculée sur cette configuration."}</p></div>
+        <div><h2>Construire une allocation</h2><p>{optimizationProfile === "custom" ? "Pondérations personnalisées : ton allocation est enregistrée sur cet appareil." : automaticWeights ? `Proposition automatique : ${optimizationProfileDescription(optimizationProfile)}. Modifier les poids crée une allocation personnalisée.` : `Profil : ${optimizationProfileLabel(optimizationProfile)}. Choisis une proposition ou modifie les poids.`}</p></div>
       </div>
       <div className="optimization-profiles">
-        <div className="optimization-profiles-heading"><span>Proposition automatique</span><small>Calculée sur la configuration actuelle</small></div>
+        <div className="optimization-profiles-heading"><span>Mode d’allocation</span><small>Trois propositions et ton allocation</small></div>
         <div className="optimization-profile-list" role="group" aria-label="Profils d'optimisation">
-          {profileOptions.map((profile) => <button key={profile.id} className={`optimization-profile ${optimizationProfile === profile.id ? "active" : ""}`} disabled={profile.id === "growth" ? !growthProposal.feasible : profile.id === "robust" ? !robustProposal.feasible : !goalProposal.feasible} onClick={() => onOptimizationProfileChange(profile.id)} title={(profile.id === "growth" ? growthProposal : profile.id === "robust" ? robustProposal : goalProposal).feasible ? profile.shortDescription : "Aucune allocation ne respecte les contraintes choisies"}>
+          {profileOptions.map((profile) => <button key={profile.id} className={`optimization-profile ${optimizationProfile === profile.id ? "active" : ""}`} disabled={profile.id === "growth" ? !growthProposal.feasible : profile.id === "robust" ? !robustProposal.feasible : profile.id === "goal" ? !goalProposal.feasible : false} onClick={() => onOptimizationProfileChange(profile.id)} title={profile.shortDescription}>
             <strong>{profile.label}</strong><span>{profile.shortDescription}</span>
           </button>)}
         </div>
+        {optimizationProfile === "custom"
+          ? <p className="custom-profile-explanation">Tes poids et ta sélection d'actifs sont sauvegardés dans ce navigateur. Explore les autres modes puis reviens ici à tout moment.</p>
+          : <button type="button" className="copy-custom-button" onClick={onCopyToCustom}>{hasCustomAllocation ? "Remplacer mon allocation personnalisée…" : "Copier dans Personnalisé"}</button>}
         {optimizationProfile === "goal" && <div className="robust-settings" aria-label="Réglages de l'objectif patrimonial">
           <div className="robust-simple-heading"><strong>Quel capital souhaites-tu atteindre ?</strong><p>Les simulations utilisent les rendements annuels historiques dans la devise et le mode nominal/réel affichés.</p></div>
           <div className="robust-settings-grid">
@@ -1069,13 +1172,36 @@ function PortfolioView({
             <p>Après un changement, reclique sur « Robustesse » pour appliquer les nouveaux poids.</p>
           </div>}
           {!prospectiveSettings.enabled && <>
-          <div className="robust-simple-heading"><strong>Et si les prochaines années étaient difficiles ?</strong><p>L'application essaie plusieurs suites possibles d'années passées et cherche une répartition qui s'en sort bien, même quand les résultats sont moins bons.</p></div>
+          <div className="robust-simple-heading"><strong>Et si les prochaines années étaient difficiles ?</strong><p>L'application réassemble des années historiques en différentes trajectoires. Elle recherche l'allocation offrant le meilleur rendement au seuil défavorable choisi, plutôt que le meilleur rendement historique global.</p><p>Être plus prudent sur ce seuil ne garantit pas une volatilité ou des pertes maximales plus faibles.</p></div>
           <fieldset className="robust-prudence">
             <legend>À quel point veux-tu privilégier les scénarios difficiles ?</legend>
             <div className="robust-prudence-options">
-              {([ { value: 30, label: "Un peu", detail: "30 % des scénarios sont moins bons" }, { value: 20, label: "Moyennement", detail: "20 % des scénarios sont moins bons" }, { value: 10, label: "Beaucoup", detail: "10 % des scénarios sont moins bons" } ] as const).map(option => <label key={option.value} className={robustScenarioSettings.quantilePct === option.value ? "selected" : ""}><input type="radio" name="robust-quantile" checked={robustScenarioSettings.quantilePct === option.value} onChange={() => onRobustScenarioSettingsChange({ quantilePct: option.value })} /><span><strong>{option.label}</strong><small>{option.detail}</small></span></label>)}
+              {([ { value: 30, label: "Modéré", detail: "Seuil des 30 % de scénarios les moins favorables" }, { value: 20, label: "Équilibré", detail: "Seuil des 20 % de scénarios les moins favorables" }, { value: 10, label: "Très prudent", detail: "Seuil des 10 % de scénarios les moins favorables" } ] as const).map(option => <label key={option.value} className={robustScenarioSettings.quantilePct === option.value ? "selected" : ""}><input type="radio" name="robust-quantile" checked={robustScenarioSettings.quantilePct === option.value} onChange={() => onRobustScenarioSettingsChange({ quantilePct: option.value })} /><span><strong>{option.label}</strong><small>{option.detail}</small></span></label>)}
             </div>
           </fieldset>
+          {robustIllustration && <div className="robust-explainer" aria-label="Illustration des simulations de robustesse">
+            <h4>Visualiser les scénarios</h4>
+            <p>Chaque barre regroupe des trajectoires de {robustScenarioSettings.horizonYears} ans par rendement annualisé. Les barres roses représentent les résultats les plus défavorables.</p>
+            <div role="img" aria-label="Histogramme des rendements annualisés simulés">
+              <ResponsiveContainer width="100%" height={170}><BarChart data={robustIllustration.histogram} margin={{ top: 8, right: 5, left: -18, bottom: 8 }}>
+                <CartesianGrid vertical={false} stroke="#e5e9ec" />
+                <XAxis dataKey="range" tick={{ fontSize: 9 }} interval={1} />
+                <YAxis allowDecimals={false} tick={{ fontSize: 9 }} />
+                <Tooltip formatter={value => [String(value), "Trajectoires"]} />
+                <Bar dataKey="count" name="Trajectoires" radius={[3, 3, 0, 0]}>{robustIllustration.histogram.map((bar, index) => <Cell key={index} fill={bar.difficult ? "#cf7e7e" : "#659ac3"} />)}</Bar>
+              </BarChart></ResponsiveContainer>
+            </div>
+            <p>Seuil choisi : <strong>{robustIllustration.robust.quantilePct} %</strong> des simulations obtiennent approximativement moins de <strong>{formatPercent(robustIllustration.robust.quantileCagr)} par an</strong>.</p>
+            <h4>Le compromis face au mode Croissance</h4>
+            <div className="robust-comparison-scroll"><table><thead><tr><th>Indicateur</th><th>Croissance</th><th>Robustesse</th></tr></thead><tbody>
+              <tr><td>Rendement historique annualisé</td><td>{formatPercent(growthProposal.stats?.cagr)}</td><td>{formatPercent(robustProposal.stats?.cagr)}</td></tr>
+              <tr><td>Seuil défavorable simulé</td><td>{formatPercent(robustIllustration.growth.quantileCagr)}</td><td>{formatPercent(robustIllustration.robust.quantileCagr)}</td></tr>
+              <tr><td>Rendement médian simulé</td><td>{formatPercent(robustIllustration.growth.medianCagr)}</td><td>{formatPercent(robustIllustration.robust.medianCagr)}</td></tr>
+              <tr><td>Volatilité historique</td><td>{formatPercent(growthProposal.stats?.volatility)}</td><td>{formatPercent(robustProposal.stats?.volatility)}</td></tr>
+              <tr><td>Drawdown annuel historique</td><td>{formatPercent(growthProposal.stats?.maxDrawdown)}</td><td>{formatPercent(robustProposal.stats?.maxDrawdown)}</td></tr>
+            </tbody></table></div>
+            <p>Les allocations sont évaluées sur les mêmes trajectoires. Ces chiffres ne sont ni des prévisions ni des probabilités réelles de gains ou de pertes.</p>
+          </div>}
           {robustProposal.scenarioSummary && <div className="robust-simple-result">
             <strong>Dans les simulations : {formatPercent(robustProposal.scenarioSummary.quantileCagr)} par an au seuil choisi</strong>
             <p>Environ {robustProposal.scenarioSummary.quantilePct} % des simulations font moins bien. Le résultat du milieu est de {formatPercent(robustProposal.scenarioSummary.medianCagr)} par an.</p>
@@ -1095,13 +1221,13 @@ function PortfolioView({
           </details>
         </>}
         </div>}
-        <div className="growth-constraints" aria-label="Contraintes du profil Croissance">
+        {optimizationProfile !== "custom" && <div className="growth-constraints" aria-label="Contraintes des profils automatiques">
           <div className="growth-constraints-heading"><span>Contraintes de recherche</span><small>Les valeurs sont modifiables et ne constituent pas des normes universelles.</small></div>
           <label>Plafond par actif <input aria-label="Plafond de poids par actif" type="number" min="0" max="100" step="1" value={growthConstraints.maxWeightPct} onChange={(event) => onGrowthConstraintsChange({ maxWeightPct: Math.max(0, Math.min(100, Number(event.target.value))) })} /> <span>%</span></label>
           <label><input aria-label="Activer le budget de drawdown annuel" type="checkbox" checked={growthConstraints.maxAnnualCloseDrawdownPct !== null} onChange={(event) => onGrowthConstraintsChange({ maxAnnualCloseDrawdownPct: event.target.checked ? 40 : null })} /> Drawdown maximal de clôture annuelle <input aria-label="Budget de drawdown annuel" type="number" min="0" max="100" step="1" value={growthConstraints.maxAnnualCloseDrawdownPct ?? ""} disabled={growthConstraints.maxAnnualCloseDrawdownPct === null} onChange={(event) => onGrowthConstraintsChange({ maxAnnualCloseDrawdownPct: Math.max(0, Math.min(100, Number(event.target.value))) })} /> <span>%</span></label>
           <label><input aria-label="Activer le budget de volatilité annuelle" type="checkbox" checked={growthConstraints.maxAnnualVolatilityPct !== null} onChange={(event) => onGrowthConstraintsChange({ maxAnnualVolatilityPct: event.target.checked ? 20 : null })} /> Volatilité annuelle maximale <input aria-label="Budget de volatilité annuelle" type="number" min="0" step="1" value={growthConstraints.maxAnnualVolatilityPct ?? ""} disabled={growthConstraints.maxAnnualVolatilityPct === null} onChange={(event) => onGrowthConstraintsChange({ maxAnnualVolatilityPct: Math.max(0, Number(event.target.value)) })} /> <span>%</span></label>
-        </div>
-         {growthOptimization.diagnostics.length > 0 && <p className="optimization-profile-note">{growthOptimization.diagnostics.join(" ")}</p>}
+        </div>}
+         {growthOptimization.diagnostics.length > 0 && optimizationProfile !== "custom" && <p className="optimization-profile-note">{growthOptimization.diagnostics.join(" ")}</p>}
       </div>
       <div className="weight-list">
         {assets.map((asset) => {

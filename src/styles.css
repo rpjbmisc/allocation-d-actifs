@@ -307,3 +307,17 @@ button:disabled, input:disabled { cursor: not-allowed; opacity: .45; }
 @media (max-width: 980px) {
   .portfolio-results { grid-column: 1; }
 }
+
+/* Portefeuille personnalisé : distinct des propositions automatiques */
+.custom-profile-explanation { color: #536b7a; font-size: 11px; line-height: 1.5; margin: 9px 0; }
+.copy-custom-button { margin-top: 9px; width: 100%; border: 1px solid #b8cbd4; border-radius: 5px; background: #fff; color: #17324a; font-size: 11px; font-weight: 600; padding: 8px 10px; cursor: pointer; }
+.copy-custom-button:hover { border-color: #e76f51; }
+
+/* Lecture progressive de la robustesse */
+.robust-explainer { padding: 10px; border: 1px solid #dce5eb; border-radius: 6px; background: #fff; display: grid; gap: 7px; min-width: 0; }
+.robust-explainer h4 { margin: 4px 0 0; color: #17324a; font-size: 12px; }
+.robust-explainer p { color: #536b7a; font-size: 10px; line-height: 1.5; margin: 0; }
+.robust-comparison-scroll { overflow-x: auto; }
+.robust-comparison-scroll table { width: 100%; border-collapse: collapse; font-size: 10px; white-space: nowrap; }
+.robust-comparison-scroll th, .robust-comparison-scroll td { border-bottom: 1px solid #e5e9ec; padding: 7px 6px; text-align: right; }
+.robust-comparison-scroll th:first-child, .robust-comparison-scroll td:first-child { text-align: left; }
