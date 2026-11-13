@@ -130,6 +130,29 @@ const defaultValidationSettings: WalkForwardSettings = {
   expanding: true,
 };
 const defaultRobustScenarioSettings: ScenarioSettings = DEFAULT_SCENARIO_SETTINGS;
+const CUSTOM_ALLOCATION_KEY = "allocation-d-actifs:custom-portfolio:v1";
+const CUSTOM_ACTIVE_KEY = "allocation-d-actifs:custom-active:v1";
+type CustomAllocation = { selected: string[]; weights: Record<string, number> };
+
+function readSavedCustomAllocation(): CustomAllocation | null {
+  try {
+    const raw = window.localStorage.getItem(CUSTOM_ALLOCATION_KEY);
+    if (!raw) return null;
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") return null;
+    const { selected, weights } = parsed as Partial<CustomAllocation>;
+    if (!Array.isArray(selected) || selected.length < 1 || selected.length > MAX_SELECTED_ASSETS ||
+        !selected.every(id => typeof id === "string") || new Set(selected).size !== selected.length ||
+        !weights || typeof weights !== "object" || Array.isArray(weights)) return null;
+    if (!selected.every(id => typeof weights[id] === "number" && Number.isFinite(weights[id]) && weights[id] >= 0 && weights[id] <= 100)) return null;
+    return { selected, weights: Object.fromEntries(selected.map(id => [id, weights[id]])) };
+  } catch { return null; }
+}
+
+function wasCustomActive(): boolean {
+  try { return window.localStorage.getItem(CUSTOM_ACTIVE_KEY) === "true"; }
+  catch { return false; }
+}
 
 function assetCategory(id: string): AssetCategory {
   if (["sp500", "msci_world", "msci_world_ex_usa", "msci_world_small_cap_value", "msci_world_value", "msci_em", "russell2000", "us_total_market", "global_infrastructure", "msci_pacific_ex_japan_imi", "msci_em_asia", "msci_japan", "msci_europe_small_cap_weighted", "msci_usa_small_cap_weighted", "msci_europe"].includes(id)) return "Actions";
@@ -181,7 +204,10 @@ function App() {
   const [hiddenAssets, setHiddenAssets] = useState<string[]>([]);
   const [weights, setWeights] = useState<Record<string, number>>({});
   const [automaticWeights, setAutomaticWeights] = useState(false);
-  const [optimizationProfile, setOptimizationProfile] = useState<PortfolioOptimizationProfile>("growth");
+  const [customAllocation, setCustomAllocation] = useState<CustomAllocation | null>(readSavedCustomAllocation);
+  const [optimizationProfile, setOptimizationProfile] = useState<PortfolioOptimizationProfile>(
+    () => wasCustomActive() && readSavedCustomAllocation() ? "custom" : "growth",
+  );
   const [growthConstraints, setGrowthConstraints] = useState<GrowthConstraintSettings>(defaultGrowthConstraints);
   const [robustScenarioSettings, setRobustScenarioSettings] = useState<ScenarioSettings>(defaultRobustScenarioSettings);
   const [prospectiveSettings, setProspectiveSettings] = useState<ProspectiveSettings>(defaultProspectiveSettings);
@@ -209,9 +235,14 @@ function App() {
         setRawData(rawData);
         setCurrencyContext(currencyContext);
         const sharedSelection = selected.filter((id) => registry.some((asset) => asset.id === id));
-        const initialSelection = sharedSelection.length ? sharedSelection : preferredIds.filter((id) => registry.some((asset) => asset.id === id));
+        const savedSelection = optimizationProfile === "custom"
+          ? customAllocation?.selected.filter(id => registry.some(asset => asset.id === id)) ?? [] : [];
+        const initialSelection = savedSelection.length ? savedSelection : sharedSelection.length ? sharedSelection : preferredIds.filter((id) => registry.some((asset) => asset.id === id));
         setSelected(initialSelection);
-        setWeights(Object.fromEntries(registry.map((asset) => [asset.id, initialSelection.includes(asset.id) ? 100 / initialSelection.length : 0])));
+        setWeights(Object.fromEntries(registry.map(asset => [asset.id,
+          initialSelection.includes(asset.id)
+            ? savedSelection.length ? customAllocation?.weights[asset.id] ?? 0 : 100 / initialSelection.length : 0,
+        ])));
       } catch (cause) {
         if (!cancelled) setError(cause instanceof Error ? cause.message : "Impossible de charger les données.");
       } finally {
@@ -221,6 +252,14 @@ function App() {
     void load();
     return () => { cancelled = true; };
   }, []);
+
+  useEffect(() => {
+    try {
+      if (customAllocation) window.localStorage.setItem(CUSTOM_ALLOCATION_KEY, JSON.stringify(customAllocation));
+      else window.localStorage.removeItem(CUSTOM_ALLOCATION_KEY);
+      window.localStorage.setItem(CUSTOM_ACTIVE_KEY, String(optimizationProfile === "custom"));
+    } catch { /* Le stockage local peut être indisponible. */ }
+  }, [customAllocation, optimizationProfile]);
 
   useEffect(() => {
     if (loading || isCorrelationPage) return;
@@ -362,7 +401,7 @@ function App() {
   );
 
   useEffect(() => {
-    if (!portfolioVisible) return;
+    if (!portfolioVisible || optimizationProfile === "custom") return;
     if (!automaticCandidate) {
       setAutomaticWeights(false);
       return;
@@ -375,7 +414,7 @@ function App() {
     });
     setAutomaticWeights(true);
     automaticCandidateInitialized.current = true;
-  }, [automaticCandidate, automaticWeights, portfolioVisible, selectedAssets]);
+  }, [automaticCandidate, automaticWeights, optimizationProfile, portfolioVisible, selectedAssets]);
 
   const years = useMemo(() => {
     const allYears = new Set<number>();
@@ -486,28 +525,34 @@ function App() {
 
   const toggleAsset = (id: string) => {
     if (!selected.includes(id) && periodRestricted && !periodEligibleAssets.has(id)) return;
-    setSelected((current) => {
-      if (current.includes(id)) return current.length > 1 ? current.filter((item) => item !== id) : current;
-      if (current.length >= MAX_SELECTED_ASSETS) return current;
-      setWeights((previous) => ({ ...previous, [id]: 0 }));
-      return [...current, id];
-    });
+    const nextSelected = selected.includes(id)
+      ? selected.length > 1 ? selected.filter(item => item !== id) : selected
+      : selected.length < MAX_SELECTED_ASSETS ? [...selected, id] : selected;
+    if (nextSelected === selected) return;
+    const nextWeights = { ...weights, [id]: 0 };
+    setSelected(nextSelected);
+    setWeights(nextWeights);
+    if (optimizationProfile === "custom") setCustomAllocation({ selected: nextSelected, weights: nextWeights });
+  };
+
+  const saveManualWeights = (nextWeights: Record<string, number>) => {
+    setAutomaticWeights(false);
+    setOptimizationProfile("custom");
+    setWeights(nextWeights);
+    setCustomAllocation({ selected: [...selected], weights: nextWeights });
   };
 
   const updateWeight = (id: string, value: number) => {
-    setAutomaticWeights(false);
-    setWeights((current) => ({ ...current, [id]: Math.max(0, Math.min(100, value)) }));
+    saveManualWeights({ ...weights, [id]: Math.max(0, Math.min(100, value)) });
   };
 
   const normalizeWeights = () => {
-    setAutomaticWeights(false);
     const total = selectedAssets.reduce((sum, asset) => sum + (weights[asset.id] ?? 0), 0);
     if (total <= 0 && selectedAssets.length > 0) {
-      const equalWeight = 100 / selectedAssets.length;
-      setWeights((current) => selectedAssets.reduce((next, asset) => ({ ...next, [asset.id]: equalWeight }), { ...current }));
-      return;
+      saveManualWeights(selectedAssets.reduce((next, asset) => ({ ...next, [asset.id]: 100 / selectedAssets.length }), { ...weights }));
+    } else if (total > 0) {
+      saveManualWeights(selectedAssets.reduce((next, asset) => ({ ...next, [asset.id]: (weights[asset.id] ?? 0) / total * 100 }), { ...weights }));
     }
-    setWeights((current) => selectedAssets.reduce((next, asset) => ({ ...next, [asset.id]: (current[asset.id] ?? 0) / total * 100 }), { ...current }));
   };
 
   const resetConfiguration = () => {
@@ -515,6 +560,7 @@ function App() {
     const initialSelection = preferredIds.filter((id) => availableAssets.some((asset) => asset.id === id));
     const fallbackSelection = initialSelection.length ? initialSelection : availableAssets.slice(0, 3).map((asset) => asset.id);
     setOptimizationProfile("growth");
+    setCustomAllocation(null);
     setGrowthConstraints({ ...defaultGrowthConstraints });
     setAutomaticWeights(false);
     setSelected(fallbackSelection);
@@ -531,6 +577,18 @@ function App() {
   };
 
   const applyOptimizationProfile = (profile: PortfolioOptimizationProfile) => {
+    if (profile === "custom") {
+      if (customAllocation) {
+        const available = customAllocation.selected.filter(id => assets.some(asset => asset.id === id));
+        if (available.length) {
+          setSelected(available);
+          setWeights(Object.fromEntries(assets.map(asset => [asset.id, available.includes(asset.id) ? customAllocation.weights[asset.id] ?? 0 : 0])));
+        }
+      } else setCustomAllocation({ selected: [...selected], weights: { ...weights } });
+      setOptimizationProfile("custom");
+      setAutomaticWeights(false);
+      return;
+    }
     const proposal = profile === "growth" ? growthOptimization : profile === "robust" ? activeRobustOptimization : goalOptimization;
     if (!proposal.weights) return;
     setOptimizationProfile(profile);
@@ -541,8 +599,9 @@ function App() {
     ));
   };
 
-  const toggleHiddenAsset = (id: string) => {
-    setHiddenAssets((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
+  const copyCurrentToCustom = () => {
+    if (customAllocation && !window.confirm("Remplacer ton allocation personnalisée enregistrée par les poids affichés ?")) return;
+    saveManualWeights({ ...weights });
   };
 
   const activeLabel = mode === "nominal" ? "nominal" : "réel";
@@ -610,22 +669,22 @@ function App() {
                  <section className="configuration-step">
                    <div className="step-heading"><span className="step-number">02</span><div><h3>Période</h3><p>Définis la fenêtre historique à analyser.</p></div><strong>{start}–{end}</strong></div>
                    <div className="control-row">
-                      <label className="switch-control"><input type="checkbox" checked={commonPeriod} onChange={(event) => { setOptimizationProfile("growth"); setCommonPeriod(event.target.checked); }} /><span className="switch" /> <span>Utiliser la période commune</span></label>
+                      <label className="switch-control"><input type="checkbox" checked={commonPeriod} onChange={(event) => { setCommonPeriod(event.target.checked); }} /><span className="switch" /> <span>Utiliser la période commune</span></label>
                       {commonPeriod && <strong className="period-value">{selectedCount ? `${commonStart}–${commonEnd}` : "En attente d'actifs"}</strong>}
-                       {!commonPeriod && <label className="range-control">De <input type="number" value={range[0]} onChange={(event) => { setOptimizationProfile("growth"); setRange([Number(event.target.value), range[1]]); }} /> à <input type="number" value={range[1]} onChange={(event) => { setOptimizationProfile("growth"); setRange([range[0], Number(event.target.value)]); }} /></label>}
+                       {!commonPeriod && <label className="range-control">De <input type="number" value={range[0]} onChange={(event) => { setRange([Number(event.target.value), range[1]]); }} /> à <input type="number" value={range[1]} onChange={(event) => { setRange([range[0], Number(event.target.value)]); }} /></label>}
                      </div>
-                      <PeriodSelector start={range[0]} end={range[1]} onChange={(nextStart, nextEnd) => { setOptimizationProfile("growth"); setCommonPeriod(false); setRange([nextStart, nextEnd]); }} />
+                      <PeriodSelector start={range[0]} end={range[1]} onChange={(nextStart, nextEnd) => { setCommonPeriod(false); setRange([nextStart, nextEnd]); }} />
                     <p className="period-explanation">{commonPeriod ? selectedCount ? `La période s'ajuste automatiquement aux années disponibles pour les ${selectedCount} actifs sélectionnés. Elle sera recalculée à chaque changement.` : "Sélectionne au moins un actif pour calculer la période commune." : "Hors Portefeuille, chaque actif est analysé sur ses années disponibles dans la plage choisie. Dans Portefeuille, seuls les actifs couvrant toute la plage sont utilisés."}</p>
                  </section>
 
                   <section className="configuration-step">
                     <div className="step-heading"><span className="step-number">03</span><div><h3>Lecture</h3><p>Choisis l'effet de l'inflation sur les rendements.</p></div><strong>{mode === "nominal" ? "Nominal" : "Réel"}</strong></div>
-                      <div className="mode-toggle"><button className={mode === "nominal" ? "active" : ""} onClick={() => { if (mode !== "nominal") { setOptimizationProfile("growth"); setMode("nominal"); } }}>Nominal</button><button className={mode === "real" ? "active" : ""} onClick={() => { if (mode !== "real") { setOptimizationProfile("growth"); setMode("real"); } }}>Réel</button></div>
+                      <div className="mode-toggle"><button className={mode === "nominal" ? "active" : ""} onClick={() => { if (mode !== "nominal") { setMode("nominal"); } }}>Nominal</button><button className={mode === "real" ? "active" : ""} onClick={() => { if (mode !== "real") { setMode("real"); } }}>Réel</button></div>
                     <p className="period-explanation">Nominal conserve les montants courants ; réel retire l'effet de l'inflation.</p>
                   </section>
                   <section className="configuration-step">
                     <div className="step-heading"><span className="step-number">04</span><div><h3>Devise de référence</h3><p>Le mode EUR convertit les rendements USD sans couverture de change.</p></div><strong>{currency === "eur" ? "EUR" : "USD"}</strong></div>
-                      <div className="mode-toggle"><button className={currency === "usd" ? "active" : ""} onClick={() => { if (currency !== "usd") { setOptimizationProfile("growth"); setCurrency("usd"); } }}>USD historique</button><button className={currency === "eur" ? "active" : ""} onClick={() => { if (currency !== "eur") { setOptimizationProfile("growth"); setCurrency("eur"); } }}>EUR non couvert</button></div>
+                      <div className="mode-toggle"><button className={currency === "usd" ? "active" : ""} onClick={() => { if (currency !== "usd") { setCurrency("usd"); } }}>USD historique</button><button className={currency === "eur" ? "active" : ""} onClick={() => { if (currency !== "eur") { setCurrency("eur"); } }}>EUR non couvert</button></div>
                     <p className="period-explanation">En EUR, la série commence en 1961 et utilise le taux USD/EUR historique puis le taux BCE à partir de 1999.</p>
                   </section>
                </div>
