@@ -35,19 +35,19 @@
     "msci_world_ex_usa": {
       "kind": "equity",
       "countries": {
-        "JP": 20.67,
-        "GB": 12.53,
-        "CA": 12.12,
-        "FR": 8.73,
-        "CH": 8.41,
-        "OTHER": 37.54
+        "JP": 21.84,
+        "GB": 12.61,
+        "CA": 12.17,
+        "FR": 8.27,
+        "CH": 7.92,
+        "OTHER": 37.19
       },
       "sizes": {
         "large_mid": 100
       },
       "factor": "none",
       "source": "https://www.msci.com/documents/10199/255599/msci-world-ex-usa-index-price-usd.pdf",
-      "asOf": "2026-06-30"
+      "asOf": "2026-09-30"
     },
     "msci_world_small_cap_value": {
       "kind": "equity",
@@ -61,37 +61,29 @@
     },
     "msci_world_value": {
       "kind": "equity",
-      "countries": {
-        "US": 72.1,
-        "JP": 5.6,
-        "GB": 3.9,
-        "CA": 3.7,
-        "FR": 2.5,
-        "OTHER": 12.2
-      },
       "sizes": {
         "large_mid": 100
       },
       "factor": "value",
       "source": "https://www.msci.com/indexes/index/105868",
-      "asOf": "2026-06-30"
+      "note": "Biais Value identifié par le nom de l'indice ; ventilation pays non attestée."
     },
     "msci_em": {
       "kind": "equity",
       "countries": {
-        "TW": 26.41,
-        "KR": 23.06,
-        "CN": 20.36,
-        "IN": 10.87,
-        "BR": 3.86,
-        "OTHER": 15.44
+        "TW": 28.88,
+        "CN": 20,
+        "KR": 19.66,
+        "IN": 11.73,
+        "BR": 3.9,
+        "OTHER": 15.83
       },
       "sizes": {
         "large_mid": 100
       },
       "factor": "none",
       "source": "https://www.msci.com/documents/10199/10c3f32f-4565-4a92-aa1c-edf6f3a4e03f",
-      "asOf": "2026-05-29"
+      "asOf": "2026-10-30"
     },
     "reit_us": {
       "kind": "other",
@@ -123,34 +115,31 @@
     "msci_pacific_ex_japan_imi": {
       "kind": "equity",
       "countries": {
-        "AU": 64.27,
-        "SG": 17.58,
-        "HK": 16.28,
-        "NZ": 1.87
+        "PACIFIC_OTHER": 100
       },
       "sizes": {
         "all_caps": 100
       },
       "factor": "none",
       "source": "https://www.msci.com/documents/10199/ff245708-ddb9-48cd-8da6-c65b1598b227",
-      "asOf": "2026-09-30"
+      "note": "Univers Pacifique développé hors Japon confirmé, mais poids des pays non validés."
     },
     "msci_em_asia": {
       "kind": "equity",
       "countries": {
-        "TW": 32.65,
-        "KR": 28.32,
-        "CN": 22.72,
-        "IN": 13.24,
-        "TH": 1.15,
-        "ASIA_EM_OTHER": 1.92
+        "TW": 30.41,
+        "CN": 28.21,
+        "KR": 22.88,
+        "IN": 14.62,
+        "MY": 1.36,
+        "ASIA_EM_OTHER": 2.52
       },
       "sizes": {
         "large_mid": 100
       },
       "factor": "none",
       "source": "https://www.msci.com/documents/10199/255599/msci-emerging-markets-asia.pdf",
-      "asOf": "2026-06-30"
+      "asOf": "2026-04-30"
     },
     "msci_japan": {
       "kind": "equity",
@@ -190,19 +179,14 @@
     "msci_europe": {
       "kind": "equity",
       "countries": {
-        "GB": 23.27,
-        "FR": 15.6,
-        "CH": 14.28,
-        "DE": 13.78,
-        "NL": 7.92,
-        "EU_OTHER": 25.15
+        "EU_OTHER": 100
       },
       "sizes": {
         "large_mid": 100
       },
       "factor": "none",
       "source": "https://www.msci.com/documents/10199/861bb4d4-7a59-489b-8cef-bb104e152e3c",
-      "asOf": "2026-03-31"
+      "note": "Indice 100 % Europe développée, ventilation par pays non confirmée pour cette photographie."
     },
     "global_infrastructure": {
       "kind": "other",
