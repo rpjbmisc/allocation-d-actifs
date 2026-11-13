@@ -126,11 +126,11 @@ const defaultGrowthConstraints: GrowthConstraintSettings = {
   maxWeightPct: 50,
 };
 const defaultValidationSettings: WalkForwardSettings = {
-  minTrainYears: 20,
+  minTrainYears: 15,
   testYears: 5,
   expanding: true,
 };
-const defaultRobustScenarioSettings: ScenarioSettings = DEFAULT_SCENARIO_SETTINGS;
+const defaultRobustScenarioSettings: ScenarioSettings = { ...DEFAULT_SCENARIO_SETTINGS, horizonYears: 25 };
 const CUSTOM_ALLOCATION_KEY = "allocation-d-actifs:custom-portfolio:v1";
 const CUSTOM_ACTIVE_KEY = "allocation-d-actifs:custom-active:v1";
 type CustomAllocation = { selected: string[]; weights: Record<string, number> };
@@ -442,6 +442,7 @@ function App() {
       settings: validationSettings,
       benchmarkAssetId: data.msci_world ? "msci_world" : null,
       scenarioSettings: robustScenarioSettings,
+      prospectiveSettings: { ...prospectiveSettings, enabled: true, objective: "regret" as const },
       goalSettings,
       constraints: {
         longOnly: true as const,
@@ -452,7 +453,7 @@ function App() {
         maxEvaluations: 100_000,
       },
     };
-  }, [automaticSearchStep, data, end, growthConstraints, mode, robustScenarioSettings, goalSettings, selectedAssets, start, validationSettings]);
+  }, [automaticSearchStep, data, end, growthConstraints, mode, robustScenarioSettings, prospectiveSettings, goalSettings, selectedAssets, start, validationSettings]);
   const validationVisible = portfolioVisible && portfolioSpace === "validation";
   const optimizedWalkForward = useMemo(() => validationVisible ? runWalkForwardOptimized(walkForwardInput) : null, [validationVisible, walkForwardInput]);
   const fixedWalkForward = useMemo(() => validationVisible ? runWalkForwardFixed({ ...walkForwardInput, customWeights: portfolioWeights }) : null, [validationVisible, walkForwardInput, portfolioWeights]);
