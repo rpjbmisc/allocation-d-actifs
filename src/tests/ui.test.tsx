@@ -127,3 +127,21 @@ it("explains all three prospective optimization choices in clear language", asyn
     expect((radio as HTMLInputElement).checked).toBe(true);
   }
 }, UI_TEST_TIMEOUT);
+
+it("keeps partially covered assets selected outside the portfolio and excludes them only from strict portfolio calculations", async () => {
+  window.history.replaceState({}, "", "/?tab=overview&assets=msci_world,msci_em_asia&start=1970&end=2025&common=false&currency=usd");
+  const user = userEvent.setup();
+  render(<App />);
+  await screen.findByRole("tab", { name: "Portefeuille" });
+  await waitFor(() => expect(document.querySelectorAll(".asset-card")).toHaveLength(2));
+  const cards = [...document.querySelectorAll(".asset-card")];
+  expect(cards.some(card => card.textContent?.includes("MSCI Emerging Markets Asia") && card.textContent?.includes("2000–2025"))).toBe(true);
+  await user.click(screen.getByRole("tab", { name: "100 $ investis" }));
+  await waitFor(() => expect(screen.getByText(/départ propre à chaque actif/)).toBeTruthy());
+  expect(screen.getByRole("button", { name: "MSCI Emerging Markets Asia" })).toBeTruthy();
+  await user.click(screen.getByRole("tab", { name: "Portefeuille" }));
+  expect(screen.getByText(/Exclus du calcul du portefeuille/)).toBeTruthy();
+  expect(screen.getByText(/MSCI Emerging Markets Asia/)).toBeTruthy();
+  await user.click(screen.getByRole("tab", { name: "Vue d'ensemble" }));
+  await waitFor(() => expect(document.querySelectorAll(".asset-card")).toHaveLength(2));
+}, UI_TEST_TIMEOUT);
