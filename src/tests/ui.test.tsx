@@ -145,3 +145,28 @@ it("keeps partially covered assets selected outside the portfolio and excludes t
   await user.click(screen.getByRole("tab", { name: "Vue d'ensemble" }));
   await waitFor(() => expect(document.querySelectorAll(".asset-card")).toHaveLength(2));
 }, UI_TEST_TIMEOUT);
+
+it("never hides a selected asset on Overview when its period has no overlap", async () => {
+  window.history.replaceState({}, "", "/?tab=overview&assets=msci_world,msci_em_asia&start=1970&end=1995&common=false&currency=usd");
+  render(<App />);
+  await waitFor(() => expect(document.querySelectorAll(".asset-card")).toHaveLength(2));
+  const cards = [...document.querySelectorAll(".asset-card")];
+  const asia = cards.find(card => card.textContent?.includes("MSCI Emerging Markets Asia"));
+  expect(asia).toBeTruthy();
+  expect(asia?.textContent).toContain("Aucune donnée sur 1970–1995");
+  expect(asia?.textContent).toContain("Historique insuffisant");
+}, UI_TEST_TIMEOUT);
+
+it("allows adding MSCI Emerging Markets Asia from the asset picker on a partial historical interval", async () => {
+  window.history.replaceState({}, "", "/?tab=overview&assets=msci_world&start=1970&end=2025&common=false&currency=eur");
+  const user = userEvent.setup();
+  render(<App />);
+  await screen.findByRole("tab", { name: "Portefeuille" });
+  await user.click(screen.getByRole("button", { name: "Modifier" }));
+  const chip = screen.getByRole("button", { name: /MSCI Emerging Markets Asia 2000–2025/ });
+  expect(chip.hasAttribute("disabled")).toBe(false);
+  await user.click(chip);
+  await waitFor(() => expect(document.querySelectorAll(".asset-card")).toHaveLength(2));
+  const cards = [...document.querySelectorAll(".asset-card")];
+  expect(cards.some(card => card.textContent?.includes("MSCI Emerging Markets Asia") && card.textContent?.includes("2000–2025"))).toBe(true);
+}, UI_TEST_TIMEOUT);
