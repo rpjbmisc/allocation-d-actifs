@@ -1,8 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { loadHistoricalData } from "./data/load";
-import { allocationProfiles, defaultConstraintsForProfile, DEFAULT_ALLOCATION_PROFILE } from "./optimization/profiles";
-import type { AllocationProfileId } from "./optimization/profiles";
-import { suggestProfileAssets } from "./optimization/suggestedAssets";
 import { defaultProspectiveSettings } from "./scenarios/prospective";
 import type { ProspectiveSettings } from "./scenarios/prospective";
 import { optimizeProspective } from "./optimization/prospective";
@@ -66,7 +63,6 @@ import {
 
 type Tab = "overview" | "returns" | "growth" | "decades" | "portfolio" | "correlations";
 type PortfolioSpace = "construction" | "comparison" | "validation";
-type PresetId = "custom";
 type Dataset = Record<string, Row[]>;
 type ChartRow = Record<string, number | string | null>;
 type ChartColumn = { key: string; label: string };
@@ -123,7 +119,11 @@ const crisisMarkers = [
   { year: 2008, label: "2008" },
   { year: 2020, label: "2020" },
 ];
-const defaultGrowthConstraints: GrowthConstraintSettings = defaultConstraintsForProfile(DEFAULT_ALLOCATION_PROFILE);
+const defaultGrowthConstraints: GrowthConstraintSettings = {
+  maxAnnualCloseDrawdownPct: 40,
+  maxAnnualVolatilityPct: 25,
+  maxWeightPct: 50,
+};
 const defaultValidationSettings: WalkForwardSettings = {
   minTrainYears: 20,
   testYears: 5,
@@ -181,16 +181,12 @@ function App() {
   const [hiddenAssets, setHiddenAssets] = useState<string[]>([]);
   const [weights, setWeights] = useState<Record<string, number>>({});
   const [automaticWeights, setAutomaticWeights] = useState(false);
-  const [allocationIntent, setAllocationIntent] = useState<AllocationProfileId>(DEFAULT_ALLOCATION_PROFILE);
-  const [selectionMode, setSelectionMode] = useState<"custom" | "suggested">("custom");
   const [optimizationProfile, setOptimizationProfile] = useState<PortfolioOptimizationProfile>("growth");
   const [growthConstraints, setGrowthConstraints] = useState<GrowthConstraintSettings>(defaultGrowthConstraints);
   const [robustScenarioSettings, setRobustScenarioSettings] = useState<ScenarioSettings>(defaultRobustScenarioSettings);
   const [prospectiveSettings, setProspectiveSettings] = useState<ProspectiveSettings>(defaultProspectiveSettings);
   const [goalSettings, setGoalSettings] = useState<GoalSettings>(DEFAULT_GOAL_SETTINGS);
   const [validationSettings, setValidationSettings] = useState<WalkForwardSettings>(defaultValidationSettings);
-  const activePreset = "custom" as const;
-  const presetModified = false;
   const automaticCandidateInitialized = useRef(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -259,18 +255,6 @@ function App() {
     ? allSelectedAssets.filter((asset) => !selectedAssets.includes(asset)) : [];
   const duration = Math.max(0, end - start + 1);
   const portfolioVisible = !loading && !error && !isCorrelationPage && activeTab === "portfolio";
-  const suggestedSelection = useMemo(() => selectionMode === "suggested"
-    ? suggestProfileAssets(assets, data, start, end, mode, allocationIntent)
-    : null, [selectionMode, assets, data, start, end, mode, allocationIntent]);
-
-  useEffect(() => {
-    if (!suggestedSelection?.ids.length) return;
-    setSelected(current => current.length === suggestedSelection.ids.length &&
-      current.every((id, index) => id === suggestedSelection.ids[index])
-      ? current : suggestedSelection.ids);
-  }, [suggestedSelection]);
-
-
   const stats = useMemo(() => Object.fromEntries(selectedAssets.map((asset) => {
     const window = activeTab === "portfolio" ? [start, end] : assetAnalysisWindow(data[asset.id], start, end, mode);
     return [asset.id, window ? computeStats(data[asset.id], window[0], window[1], mode) : null];
@@ -279,7 +263,7 @@ function App() {
   // Grid limitations must remain explicit; a dense 21-asset continuous optimum is not claimed.
   const automaticSearchStep = selectedAssets.length >= 7 ? 20 : selectedAssets.length >= 5 ? 10 : 5;
   const growthOptimization = useMemo<OptimizationResult>(() => {
-    if (!portfolioVisible || activePreset !== "custom" || selectedAssets.length === 0 || end <= start) {
+    if (!portfolioVisible || selectedAssets.length === 0 || end <= start) {
       return {
         strategy: "growth",
         weights: null,
@@ -307,9 +291,9 @@ function App() {
       gridStepPct: automaticSearchStep,
       maxEvaluations: 100_000,
     });
-  }, [portfolioVisible, activePreset, automaticSearchStep, data, end, growthConstraints, mode, selectedAssets, start]);
+  }, [portfolioVisible, automaticSearchStep, data, end, growthConstraints, mode, selectedAssets, start]);
   const robustOptimization = useMemo<OptimizationResult>(() => {
-    if (!portfolioVisible || prospectiveSettings.enabled || activePreset !== "custom" || selectedAssets.length === 0 || end <= start) {
+    if (!portfolioVisible || prospectiveSettings.enabled || selectedAssets.length === 0 || end <= start) {
       return {
         strategy: "robust",
         weights: null,
@@ -340,9 +324,9 @@ function App() {
       gridStepPct: automaticSearchStep,
       maxEvaluations: 100_000,
     });
-  }, [portfolioVisible, prospectiveSettings.enabled, activePreset, automaticSearchStep, data, end, growthConstraints, mode, robustScenarioSettings, selectedAssets, start]);
+  }, [portfolioVisible, prospectiveSettings.enabled, automaticSearchStep, data, end, growthConstraints, mode, robustScenarioSettings, selectedAssets, start]);
   const prospectiveOptimization = useMemo<ProspectiveResult>(() => {
-    if (!portfolioVisible || activePreset !== "custom" || !selectedAssets.length || end <= start || !prospectiveSettings.enabled) return {
+    if (!portfolioVisible || !selectedAssets.length || end <= start || !prospectiveSettings.enabled) return {
       strategy:"robust",weights:null,feasible:false,diagnostics:[],score:null,stats:null,evaluatedCandidates:0,gridStepPct:automaticSearchStep,prospectiveSummary:null
     };
     const assetIds=selectedAssets.map(a=>a.id);
@@ -352,10 +336,10 @@ function App() {
       maxAnnualVolatilityPct:growthConstraints.maxAnnualVolatilityPct,
       gridStepPct:automaticSearchStep,maxEvaluations:700
     },prospectiveSettings);
-  },[portfolioVisible,activePreset,selectedAssets,end,start,prospectiveSettings,automaticSearchStep,data,mode,robustScenarioSettings,growthConstraints]);
+  },[portfolioVisible,selectedAssets,end,start,prospectiveSettings,automaticSearchStep,data,mode,robustScenarioSettings,growthConstraints]);
   const activeRobustOptimization = prospectiveSettings.enabled ? prospectiveOptimization : robustOptimization;
   const goalOptimization = useMemo<OptimizationResult>(() => {
-    if (!portfolioVisible || activePreset !== "custom" || !selectedAssets.length || end <= start) return {
+    if (!portfolioVisible || !selectedAssets.length || end <= start) return {
       strategy: "goal", weights: null, feasible: false, diagnostics: [], score: null, stats: null, evaluatedCandidates: 0, gridStepPct: automaticSearchStep,
     };
     const assetIds = selectedAssets.map(asset => asset.id);
@@ -368,7 +352,7 @@ function App() {
       maxAnnualVolatilityPct: growthConstraints.maxAnnualVolatilityPct,
       gridStepPct: automaticSearchStep, maxEvaluations: 100_000,
     });
-  }, [portfolioVisible, activePreset, selectedAssets, end, start, automaticSearchStep, data, mode, robustScenarioSettings, goalSettings, growthConstraints]);
+  }, [portfolioVisible, selectedAssets, end, start, automaticSearchStep, data, mode, robustScenarioSettings, goalSettings, growthConstraints]);
   const optimizationResult = optimizationProfile === "robust" ? activeRobustOptimization : optimizationProfile === "goal" ? goalOptimization : growthOptimization;
   const automaticCandidate = useMemo(
     () => optimizationResult.weights
@@ -391,7 +375,7 @@ function App() {
     });
     setAutomaticWeights(true);
     automaticCandidateInitialized.current = true;
-  }, [activePreset, automaticCandidate, automaticWeights, portfolioVisible, selectedAssets]);
+  }, [automaticCandidate, automaticWeights, portfolioVisible, selectedAssets]);
 
   const years = useMemo(() => {
     const allYears = new Set<number>();
@@ -500,28 +484,7 @@ function App() {
   const weightedCorrelation = diversificationMetrics.weightedCorrelation;
   const diversificationRatio = diversificationMetrics.diversificationRatio;
 
-  const selectAllocationIntent = (intent: AllocationProfileId) => {
-    const suggestion = suggestProfileAssets(assets, data, start, end, mode, intent);
-    setAllocationIntent(intent);
-    setSelectionMode("suggested");
-    setGrowthConstraints(defaultConstraintsForProfile(intent));
-    setOptimizationProfile(intent === "controlled" ? "growth" : intent);
-    setAutomaticWeights(true);
-    automaticCandidateInitialized.current = false;
-    setRange([start, end]);
-    setCommonPeriod(false);
-    if (suggestion.ids.length) setSelected(suggestion.ids);
-    setActiveTab("portfolio");
-  };
-
-  const selectCustom = () => {
-    setSelectionMode("custom");
-    setAutomaticWeights(false);
-    automaticCandidateInitialized.current = false;
-  };
-
   const toggleAsset = (id: string) => {
-    if (selectionMode === "suggested") return;
     if (!selected.includes(id) && periodRestricted && !periodEligibleAssets.has(id)) return;
     setSelected((current) => {
       if (current.includes(id)) return current.length > 1 ? current.filter((item) => item !== id) : current;
@@ -552,9 +515,7 @@ function App() {
     const initialSelection = preferredIds.filter((id) => availableAssets.some((asset) => asset.id === id));
     const fallbackSelection = initialSelection.length ? initialSelection : availableAssets.slice(0, 3).map((asset) => asset.id);
     setOptimizationProfile("growth");
-    setAllocationIntent(DEFAULT_ALLOCATION_PROFILE);
-    setSelectionMode("custom");
-    setGrowthConstraints(defaultConstraintsForProfile(DEFAULT_ALLOCATION_PROFILE));
+    setGrowthConstraints({ ...defaultGrowthConstraints });
     setAutomaticWeights(false);
     setSelected(fallbackSelection);
     setWeights(Object.fromEntries(assets.map((asset) => [asset.id, fallbackSelection.includes(asset.id) ? 100 / Math.max(1, fallbackSelection.length) : 0])));
@@ -573,7 +534,6 @@ function App() {
     const proposal = profile === "growth" ? growthOptimization : profile === "robust" ? activeRobustOptimization : goalOptimization;
     if (!proposal.weights) return;
     setOptimizationProfile(profile);
-    if (selectionMode === "custom") setAllocationIntent(profile === "growth" && allocationIntent === "controlled" ? "controlled" : profile);
     setAutomaticWeights(true);
     setWeights((current) => selectedAssets.reduce(
       (next, asset) => ({ ...next, [asset.id]: (proposal.weights?.[asset.id] ?? 0) * 100 }),
@@ -628,37 +588,16 @@ function App() {
                <div className="configuration-steps">
                   <section className="configuration-step">
                      <div className="step-heading"><span className="step-number">01</span><div><h3>Actifs</h3><p>Choisis jusqu'à dix séries à comparer.</p></div><strong>{selectedCount}/{MAX_SELECTED_ASSETS}</strong></div>
-                    <div className="candidate-grid" role="group" aria-label="Modes de construction">
-                      <button className={selectionMode === "custom" ? "candidate-card custom selected" : "candidate-card custom"} aria-pressed={selectionMode === "custom"} onClick={selectCustom}>
-                        <div className="candidate-card-heading"><strong>À la carte</strong><span>Libre</span></div>
-                        <p>Choisis toi-même les actifs ; l'application peut ensuite optimiser leurs pondérations.</p>
-                        <div className="candidate-card-footer">Jusqu'à {MAX_SELECTED_ASSETS} actifs</div>
-                      </button>
-                      {allocationProfiles.map(profile => <button key={profile.id} className={selectionMode === "suggested" && allocationIntent === profile.id ? "candidate-card selected" : "candidate-card"} aria-pressed={selectionMode === "suggested" && allocationIntent === profile.id} onClick={() => selectAllocationIntent(profile.id)}>
-                        <div className="candidate-card-heading"><strong>{profile.label}</strong><span>Automatique</span></div>
-                        <p>{profile.description}</p>
-                        <div className="candidate-card-footer">{profile.method} · actifs présélectionnés</div>
-                      </button>)}
-                    </div>
-                    <p className="preset-description">{selectionMode === "custom"
-                      ? "Choisis librement les actifs à comparer. Les profils d'optimisation du Portefeuille peuvent ensuite proposer les pondérations."
-                      : "Les actifs sont automatiquement présélectionnés parmi les séries disponibles sur la même période. Sélection heuristique fondée sur rendement, risque et corrélations ; les pondérations sont ensuite optimisées. Pour modifier les actifs, repasse en mode À la carte."}</p>
-                    {selectionMode === "suggested" && suggestedSelection && <div className="configuration-message" role="status">
-                      {suggestedSelection.ids.length
-                        ? `${suggestedSelection.ids.length} actifs présélectionnés parmi ${suggestedSelection.eligibleCount} admissibles sur ${start}–${end}. ${suggestedSelection.excludedCount} séries écartées faute d'historique commun.`
-                        : suggestedSelection.diagnostics.join(" ")}
-                      <span> Sélection indicative : les poids sont ensuite calculés par le moteur d'optimisation.</span>
-                    </div>}
                     <div className="asset-picker-toolbar">
                       <label className="asset-search"><Search size={15} /><span className="sr-only">Rechercher un actif</span><input value={assetSearch} onChange={(event) => setAssetSearch(event.target.value)} placeholder="Rechercher un actif" /></label>
                       <div className="asset-categories" aria-label="Catégories d'actifs">{assetCategories.map((category) => <button key={category} className={assetCategoryFilter === category ? "active" : ""} onClick={() => setAssetCategoryFilter(category)}>{category}</button>)}</div>
                     </div>
-                    <div className={selectionMode === "suggested" ? "asset-chips locked" : "asset-chips"}>
+                    <div className="asset-chips">
                       {filteredAssets.map((asset) => {
                          const isSelected = selected.includes(asset.id);
                          const hasData = Boolean(data[asset.id]?.length);
                          const availableForPeriod = !periodRestricted || periodEligibleAssets.has(asset.id);
-                          return <button key={asset.id} className={`asset-chip ${isSelected ? "selected" : ""} ${!hasData || !availableForPeriod ? "unavailable" : ""}`} style={{ "--asset-color": asset.accentColor } as React.CSSProperties} onClick={() => toggleAsset(asset.id)} disabled={!hasData || selectionMode === "suggested" || (periodRestricted && !availableForPeriod && !isSelected) || (!isSelected && selected.length >= MAX_SELECTED_ASSETS)} title={!hasData ? "Données indisponibles" : !availableForPeriod ? `Indice non disponible sur ${range[0]}–${range[1]}` : undefined} aria-pressed={isSelected}>
+                          return <button key={asset.id} className={`asset-chip ${isSelected ? "selected" : ""} ${!hasData || !availableForPeriod ? "unavailable" : ""}`} style={{ "--asset-color": asset.accentColor } as React.CSSProperties} onClick={() => toggleAsset(asset.id)} disabled={!hasData || (periodRestricted && !availableForPeriod && !isSelected) || (!isSelected && selected.length >= MAX_SELECTED_ASSETS)} title={!hasData ? "Données indisponibles" : !availableForPeriod ? `Indice non disponible sur ${range[0]}–${range[1]}` : undefined} aria-pressed={isSelected}>
                            <span className="chip-dot" /> <span>{asset.name}</span><small>{asset.startYear}–{asset.endYear}</small>{!hasData && <small>indisponible</small>}{hasData && !availableForPeriod && <small>hors période</small>}
                          </button>;
                       })}
@@ -724,9 +663,7 @@ function App() {
                     weightedCorrelation={weightedCorrelation}
                     diversificationRatio={diversificationRatio}
                     mode={mode}
-                    presetModified={presetModified}
                     automaticWeights={automaticWeights}
-                    activePreset={activePreset}
                      optimizationProfile={optimizationProfile}
                      growthConstraints={growthConstraints}
                      growthOptimization={optimizationResult}
@@ -976,8 +913,6 @@ function PortfolioView({
   weightedCorrelation,
   diversificationRatio,
   mode,
-  activePreset,
-  presetModified,
   automaticWeights,
   optimizationProfile,
   growthConstraints,
@@ -1014,8 +949,6 @@ function PortfolioView({
   weightedCorrelation: number | null;
   diversificationRatio: number | null;
   mode: Mode;
-  activePreset: PresetId;
-  presetModified: boolean;
   automaticWeights: boolean;
   optimizationProfile: PortfolioOptimizationProfile;
   growthConstraints: GrowthConstraintSettings;
@@ -1066,9 +999,9 @@ function PortfolioView({
     <section className="portfolio-controls">
       <div className="card-heading compact">
         <div className="heading-icon"><SlidersHorizontal size={17} /></div>
-        <div><h2>Construire une allocation</h2><p>{activePreset === "custom" ? automaticWeights ? growthOptimization.feasible ? `Proposition automatique : ${optimizationProfileDescription(optimizationProfile)}. Tu peux modifier les pondérations.` : "Aucune allocation ne respecte les contraintes choisies." : growthOptimization.feasible ? `Pondérations personnalisées. Profil sélectionné : ${optimizationProfileLabel(optimizationProfile)}.` : "Aucune allocation historique ne peut être calculée sur cette configuration." : `${presetModified ? "Allocation candidate modifiée" : "Ventilation candidate chargée"}. Les actifs du picker sont verrouillés.`}</p></div>
+        <div><h2>Construire une allocation</h2><p>{automaticWeights ? growthOptimization.feasible ? `Proposition automatique : ${optimizationProfileDescription(optimizationProfile)}. Tu peux modifier les pondérations.` : "Aucune allocation ne respecte les contraintes choisies." : growthOptimization.feasible ? `Pondérations personnalisées. Profil sélectionné : ${optimizationProfileLabel(optimizationProfile)}.` : "Aucune allocation historique ne peut être calculée sur cette configuration."}</p></div>
       </div>
-      {activePreset === "custom" && <div className="optimization-profiles">
+      <div className="optimization-profiles">
         <div className="optimization-profiles-heading"><span>Proposition automatique</span><small>Calculée sur la configuration actuelle</small></div>
         <div className="optimization-profile-list" role="group" aria-label="Profils d'optimisation">
           {profileOptions.map((profile) => <button key={profile.id} className={`optimization-profile ${optimizationProfile === profile.id ? "active" : ""}`} disabled={profile.id === "growth" ? !growthProposal.feasible : profile.id === "robust" ? !robustProposal.feasible : !goalProposal.feasible} onClick={() => onOptimizationProfileChange(profile.id)} title={(profile.id === "growth" ? growthProposal : profile.id === "robust" ? robustProposal : goalProposal).feasible ? profile.shortDescription : "Aucune allocation ne respecte les contraintes choisies"}>
@@ -1169,7 +1102,7 @@ function PortfolioView({
           <label><input aria-label="Activer le budget de volatilité annuelle" type="checkbox" checked={growthConstraints.maxAnnualVolatilityPct !== null} onChange={(event) => onGrowthConstraintsChange({ maxAnnualVolatilityPct: event.target.checked ? 20 : null })} /> Volatilité annuelle maximale <input aria-label="Budget de volatilité annuelle" type="number" min="0" step="1" value={growthConstraints.maxAnnualVolatilityPct ?? ""} disabled={growthConstraints.maxAnnualVolatilityPct === null} onChange={(event) => onGrowthConstraintsChange({ maxAnnualVolatilityPct: Math.max(0, Number(event.target.value)) })} /> <span>%</span></label>
         </div>
          {growthOptimization.diagnostics.length > 0 && <p className="optimization-profile-note">{growthOptimization.diagnostics.join(" ")}</p>}
-      </div>}
+      </div>
       <div className="weight-list">
         {assets.map((asset) => {
           const enteredWeight = weights[asset.id] ?? 0;
