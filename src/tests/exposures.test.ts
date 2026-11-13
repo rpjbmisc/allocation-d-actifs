@@ -1,3 +1,4 @@
+import assetExposures from "../../public/data/asset_exposures.json";
 import {describe,it,expect} from "vitest";
 import {calculatePortfolioExposure,type ExposureRegistry} from "../domain/exposures";
 
@@ -56,5 +57,26 @@ describe("composition économique des portefeuilles",()=>{
     const a=calculatePortfolioExposure({world:0.6,small:0.4},data)!;
     const b=calculatePortfolioExposure({world:60,small:40},data)!;
     expect(a.breakdown.countries).toEqual(b.breakdown.countries);
+  });
+});
+
+describe("photographies réelles du registre",()=>{
+  const real = assetExposures as unknown as ExposureRegistry;
+  it("normalise toutes les distributions publiées",()=>{
+    for (const [id,asset] of Object.entries(real.assets)) {
+      if (!asset.countries) continue;
+      expect(Object.values(asset.countries).reduce((a,b)=>a+b,0),id).toBeCloseTo(100,1);
+      const view=calculatePortfolioExposure({[id]:100},real)!;
+      expect(view.breakdown.countries.reduce((a,b)=>a+b.percent,0),id).toBeCloseTo(100,1);
+    }
+  });
+  it("ventile correctement les marchés d'Europe, du Pacifique et émergents",()=>{
+    const p=calculatePortfolioExposure({msci_europe:40,msci_pacific_ex_japan_imi:40,msci_em:20},real)!;
+    expect(p.precision.countries).toBeGreaterThan(99);
+    const byCountry=asMap(p.breakdown.countries);
+    expect(byCountry["Royaume-Uni"]).toBeGreaterThan(5);
+    expect(byCountry["Australie"]).toBeGreaterThan(20);
+    expect(byCountry["Taïwan"]).toBeGreaterThan(5);
+    expect(byCountry["Pays non détaillés"]??0).toBe(0);
   });
 });
