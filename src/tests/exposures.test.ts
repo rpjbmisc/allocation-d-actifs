@@ -18,7 +18,7 @@ describe("composition économique des portefeuilles",()=>{
     expect(p.otherShare).toBeCloseTo(25);
     const zones=asMap(p.breakdown.zones);
     expect(zones["Amérique du Nord"]).toBeCloseTo(80);
-    expect(zones["Asie développée"]).toBeCloseTo(6.6666667);
+    expect(zones["Japon"]).toBeCloseTo(6.6666667);
     expect(zones["Zone non détaillée"]).toBeCloseTo(13.3333333);
     expect(p.breakdown.zones.reduce((n,x)=>n+x.percent,0)).toBeCloseTo(100);
     expect(asMap(p.breakdown.styles)["Indice à biais Value"]).toBeCloseTo(33.3333333);
