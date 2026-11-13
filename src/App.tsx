@@ -65,6 +65,7 @@ import {
 
 type Tab = "overview" | "returns" | "growth" | "decades" | "portfolio" | "correlations";
 type PortfolioSpace = "construction" | "comparison" | "validation";
+type PresetId = "custom";
 type Dataset = Record<string, Row[]>;
 type ChartRow = Record<string, number | string | null>;
 type ChartColumn = { key: string; label: string };
@@ -187,7 +188,7 @@ function App() {
   const [goalSettings, setGoalSettings] = useState<GoalSettings>(DEFAULT_GOAL_SETTINGS);
   const [validationSettings, setValidationSettings] = useState<WalkForwardSettings>(defaultValidationSettings);
   const activePreset = "custom" as const;
-  const [presetModified, setPresetModified] = useState(false);
+  const presetModified = false;
   const automaticCandidateInitialized = useRef(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -496,9 +497,7 @@ function App() {
   };
 
   const toggleAsset = (id: string) => {
-    if (activePreset !== "custom") return;
     if (!selected.includes(id) && periodRestricted && !periodEligibleAssets.has(id)) return;
-    setOptimizationProfile("growth");
     setSelected((current) => {
       if (current.includes(id)) return current.length > 1 ? current.filter((item) => item !== id) : current;
       if (current.length >= MAX_SELECTED_ASSETS) return current;
@@ -509,13 +508,11 @@ function App() {
 
   const updateWeight = (id: string, value: number) => {
     setAutomaticWeights(false);
-    if (activePreset !== "custom") setPresetModified(true);
     setWeights((current) => ({ ...current, [id]: Math.max(0, Math.min(100, value)) }));
   };
 
   const normalizeWeights = () => {
     setAutomaticWeights(false);
-    if (activePreset !== "custom") setPresetModified(true);
     const total = selectedAssets.reduce((sum, asset) => sum + (weights[asset.id] ?? 0), 0);
     if (total <= 0 && selectedAssets.length > 0) {
       const equalWeight = 100 / selectedAssets.length;
@@ -533,7 +530,6 @@ function App() {
     setAllocationIntent(DEFAULT_ALLOCATION_PROFILE);
     setGrowthConstraints(defaultConstraintsForProfile(DEFAULT_ALLOCATION_PROFILE));
     setAutomaticWeights(false);
-    setPresetModified(false);
     setSelected(fallbackSelection);
     setWeights(Object.fromEntries(assets.map((asset) => [asset.id, fallbackSelection.includes(asset.id) ? 100 / Math.max(1, fallbackSelection.length) : 0])));
     setCommonPeriod(true);
