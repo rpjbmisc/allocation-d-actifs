@@ -710,6 +710,7 @@ function App() {
                      growthProposal={growthOptimization}
                      robustProposal={activeRobustOptimization} prospectiveSettings={prospectiveSettings} onProspectiveSettingsChange={setProspectiveSettings} goalProposal={goalOptimization} goalSettings={goalSettings} onGoalSettingsChange={(next) => setGoalSettings(current => ({ ...current, ...next }))}
                      robustScenarioSettings={robustScenarioSettings}
+                     onRobustScenarioSettingsChange={(next) => setRobustScenarioSettings(current => ({ ...current, ...next }))}
                      start={start}
                      end={end}
                      benchmarkPortfolio={benchmarkPortfolio}
@@ -966,6 +967,7 @@ function PortfolioView({
   goalSettings,
   onGoalSettingsChange,
   robustScenarioSettings,
+  onRobustScenarioSettingsChange,
   prospectiveSettings,
   onProspectiveSettingsChange,
   start,
@@ -1005,6 +1007,7 @@ function PortfolioView({
   goalSettings: GoalSettings;
   onGoalSettingsChange: (next: Partial<GoalSettings>) => void;
   robustScenarioSettings: ScenarioSettings;
+  onRobustScenarioSettingsChange: (next: Partial<ScenarioSettings>) => void;
   start: number;
   end: number;
   prospectiveSettings: ProspectiveSettings;
@@ -1075,7 +1078,7 @@ function PortfolioView({
         </div>}
         {optimizationProfile === "robust" && <div className="robust-settings" aria-label="Présentation du mode Tout-terrain">
           <ToutTerrainPanel assets={assets} data={data} start={start} end={end} mode={mode}
-            scenarioSettings={robustScenarioSettings} onScenarioSettingsChange={(next) => setRobustScenarioSettings(current => ({ ...current, ...next }))} settings={prospectiveSettings}
+            scenarioSettings={robustScenarioSettings} onScenarioSettingsChange={onRobustScenarioSettingsChange} settings={prospectiveSettings}
             onSettingsChange={onProspectiveSettingsChange} growth={growthProposal} terrain={robustProposal} />
         </div>}
         {optimizationProfile !== "custom" && <div className="growth-constraints" aria-label="Contraintes des profils automatiques">
