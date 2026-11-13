@@ -163,7 +163,7 @@ it("allows adding MSCI Emerging Markets Asia from the asset picker on a partial 
   render(<App />);
   await screen.findByRole("tab", { name: "Portefeuille" });
   await user.click(screen.getByRole("button", { name: "Modifier" }));
-  const chip = screen.getByRole("button", { name: /MSCI Emerging Markets Asia 2000–2025/ });
+  const chip = screen.getByRole("button", { name: /MSCI Emerging Markets Asia/ });
   expect(chip.hasAttribute("disabled")).toBe(false);
   await user.click(chip);
   await waitFor(() => expect(document.querySelectorAll(".asset-card")).toHaveLength(2));
