@@ -357,3 +357,32 @@ button:disabled, input:disabled { cursor: not-allowed; opacity: .45; }
 .terrain-paths-setting { margin-top: 8px; }
 .terrain-reset { margin-top: 8px; padding: 7px 10px; border: 1px solid #b8cbd4; background: #fff; border-radius: 5px; cursor: pointer; color: #17324a; font-size: 11px; }
 @media (max-width: 520px) { .terrain-futures { grid-template-columns: 1fr; } .terrain-table { font-size: 9px; } .terrain-table th,.terrain-table td { padding: 7px 4px; } }
+
+/* Validation pédagogique */
+.validation-explainer { display: grid; gap: 10px; margin-top: 13px; padding: 13px; border: 1px solid #e4eaee; border-radius: 7px; background: #f8fafb; color: #536b7a; font-size: 11px; line-height: 1.55; }
+.validation-explainer strong { color: #17324a; }
+.validation-explainer p { margin: 0; }
+.validation-timeline { display: grid; grid-template-columns: minmax(0,3fr) minmax(0,1fr); gap: 3px; min-height: 67px; overflow: hidden; border-radius: 5px; }
+.validation-timeline > div { display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 3px; padding: 8px 4px; color: #fff; text-align: center; }
+.validation-timeline-train { background: #527fa8; }
+.validation-timeline-test { background: #2e9979; }
+.validation-timeline strong, .validation-timeline span { color: #fff; }
+.validation-timeline strong { font-size: 11px; }
+.validation-timeline span { font-size: 9px; }
+.validation-caution { color: #856a43; font-size: 11px; line-height: 1.5; }
+.validation-main-table th, .validation-main-table td { white-space: nowrap; }
+.validation-main-table th:first-child { min-width: 110px; }
+.validation-summary-card.validation-conclusion-card { display: grid; gap: 8px; }
+.validation-conclusion-card h2 { font-size: 16px; color: #17324a; margin: 0; }
+.validation-conclusion-card p { line-height: 1.6; }
+.validation-chart-card { min-width: 0; }
+.validation-chart-legend { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 10px 15px; padding: 5px 10px; color: #536b7a; font-size: 10px; }
+.validation-chart-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.validation-chart-legend i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+.validation-advanced { background: rgba(255,255,255,.78); border: 1px solid #dfe6ea; padding: 16px; min-width: 0; }
+.validation-advanced summary { cursor: pointer; color: #17324a; font-weight: 600; }
+.validation-advanced h3 { color: #17324a; font-size: 12px; margin-top: 18px; }
+.validation-advanced .table-scroll { margin-top: 10px; }
+.validation-advanced .method-note { line-height: 1.5; }
+.validation-results-card .validation-main-table { min-width: 580px; }
+@media (max-width: 520px) { .validation-timeline { grid-template-columns: minmax(0,2fr) minmax(0,1fr); } }
