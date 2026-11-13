@@ -267,9 +267,11 @@ function App() {
   const [start, end] = effectiveRange;
   // Only portfolio calculations require every constituent to cover the complete interval.
   // Keep the global selection intact when navigating between tabs.
+  // A selected asset must remain visible outside Portefeuille even if no valid
+  // return window exists: show an explicit unavailable state instead of hiding it.
   const selectedAssets = useMemo(() => activeTab === "portfolio"
     ? allSelectedAssets.filter((asset) => assetCoversPeriod(data[asset.id], start, end, mode))
-    : allSelectedAssets.filter((asset) => assetAnalysisWindow(data[asset.id], start, end, mode)),
+    : allSelectedAssets,
     [activeTab, allSelectedAssets, data, start, end, mode]);
   const excludedPortfolioAssets = activeTab === "portfolio"
     ? allSelectedAssets.filter((asset) => !selectedAssets.includes(asset)) : [];
@@ -1428,7 +1430,18 @@ function ChartCard({ title, subtitle, icon, children, data, columns, format = "n
 
 function Overview({ assets, stats, data, mode, start, end }: { assets: Asset[]; stats: Record<string, ReturnType<typeof computeStats>>; data: Dataset; mode: Mode; start: number; end: number }) {
   return <>
-     <section className="kpi-grid">{assets.map((asset) => { const stat = stats[asset.id]; if (!stat) return null; return <article className="asset-card" key={asset.id} style={{ "--asset-color": asset.accentColor } as React.CSSProperties}><div className="asset-card-top"><span className="asset-badge">{asset.name}</span><span className="asset-period">{assetAnalysisWindow(data[asset.id], start, end, mode)?.join("–") ?? "n.d."}</span></div><div className="main-kpi"><span>TCAM annualisé · {mode === "nominal" ? "nominal" : "réel"}</span><strong>{formatPercent(mode === "nominal" ? stat.cagrNominal : stat.cagrReal)}</strong><small>Performance moyenne par an, composée.</small></div><div className="metric-grid"><Metric label="Volatilité" value={formatPercent(stat.volatility, 1)} description="Variation annuelle des rendements." /><Metric label="Années positives" value={`${stat.positiveRate.toFixed(0)} %`} description="Part des années au-dessus de 0 %." /><Metric label="Meilleure année" value={stat.best ? `${stat.best.year} · ${formatPercent(returnValue(stat.best, mode))}` : "n.d."} description="Rendement annuel le plus élevé." positive /><Metric label="Pire année" value={stat.worst ? `${stat.worst.year} · ${formatPercent(returnValue(stat.worst, mode))}` : "n.d."} description="Rendement annuel le plus faible." negative /></div></article>; })}</section>
+    <section className="kpi-grid">{assets.map((asset) => {
+      const stat = stats[asset.id];
+      const window = assetAnalysisWindow(data[asset.id], start, end, mode);
+      const period = window?.join("–") ?? `Aucune donnée sur ${start}–${end}`;
+      return <article className="asset-card" key={asset.id} style={{ "--asset-color": asset.accentColor } as React.CSSProperties}>
+        <div className="asset-card-top"><span className="asset-badge">{asset.name}</span><span className="asset-period">{period}</span></div>
+        {stat ? <>
+          <div className="main-kpi"><span>TCAM annualisé · {mode === "nominal" ? "nominal" : "réel"}</span><strong>{formatPercent(mode === "nominal" ? stat.cagrNominal : stat.cagrReal)}</strong><small>Performance moyenne par an, composée.</small></div>
+          <div className="metric-grid"><Metric label="Volatilité" value={formatPercent(stat.volatility, 1)} description="Variation annuelle des rendements." /><Metric label="Années positives" value={`${stat.positiveRate.toFixed(0)} %`} description="Part des années au-dessus de 0 %." /><Metric label="Meilleure année" value={stat.best ? `${stat.best.year} · ${formatPercent(returnValue(stat.best, mode))}` : "n.d."} description="Rendement annuel le plus élevé." positive /><Metric label="Pire année" value={stat.worst ? `${stat.worst.year} · ${formatPercent(returnValue(stat.worst, mode))}` : "n.d."} description="Rendement annuel le plus faible." negative /></div>
+        </> : <div className="main-kpi"><span>TCAM annualisé · {mode === "nominal" ? "nominal" : "réel"}</span><strong>n.d.</strong><small>Historique insuffisant ou discontinu dans la plage sélectionnée. L'actif reste sélectionné.</small></div>}
+      </article>;
+    })}</section>
     <section className="insight-grid"><div className="insight-card"><div className="card-heading compact"><div className="heading-icon warm"><ArrowUpRight size={17} /></div><div><h2>Les meilleures années</h2><p>Top 5 · lecture {mode === "nominal" ? "nominale" : "réelle"}</p></div></div><RankingTable assets={assets} stats={stats} mode={mode} best /></div><div className="insight-card"><div className="card-heading compact"><div className="heading-icon cool"><ArrowDownRight size={17} /></div><div><h2>Les années difficiles</h2><p>Bottom 5 · lecture {mode === "nominal" ? "nominale" : "réelle"}</p></div></div><RankingTable assets={assets} stats={stats} mode={mode} best={false} /></div></section>
   </>;
 }
