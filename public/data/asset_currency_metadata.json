@@ -105,6 +105,42 @@
       "levelType": "index_level",
       "returnType": "total_return",
       "currencyEvidence": "US investment-grade corporate bond reinvestment series"
+    },
+    "msci_pacific_ex_japan_imi": {
+      "currency": "USD",
+      "levelType": "index_level",
+      "returnType": "net_total_return",
+      "currencyEvidence": "User-supplied MSCI Pacific ex Japan IMI NTR historical series, USD assumed (verify original source currency)"
+    },
+    "msci_em_asia": {
+      "currency": "USD",
+      "levelType": "index_level",
+      "returnType": "net_total_return",
+      "currencyEvidence": "User-supplied MSCI Emerging Markets Asia NTR historical series, USD assumed (verify original source currency)"
+    },
+    "msci_japan": {
+      "currency": "USD",
+      "levelType": "index_level",
+      "returnType": "net_total_return",
+      "currencyEvidence": "User-supplied MSCI Japan NTR historical series, USD assumed (verify original source currency)"
+    },
+    "msci_europe_small_cap_weighted": {
+      "currency": "USD",
+      "levelType": "index_level",
+      "returnType": "net_total_return",
+      "currencyEvidence": "User-supplied MSCI Europe Small Cap Weighted NTR historical series, USD assumed (verify original source currency)"
+    },
+    "msci_usa_small_cap_weighted": {
+      "currency": "USD",
+      "levelType": "index_level",
+      "returnType": "net_total_return",
+      "currencyEvidence": "User-supplied MSCI USA Small Cap Weighted NTR historical series, USD assumed (verify original source currency)"
+    },
+    "msci_europe": {
+      "currency": "USD",
+      "levelType": "index_level",
+      "returnType": "net_total_return",
+      "currencyEvidence": "User-supplied MSCI Europe NTR historical series, USD assumed (verify original source currency)"
     }
   },
   "caveats": [

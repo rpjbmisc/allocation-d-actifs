@@ -141,7 +141,7 @@ const defaultValidationSettings: WalkForwardSettings = {
 const defaultRobustScenarioSettings: ScenarioSettings = DEFAULT_SCENARIO_SETTINGS;
 
 function assetCategory(id: string): AssetCategory {
-  if (["sp500", "msci_world", "msci_world_ex_usa", "msci_world_small_cap_value", "msci_world_value", "msci_em", "russell2000", "us_total_market", "global_infrastructure"].includes(id)) return "Actions";
+  if (["sp500", "msci_world", "msci_world_ex_usa", "msci_world_small_cap_value", "msci_world_value", "msci_em", "russell2000", "us_total_market", "global_infrastructure", "msci_pacific_ex_japan_imi", "msci_em_asia", "msci_japan", "msci_europe_small_cap_weighted", "msci_usa_small_cap_weighted", "msci_europe"].includes(id)) return "Actions";
   if (["tbills_us", "us_lt_govt_bonds", "highyield_us"].includes(id)) return "Obligations";
   if (id === "reit_us") return "Immobilier";
   if (id === "gold") return "Métaux";
