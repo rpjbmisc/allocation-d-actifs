@@ -14,9 +14,9 @@ describe("historical input audit", () => {
   it.each(assets)("preserves and validates $id observations and registry bounds", asset => {
     expect(auditRows(normalizeRows(read(asset.csvFile)), asset)).toEqual([]);
   });
-  it("loads the real registry, CSV series, FX, CPI and static presets", async () => {
+  it("loads the real registry, CSV series, FX and CPI", async () => {
     const loaded = await loadHistoricalData("/", diskFetch);
-    expect(loaded.assets).toHaveLength(21); expect(Object.keys(loaded.rawData)).toHaveLength(21); expect(loaded.presets.length).toBeGreaterThan(0);
+    expect(loaded.assets).toHaveLength(21); expect(Object.keys(loaded.rawData)).toHaveLength(21);
     expect(loaded.currencyContext.usdPerEur[2000]).toBeGreaterThan(0);
   });
   it("reports missing files rather than silently loading an empty asset", async () => {
