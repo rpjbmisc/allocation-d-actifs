@@ -88,19 +88,41 @@
     "msci_em": {
       "kind": "equity",
       "countries": {
-        "TW": 28.88,
-        "CN": 20,
-        "KR": 19.66,
-        "IN": 11.73,
-        "BR": 3.9,
-        "OTHER": 15.83
+        "TW": 27.02,
+        "CN": 21.71,
+        "KR": 18.99,
+        "IN": 11.86,
+        "BR": 3.96,
+        "ZA": 3.33,
+        "SA": 2.56,
+        "MX": 1.78,
+        "AE": 1.25,
+        "PL": 1.17,
+        "MY": 0.99,
+        "TH": 0.98,
+        "QA": 0.59,
+        "GR": 0.54,
+        "ID": 0.52,
+        "KW": 0.47,
+        "PE": 0.44,
+        "CL": 0.42,
+        "TR": 0.36,
+        "HU": 0.36,
+        "PH": 0.29,
+        "CZ": 0.14,
+        "CO": 0.13,
+        "HK": 0.06,
+        "EG": 0.05,
+        "US": 0.03
       },
       "sizes": {
         "large_mid": 100
       },
       "factor": "none",
-      "source": "https://www.msci.com/documents/10199/10c3f32f-4565-4a92-aa1c-edf6f3a4e03f",
-      "asOf": "2026-10-30"
+      "source": "https://www.ssga.com/dk/en_gb/intermediary/etfs/spdr-msci-emerging-markets-ucits-etf-spym-gy",
+      "asOf": "2026-08-07",
+      "basis": "proxy_etf",
+      "note": "Proxy : composition pays de l'ETF SPDR MSCI Emerging Markets UCITS ETF, qui suit le MSCI Emerging Markets ; des écarts de réplication et une ligne résiduelle peuvent exister."
     },
     "reit_us": {
       "kind": "other",
@@ -200,20 +222,30 @@
     "msci_europe": {
       "kind": "equity",
       "countries": {
-        "GB": 22.64,
-        "FR": 15.27,
-        "CH": 14.49,
-        "DE": 13.63,
-        "NL": 8.75,
-        "EU_OTHER": 25.22
+        "GB": 22.96,
+        "FR": 14.58,
+        "CH": 14.55,
+        "DE": 13.72,
+        "NL": 8.84,
+        "ES": 6.25,
+        "SE": 5.47,
+        "IT": 4.99,
+        "DK": 2.5,
+        "FI": 1.86,
+        "BE": 1.69,
+        "NO": 1.01,
+        "IE": 0.67,
+        "AT": 0.58,
+        "PT": 0.34
       },
       "sizes": {
         "large_mid": 100
       },
       "factor": "none",
-      "source": "https://www.msci.com/documents/10199/861bb4d4-7a59-489b-8cef-bb104e152e3c",
-      "note": "Cinq pays détaillés dans la fiche MSCI du 31 juillet 2026 ; 25,22 % restent regroupés en autres pays européens.",
-      "asOf": "2026-07-31"
+      "source": "https://www.ssga.com/uk/en_gb/institutional/etfs/state-street-spdr-msci-europe-ucits-etf-ero-fp",
+      "note": "Proxy : composition pays de l'ETF State Street SPDR MSCI Europe UCITS ETF, qui suit le MSCI Europe ; répartition de l'ETF et non publication directe du poids de chaque pays de l'indice.",
+      "asOf": "2026-10-13",
+      "basis": "proxy_etf"
     },
     "global_infrastructure": {
       "kind": "other",
