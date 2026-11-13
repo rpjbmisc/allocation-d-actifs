@@ -3,6 +3,7 @@ import { loadHistoricalData } from "./data/load";
 import { defaultProspectiveSettings } from "./scenarios/prospective";
 import type { ProspectiveSettings } from "./scenarios/prospective";
 import { optimizeProspective } from "./optimization/prospective";
+import { generateJointScenarios, scenarioPortfolioCagr, summarizeScenarioPortfolio } from "./scenarios/generator";
 import type { ProspectiveResult } from "./optimization/prospective";
 import {
   Area,
@@ -731,6 +732,8 @@ function App() {
                      growthProposal={growthOptimization}
                      robustProposal={activeRobustOptimization} prospectiveSettings={prospectiveSettings} onProspectiveSettingsChange={setProspectiveSettings} goalProposal={goalOptimization} goalSettings={goalSettings} onGoalSettingsChange={(next) => setGoalSettings(current => ({ ...current, ...next }))}
                      robustScenarioSettings={robustScenarioSettings}
+                     start={start}
+                     end={end}
                      benchmarkPortfolio={benchmarkPortfolio}
                     walkForward={walkForward}
                     space={portfolioSpace}
@@ -988,6 +991,8 @@ function PortfolioView({
   robustScenarioSettings,
   prospectiveSettings,
   onProspectiveSettingsChange,
+  start,
+  end,
   benchmarkPortfolio,
   walkForward,
   space,
@@ -1024,6 +1029,8 @@ function PortfolioView({
   goalSettings: GoalSettings;
   onGoalSettingsChange: (next: Partial<GoalSettings>) => void;
   robustScenarioSettings: ScenarioSettings;
+  start: number;
+  end: number;
   prospectiveSettings: ProspectiveSettings;
   onProspectiveSettingsChange: (next: ProspectiveSettings) => void;
   benchmarkPortfolio: PortfolioStats | null;
@@ -1038,6 +1045,28 @@ function PortfolioView({
   onRobustScenarioSettingsChange: (next: Partial<ScenarioSettings>) => void;
   onValidationSettingsChange: (next: Partial<WalkForwardSettings>) => void;
 }) {
+  const robustIllustration = useMemo(() => {
+    if (optimizationProfile !== "robust" || prospectiveSettings.enabled || !robustProposal.weights || !growthProposal.weights || !assets.length) return null;
+    const scenarios = generateJointScenarios(
+      { data, assetIds: assets.map(asset => asset.id), start, end, mode }, robustScenarioSettings,
+    );
+    if (scenarios.diagnostics.length || !scenarios.scenarios.length) return null;
+    const robust = summarizeScenarioPortfolio(scenarios.scenarios, robustProposal.weights, scenarios.settings);
+    const growth = summarizeScenarioPortfolio(scenarios.scenarios, growthProposal.weights, scenarios.settings);
+    if (!robust || !growth) return null;
+    const all = scenarios.scenarios.map(scenario => scenarioPortfolioCagr(scenario, robustProposal.weights));
+    if (all.some(value => value === null || !Number.isFinite(value))) return null;
+    const values = all as number[];
+    const min = Math.min(...values), max = Math.max(...values);
+    const step = Math.max((max - min) / 10, 0.001);
+    const histogram = Array.from({ length: 10 }, (_, index) => ({
+      range: `${(min + index * step).toFixed(1)} %`,
+      count: values.filter(value => Math.min(9, Math.floor((value - min) / step)) === index).length,
+      difficult: min + (index + 0.5) * step <= robust.quantileCagr,
+    }));
+    return { robust, growth, histogram };
+  }, [assets, data, end, growthProposal.weights, mode, optimizationProfile, prospectiveSettings.enabled, robustProposal.weights, robustScenarioSettings, start]);
+
   const totalWeight = assets.reduce((sum, asset) => sum + (weights[asset.id] ?? 0), 0);
   const fractions = normalizeAllocationWeights(Object.fromEntries(assets.map(asset => [asset.id, weights[asset.id] ?? 0])));
   const normalizedWeights = Object.fromEntries(assets.map(asset => [asset.id, (fractions?.[asset.id] ?? 0) * 100]));
@@ -1138,13 +1167,36 @@ function PortfolioView({
             <p>Après un changement, reclique sur « Robustesse » pour appliquer les nouveaux poids.</p>
           </div>}
           {!prospectiveSettings.enabled && <>
-          <div className="robust-simple-heading"><strong>Et si les prochaines années étaient difficiles ?</strong><p>L'application essaie plusieurs suites possibles d'années passées et cherche une répartition qui s'en sort bien, même quand les résultats sont moins bons.</p></div>
+          <div className="robust-simple-heading"><strong>Et si les prochaines années étaient difficiles ?</strong><p>L'application réassemble des années historiques en différentes trajectoires. Elle recherche l'allocation offrant le meilleur rendement au seuil défavorable choisi, plutôt que le meilleur rendement historique global.</p><p>Être plus prudent sur ce seuil ne garantit pas une volatilité ou des pertes maximales plus faibles.</p></div>
           <fieldset className="robust-prudence">
             <legend>À quel point veux-tu privilégier les scénarios difficiles ?</legend>
             <div className="robust-prudence-options">
-              {([ { value: 30, label: "Un peu", detail: "30 % des scénarios sont moins bons" }, { value: 20, label: "Moyennement", detail: "20 % des scénarios sont moins bons" }, { value: 10, label: "Beaucoup", detail: "10 % des scénarios sont moins bons" } ] as const).map(option => <label key={option.value} className={robustScenarioSettings.quantilePct === option.value ? "selected" : ""}><input type="radio" name="robust-quantile" checked={robustScenarioSettings.quantilePct === option.value} onChange={() => onRobustScenarioSettingsChange({ quantilePct: option.value })} /><span><strong>{option.label}</strong><small>{option.detail}</small></span></label>)}
+              {([ { value: 30, label: "Modéré", detail: "Seuil des 30 % de scénarios les moins favorables" }, { value: 20, label: "Équilibré", detail: "Seuil des 20 % de scénarios les moins favorables" }, { value: 10, label: "Très prudent", detail: "Seuil des 10 % de scénarios les moins favorables" } ] as const).map(option => <label key={option.value} className={robustScenarioSettings.quantilePct === option.value ? "selected" : ""}><input type="radio" name="robust-quantile" checked={robustScenarioSettings.quantilePct === option.value} onChange={() => onRobustScenarioSettingsChange({ quantilePct: option.value })} /><span><strong>{option.label}</strong><small>{option.detail}</small></span></label>)}
             </div>
           </fieldset>
+          {robustIllustration && <div className="robust-explainer" aria-label="Illustration des simulations de robustesse">
+            <h4>Visualiser les scénarios</h4>
+            <p>Chaque barre regroupe des trajectoires de {robustScenarioSettings.horizonYears} ans par rendement annualisé. Les barres roses représentent les résultats les plus défavorables.</p>
+            <div role="img" aria-label="Histogramme des rendements annualisés simulés">
+              <ResponsiveContainer width="100%" height={170}><BarChart data={robustIllustration.histogram} margin={{ top: 8, right: 5, left: -18, bottom: 8 }}>
+                <CartesianGrid vertical={false} stroke="#e5e9ec" />
+                <XAxis dataKey="range" tick={{ fontSize: 9 }} interval={1} />
+                <YAxis allowDecimals={false} tick={{ fontSize: 9 }} />
+                <Tooltip formatter={value => [String(value), "Trajectoires"]} />
+                <Bar dataKey="count" name="Trajectoires" radius={[3, 3, 0, 0]}>{robustIllustration.histogram.map((bar, index) => <Cell key={index} fill={bar.difficult ? "#cf7e7e" : "#659ac3"} />)}</Bar>
+              </BarChart></ResponsiveContainer>
+            </div>
+            <p>Seuil choisi : <strong>{robustIllustration.robust.quantilePct} %</strong> des simulations obtiennent approximativement moins de <strong>{formatPercent(robustIllustration.robust.quantileCagr)} par an</strong>.</p>
+            <h4>Le compromis face au mode Croissance</h4>
+            <div className="robust-comparison-scroll"><table><thead><tr><th>Indicateur</th><th>Croissance</th><th>Robustesse</th></tr></thead><tbody>
+              <tr><td>Rendement historique annualisé</td><td>{formatPercent(growthProposal.stats?.cagr)}</td><td>{formatPercent(robustProposal.stats?.cagr)}</td></tr>
+              <tr><td>Seuil défavorable simulé</td><td>{formatPercent(robustIllustration.growth.quantileCagr)}</td><td>{formatPercent(robustIllustration.robust.quantileCagr)}</td></tr>
+              <tr><td>Rendement médian simulé</td><td>{formatPercent(robustIllustration.growth.medianCagr)}</td><td>{formatPercent(robustIllustration.robust.medianCagr)}</td></tr>
+              <tr><td>Volatilité historique</td><td>{formatPercent(growthProposal.stats?.volatility)}</td><td>{formatPercent(robustProposal.stats?.volatility)}</td></tr>
+              <tr><td>Drawdown annuel historique</td><td>{formatPercent(growthProposal.stats?.maxDrawdown)}</td><td>{formatPercent(robustProposal.stats?.maxDrawdown)}</td></tr>
+            </tbody></table></div>
+            <p>Les allocations sont évaluées sur les mêmes trajectoires. Ces chiffres ne sont ni des prévisions ni des probabilités réelles de gains ou de pertes.</p>
+          </div>}
           {robustProposal.scenarioSummary && <div className="robust-simple-result">
             <strong>Dans les simulations : {formatPercent(robustProposal.scenarioSummary.quantileCagr)} par an au seuil choisi</strong>
             <p>Environ {robustProposal.scenarioSummary.quantilePct} % des simulations font moins bien. Le résultat du milieu est de {formatPercent(robustProposal.scenarioSummary.medianCagr)} par an.</p>
