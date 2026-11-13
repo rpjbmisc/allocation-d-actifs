@@ -55,8 +55,7 @@
         "Small": 100
       },
       "factor": "value",
-      "source": "https://www.msci.com/indexes/index/139549/msci-world-small-cap-value-weighted-index",
-      "note": "Le libellé de la série ne prouve pas qu'il s'agit de l'indice Value Weighted : pays non attribués sans confirmation.",
+      "note": "Biais Value et univers Small Cap selon le libellé de la série ; fiche de composition exacte non vérifiée (pays non ventilés).",
       "asOf": "2026-10-30"
     },
     "msci_world_value": {
