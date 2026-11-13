@@ -1,0 +1,237 @@
+{
+  "schemaVersion": 1,
+  "description": "Photographies partielles de compositions officielles ; ni une série historique, ni une décomposition exhaustive. Les pays non publiés restent non ventilés. Tailles et facteurs distinguent ciblage d'indice et poids réels des sous-jacents.",
+  "updated": "2026-11-13",
+  "assets": {
+    "sp500": {
+      "kind": "equity",
+      "countries": {
+        "US": 100
+      },
+      "sizes": {
+        "Large": 100
+      },
+      "factor": "none",
+      "source": "https://www.spglobal.com/spdji/en/indices/equity/sp-500/",
+      "asOf": "2026-10-30"
+    },
+    "msci_world": {
+      "kind": "equity",
+      "countries": {
+        "US": 72.77,
+        "JP": 5.72,
+        "GB": 3.52,
+        "CA": 3.44,
+        "CH": 2.34,
+        "OTHER": 12.21
+      },
+      "sizes": {
+        "large_mid": 100
+      },
+      "factor": "none",
+      "source": "https://www.msci.com/documents/10199/178e6643-6ae6-47b9-82be-e1fc565ededb",
+      "asOf": "2026-10-30"
+    },
+    "msci_world_ex_usa": {
+      "kind": "equity",
+      "countries": {
+        "JP": 20.67,
+        "GB": 12.53,
+        "CA": 12.12,
+        "FR": 8.73,
+        "CH": 8.41,
+        "OTHER": 37.54
+      },
+      "sizes": {
+        "large_mid": 100
+      },
+      "factor": "none",
+      "source": "https://www.msci.com/documents/10199/255599/msci-world-ex-usa-index-price-usd.pdf",
+      "asOf": "2026-06-30"
+    },
+    "msci_world_small_cap_value": {
+      "kind": "equity",
+      "sizes": {
+        "Small": 100
+      },
+      "factor": "value",
+      "source": "https://www.msci.com/indexes/index/139549/msci-world-small-cap-value-weighted-index",
+      "note": "Le libellé de la série ne prouve pas qu'il s'agit de l'indice Value Weighted : pays non attribués sans confirmation.",
+      "asOf": "2026-10-30"
+    },
+    "msci_world_value": {
+      "kind": "equity",
+      "countries": {
+        "US": 72.1,
+        "JP": 5.6,
+        "GB": 3.9,
+        "CA": 3.7,
+        "FR": 2.5,
+        "OTHER": 12.2
+      },
+      "sizes": {
+        "large_mid": 100
+      },
+      "factor": "value",
+      "source": "https://www.msci.com/indexes/index/105868",
+      "asOf": "2026-06-30"
+    },
+    "msci_em": {
+      "kind": "equity",
+      "countries": {
+        "TW": 26.41,
+        "KR": 23.06,
+        "CN": 20.36,
+        "IN": 10.87,
+        "BR": 3.86,
+        "OTHER": 15.44
+      },
+      "sizes": {
+        "large_mid": 100
+      },
+      "factor": "none",
+      "source": "https://www.msci.com/documents/10199/10c3f32f-4565-4a92-aa1c-edf6f3a4e03f",
+      "asOf": "2026-05-29"
+    },
+    "reit_us": {
+      "kind": "other",
+      "assetClass": "Immobilier coté (REIT)",
+      "source": "https://www.msci.com/indexes/index/133850"
+    },
+    "russell2000": {
+      "kind": "equity",
+      "countries": {
+        "US": 100
+      },
+      "sizes": {
+        "Small": 100
+      },
+      "factor": "none",
+      "source": "https://www.lseg.com/en/ftse-russell/indices/russell-us"
+    },
+    "us_total_market": {
+      "kind": "equity",
+      "countries": {
+        "US": 100
+      },
+      "sizes": {
+        "all_caps": 100
+      },
+      "factor": "none",
+      "source": "https://www.crsp.org/indexes/"
+    },
+    "msci_pacific_ex_japan_imi": {
+      "kind": "equity",
+      "countries": {
+        "AU": 64.27,
+        "SG": 17.58,
+        "HK": 16.28,
+        "NZ": 1.87
+      },
+      "sizes": {
+        "all_caps": 100
+      },
+      "factor": "none",
+      "source": "https://www.msci.com/documents/10199/ff245708-ddb9-48cd-8da6-c65b1598b227",
+      "asOf": "2026-09-30"
+    },
+    "msci_em_asia": {
+      "kind": "equity",
+      "countries": {
+        "TW": 32.65,
+        "KR": 28.32,
+        "CN": 22.72,
+        "IN": 13.24,
+        "TH": 1.15,
+        "ASIA_EM_OTHER": 1.92
+      },
+      "sizes": {
+        "large_mid": 100
+      },
+      "factor": "none",
+      "source": "https://www.msci.com/documents/10199/255599/msci-emerging-markets-asia.pdf",
+      "asOf": "2026-06-30"
+    },
+    "msci_japan": {
+      "kind": "equity",
+      "countries": {
+        "JP": 100
+      },
+      "sizes": {
+        "large_mid": 100
+      },
+      "factor": "none",
+      "source": "https://www.msci.com/indexes/index/990400/msci-japan-index"
+    },
+    "msci_europe_small_cap_weighted": {
+      "kind": "equity",
+      "countries": {
+        "EU_OTHER": 100
+      },
+      "sizes": {
+        "Small": 100
+      },
+      "factor": "none",
+      "source": "https://www.msci.com/indexes",
+      "note": "Pays européens non ventilés (classification géographique seulement)."
+    },
+    "msci_usa_small_cap_weighted": {
+      "kind": "equity",
+      "countries": {
+        "US": 100
+      },
+      "sizes": {
+        "Small": 100
+      },
+      "factor": "none",
+      "source": "https://www.msci.com/indexes",
+      "note": "Taille small cap selon l'intitulé de l'indice ; l'exposition Value n'est pas présumée."
+    },
+    "msci_europe": {
+      "kind": "equity",
+      "countries": {
+        "GB": 23.27,
+        "FR": 15.6,
+        "CH": 14.28,
+        "DE": 13.78,
+        "NL": 7.92,
+        "EU_OTHER": 25.15
+      },
+      "sizes": {
+        "large_mid": 100
+      },
+      "factor": "none",
+      "source": "https://www.msci.com/documents/10199/861bb4d4-7a59-489b-8cef-bb104e152e3c",
+      "asOf": "2026-03-31"
+    },
+    "global_infrastructure": {
+      "kind": "other",
+      "assetClass": "Infrastructures",
+      "note": "Exclu de la poche actions faute de vérification de la composition de l'indice."
+    },
+    "gold": {
+      "kind": "other",
+      "assetClass": "Or"
+    },
+    "bitcoin": {
+      "kind": "other",
+      "assetClass": "Bitcoin"
+    },
+    "tbills_us": {
+      "kind": "other",
+      "assetClass": "Monétaire"
+    },
+    "highyield_us": {
+      "kind": "other",
+      "assetClass": "Obligations High Yield"
+    },
+    "us_lt_govt_bonds": {
+      "kind": "other",
+      "assetClass": "Obligations d'État"
+    },
+    "us_corp_bonds_ig": {
+      "kind": "other",
+      "assetClass": "Obligations d'entreprise"
+    }
+  }
+}
