@@ -4,6 +4,8 @@ import { computePortfolio, summarizePortfolioReturns } from "../domain/portfolio
 import type { AnnualPortfolioReturn } from "../domain/portfolio";
 import type { Mode, PortfolioStats, Row } from "../domain/types";
 import { optimize } from "../optimization/interface";
+import { optimizeProspective } from "../optimization/prospective";
+import type { ProspectiveSettings } from "../scenarios/prospective";
 import type { AllocationInput, OptimizationResult, PortfolioConstraints } from "../optimization/interface";
 import type { ScenarioSettings } from "../scenarios/generator";
 import type { GoalSettings } from "../optimization/goal";
@@ -58,6 +60,7 @@ export interface WalkForwardInput {
   settings?: Partial<WalkForwardSettings>;
   benchmarkAssetId?: string | null;
   scenarioSettings?: Partial<ScenarioSettings>;
+  prospectiveSettings?: ProspectiveSettings;
   goalSettings?: Partial<GoalSettings>;
 }
 
@@ -71,7 +74,7 @@ export interface WalkForwardResult {
 
 export type WeightStabilityLevel = "Très stable" | "Stable" | "Variable" | "Instable" | "Très instable";
 
-const DEFAULT_SETTINGS: WalkForwardSettings = { minTrainYears: 20, testYears: 5, expanding: true };
+const DEFAULT_SETTINGS: WalkForwardSettings = { minTrainYears: 15, testYears: 5, expanding: true };
 
 function normalizedSettings(settings?: Partial<WalkForwardSettings>): WalkForwardSettings | null {
   const result = { ...DEFAULT_SETTINGS, ...settings };
@@ -231,7 +234,11 @@ function optimizationEvaluations(
       scenarioSettings: input.scenarioSettings,
       goalSettings: input.goalSettings,
     };
-    const optimization = optimize(strategy, allocationInput, input.constraints);
+    // The main app's Tout-terrain mode uses the same prospective optimizer in each training window.
+    // Legacy callers without prospective settings retain the original historical robustness tests.
+    const optimization = strategy === "robust" && input.prospectiveSettings
+      ? optimizeProspective(allocationInput, { ...input.constraints, maxEvaluations: Math.min(input.constraints.maxEvaluations ?? 700, 700) }, input.prospectiveSettings)
+      : optimize(strategy, allocationInput, input.constraints);
     if (!optimization.weights || !optimization.feasible) {
       return { window, feasible: false, weights: null, score: optimization.score, testStats: null, diagnostics: optimization.diagnostics, optimization };
     }
@@ -253,7 +260,7 @@ function uncertainty(windowCount: number): string {
 function walkForwardBase(input: WalkForwardInput): Omit<WalkForwardResult, "strategies"> {
   const settings = normalizedSettings(input.settings) ?? DEFAULT_SETTINGS;
   const diagnostics: string[] = [];
-  if (!normalizedSettings(input.settings)) diagnostics.push("Les paramètres de fenêtres sont invalides ; les valeurs par défaut 20 ans / 5 ans sont utilisées.");
+  if (!normalizedSettings(input.settings)) diagnostics.push("Les paramètres de fenêtres sont invalides ; les valeurs par défaut 15 ans / 5 ans sont utilisées.");
   if (!input.assetIds.length || new Set(input.assetIds).size !== input.assetIds.length) diagnostics.push("L'univers de validation est vide ou contient des doublons.");
 
   const windows = buildWalkForwardWindows(input.data, input.assetIds, input.periodStart, input.periodEnd, input.returnMode, settings);
@@ -266,7 +273,7 @@ export function runWalkForwardOptimized(input: Omit<WalkForwardInput, "customWei
   const { windows } = base;
   return { ...base, strategies: [
     strategyResult("growth", "Croissance", windows, optimizationEvaluations(fullInput, windows, "growth")),
-    strategyResult("robust", "Robustesse", windows, optimizationEvaluations(fullInput, windows, "robust")),
+    strategyResult("robust", input.prospectiveSettings ? "Tout-terrain" : "Robustesse", windows, optimizationEvaluations(fullInput, windows, "robust")),
     strategyResult("goal", "Objectif patrimonial", windows, optimizationEvaluations(fullInput, windows, "goal")),
   ] };
 }
