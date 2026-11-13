@@ -605,6 +605,10 @@ function App() {
     saveManualWeights({ ...weights });
   };
 
+  const toggleHiddenAsset = (id: string) => {
+    setHiddenAssets((current) => current.includes(id) ? current.filter(item => item !== id) : [...current, id]);
+  };
+
   const activeLabel = mode === "nominal" ? "nominal" : "réel";
   const selectedCount = selectedAssets.length;
   const chartColumns: ChartColumn[] = [{ key: "year", label: "Année" }, ...selectedAssets.map((asset) => ({ key: asset.id, label: asset.name }))];
