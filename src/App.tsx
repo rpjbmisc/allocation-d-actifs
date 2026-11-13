@@ -685,7 +685,7 @@ function App() {
                </div>}
              </section>
 
-             {selectedCount > 0 && <>
+             {allSelectedAssets.length > 0 && <>
              <section className="signal-strip">
               <div><span className="strip-label">Fenêtre analysée</span><strong>{start} <span>→</span> {end}</strong><small>{duration} années</small></div>
                <div><span className="strip-label">Lecture courante</span><strong>{currency === "eur" ? "EUR non couvert" : "USD"} · {mode === "nominal" ? "Nominaux" : "Après inflation"}</strong><small>Dividendes réinvestis quand disponibles</small></div>
