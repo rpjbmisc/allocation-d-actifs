@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "description": "Photographies partielles de compositions officielles ; ni une série historique, ni une décomposition exhaustive. Les pays non publiés restent non ventilés. Tailles et facteurs distinguent ciblage d'indice et poids réels des sous-jacents.",
+  "description": "Photographies partielles de compositions MSCI par indice (source et date spécifiques) ; seules les parts publiées sont attribuées à un pays. Un reliquat Autres est conservé lorsque la fiche ne ventile pas tous les pays.",
   "updated": "2026-11-13",
   "assets": {
     "sp500": {
@@ -18,36 +18,73 @@
     "msci_world": {
       "kind": "equity",
       "countries": {
-        "US": 72.77,
-        "JP": 5.72,
-        "GB": 3.52,
-        "CA": 3.44,
-        "CH": 2.34,
-        "OTHER": 12.21
+        "US": 72.88,
+        "JP": 5.49,
+        "GB": 3.55,
+        "CA": 3.47,
+        "CH": 2.37,
+        "FR": 2.27,
+        "DE": 2.14,
+        "AU": 1.56,
+        "NL": 1.26,
+        "ES": 0.92,
+        "SE": 0.85,
+        "IT": 0.77,
+        "HK": 0.43,
+        "DK": 0.41,
+        "SG": 0.4,
+        "BE": 0.28,
+        "IL": 0.26,
+        "FI": 0.26,
+        "NO": 0.16,
+        "IE": 0.1,
+        "AT": 0.08,
+        "PT": 0.05,
+        "NZ": 0.04
       },
       "sizes": {
         "large_mid": 100
       },
       "factor": "none",
-      "source": "https://www.msci.com/documents/10199/178e6643-6ae6-47b9-82be-e1fc565ededb",
-      "asOf": "2026-10-30"
+      "source": "https://www.ssga.com/fr/en_gb/intermediary/etfs/state-street-spdr-msci-world-ucits-etf-acc-sppw-gy",
+      "asOf": "2026-11-04",
+      "basis": "proxy_etf",
+      "note": "Proxy ETF State Street SPDR MSCI World : 23 pays répliquant le MSCI World, données du 4 novembre 2026. Écart de 0,01 point dû aux arrondis publiés."
     },
     "msci_world_ex_usa": {
       "kind": "equity",
       "countries": {
-        "JP": 21.84,
-        "GB": 12.61,
-        "CA": 12.17,
-        "FR": 8.27,
-        "CH": 7.92,
-        "OTHER": 37.19
+        "JP": 20.243362831858406,
+        "GB": 13.089970501474923,
+        "CA": 12.794985250737462,
+        "CH": 8.738938053097343,
+        "FR": 8.370206489675516,
+        "DE": 7.890855457227137,
+        "AU": 5.752212389380531,
+        "NL": 4.646017699115044,
+        "ES": 3.392330383480825,
+        "SE": 3.134218289085545,
+        "IT": 2.839233038348082,
+        "HK": 1.585545722713864,
+        "DK": 1.5117994100294982,
+        "SG": 1.4749262536873153,
+        "BE": 1.0324483775811208,
+        "IL": 0.958702064896755,
+        "FI": 0.958702064896755,
+        "NO": 0.5899705014749261,
+        "IE": 0.36873156342182883,
+        "AT": 0.29498525073746307,
+        "PT": 0.18436578171091442,
+        "NZ": 0.14749262536873153
       },
       "sizes": {
         "large_mid": 100
       },
       "factor": "none",
-      "source": "https://www.msci.com/documents/10199/255599/msci-world-ex-usa-index-price-usd.pdf",
-      "asOf": "2026-09-30"
+      "source": "https://www.ssga.com/fr/en_gb/intermediary/etfs/state-street-spdr-msci-world-ucits-etf-acc-sppw-gy",
+      "asOf": "2026-11-04",
+      "basis": "proxy_etf",
+      "note": "Estimation dérivée de la ventilation pays de l'ETF SPDR MSCI World au 4 novembre 2026 : exclusion des États-Unis et renormalisation du reste. Ce n'est pas la composition publiée directement par MSCI World ex USA."
     },
     "msci_world_small_cap_value": {
       "kind": "equity",
@@ -55,8 +92,17 @@
         "Small": 100
       },
       "factor": "value",
-      "note": "Biais Value et univers Small Cap selon le libellé de la série ; fiche de composition exacte non vérifiée (pays non ventilés).",
-      "asOf": "2026-10-30"
+      "note": "MSCI World Small Cap Value, distinct de MSCI World Small Cap Value Weighted. Cinq pays détaillés et reliquat Autres, fiche du 31 juillet 2026.",
+      "asOf": "2026-07-31",
+      "countries": {
+        "US": 61.78,
+        "JP": 12.37,
+        "GB": 4.4,
+        "CA": 4.27,
+        "AU": 3.52,
+        "OTHER": 13.66
+      },
+      "source": "https://www.msci.com/documents/10199/9f8cadb3-5923-442d-96d1-7434b6593416"
     },
     "msci_world_value": {
       "kind": "equity",
@@ -65,24 +111,55 @@
       },
       "factor": "value",
       "source": "https://www.msci.com/indexes/index/105868",
-      "note": "Biais Value identifié par le nom de l'indice ; ventilation pays non attestée."
+      "note": "Composition MSCI World Value : cinq pays détaillés, reliquat Autres.",
+      "countries": {
+        "US": 72.1,
+        "JP": 5.6,
+        "GB": 3.9,
+        "CA": 3.7,
+        "FR": 2.5,
+        "OTHER": 12.2
+      },
+      "asOf": "2026-06-30"
     },
     "msci_em": {
       "kind": "equity",
       "countries": {
-        "TW": 28.88,
-        "CN": 20,
-        "KR": 19.66,
-        "IN": 11.73,
-        "BR": 3.9,
-        "OTHER": 15.83
+        "TW": 27.02,
+        "CN": 21.71,
+        "KR": 18.99,
+        "IN": 11.86,
+        "BR": 3.96,
+        "ZA": 3.33,
+        "SA": 2.56,
+        "MX": 1.78,
+        "AE": 1.25,
+        "PL": 1.17,
+        "MY": 0.99,
+        "TH": 0.98,
+        "QA": 0.59,
+        "GR": 0.54,
+        "ID": 0.52,
+        "KW": 0.47,
+        "PE": 0.44,
+        "CL": 0.42,
+        "TR": 0.36,
+        "HU": 0.36,
+        "PH": 0.29,
+        "CZ": 0.14,
+        "CO": 0.13,
+        "HK": 0.06,
+        "EG": 0.05,
+        "US": 0.03
       },
       "sizes": {
         "large_mid": 100
       },
       "factor": "none",
-      "source": "https://www.msci.com/documents/10199/10c3f32f-4565-4a92-aa1c-edf6f3a4e03f",
-      "asOf": "2026-10-30"
+      "source": "https://www.ssga.com/dk/en_gb/intermediary/etfs/spdr-msci-emerging-markets-ucits-etf-spym-gy",
+      "asOf": "2026-08-07",
+      "basis": "proxy_etf",
+      "note": "Proxy : composition pays de l'ETF SPDR MSCI Emerging Markets UCITS ETF, qui suit le MSCI Emerging Markets ; des écarts de réplication et une ligne résiduelle peuvent exister."
     },
     "reit_us": {
       "kind": "other",
@@ -114,14 +191,18 @@
     "msci_pacific_ex_japan_imi": {
       "kind": "equity",
       "countries": {
-        "PACIFIC_OTHER": 100
+        "AU": 64.57,
+        "SG": 16.95,
+        "HK": 16.6,
+        "NZ": 1.88
       },
       "sizes": {
         "all_caps": 100
       },
       "factor": "none",
       "source": "https://www.msci.com/documents/10199/ff245708-ddb9-48cd-8da6-c65b1598b227",
-      "note": "Univers Pacifique développé hors Japon confirmé, mais poids des pays non validés."
+      "note": "Ventilation exhaustive des quatre marchés dans la fiche officielle MSCI du 31 juillet 2026.",
+      "asOf": "2026-07-31"
     },
     "msci_em_asia": {
       "kind": "equity",
@@ -178,14 +259,30 @@
     "msci_europe": {
       "kind": "equity",
       "countries": {
-        "EU_OTHER": 100
+        "GB": 22.96,
+        "FR": 14.58,
+        "CH": 14.55,
+        "DE": 13.72,
+        "NL": 8.84,
+        "ES": 6.25,
+        "SE": 5.47,
+        "IT": 4.99,
+        "DK": 2.5,
+        "FI": 1.86,
+        "BE": 1.69,
+        "NO": 1.01,
+        "IE": 0.67,
+        "AT": 0.58,
+        "PT": 0.34
       },
       "sizes": {
         "large_mid": 100
       },
       "factor": "none",
-      "source": "https://www.msci.com/documents/10199/861bb4d4-7a59-489b-8cef-bb104e152e3c",
-      "note": "Indice 100 % Europe développée, ventilation par pays non confirmée pour cette photographie."
+      "source": "https://www.ssga.com/uk/en_gb/institutional/etfs/state-street-spdr-msci-europe-ucits-etf-ero-fp",
+      "note": "Proxy : composition pays de l'ETF State Street SPDR MSCI Europe UCITS ETF, qui suit le MSCI Europe ; répartition de l'ETF et non publication directe du poids de chaque pays de l'indice.",
+      "asOf": "2026-10-13",
+      "basis": "proxy_etf"
     },
     "global_infrastructure": {
       "kind": "other",
