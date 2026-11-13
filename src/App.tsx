@@ -1336,7 +1336,7 @@ function WalkForwardView({
     <section className="validation-summary-card validation-conclusion-card">
       <h2>3. Que nous apprennent ces résultats ?</h2>
       {performanceAvailable
-        ? <p>Sur ces périodes historiques restées inconnues au moment du choix des poids, <strong>Tout-terrain a obtenu un rendement {trend} à Croissance</strong> ({formatPercent(terrain.stats?.cagr)} contre {formatPercent(growth.stats?.cagr)} par an), avec une <strong>baisse maximale {drop}</strong> ({formatPercent(terrain.stats?.maxDrawdown)} contre {formatPercent(growth.stats?.maxDrawdown)}).</p>
+        ? <p>Sur ces périodes historiques restées inconnues au moment du choix des poids, <strong>Tout-terrain a obtenu un rendement {trend} à Croissance</strong> ({formatPercent(terrain?.stats?.cagr)} contre {formatPercent(growth?.stats?.cagr)} par an), avec une <strong>baisse maximale {drop}</strong> ({formatPercent(terrain?.stats?.maxDrawdown)} contre {formatPercent(growth?.stats?.maxDrawdown)}).</p>
         : <p>Les résultats disponibles ne permettent pas de comparer valablement Croissance et Tout-terrain sur l'ensemble des périodes.</p>}
       <p className="method-note">{tested < 4 ? "Cette comparaison est particulièrement fragile : trop peu de périodes de test." : "Il s'agit d'une observation historique, non d'une preuve de performance future."} Une meilleure performance ne signifie pas systématiquement un risque plus faible.</p>
     </section>
