@@ -115,7 +115,9 @@
       "name": "HDFC Bank"
     },
     "ASML": {
-      "name": "ASML"
+      "name": "ASML",
+      "style": "Growth",
+      "styleSource": "https://lt.morningstar.com/1c6qh1t6k9/stockreport/default.aspx?ClientFund=0&CurrencyId=EUR&Id=0P0000ALDL&SecurityToken=0P0000ALDL%5D3%5D0%5DE0EXG%24XAMS&tab=0&vw=sum"
     },
     "SHELL": {
       "name": "Shell"
@@ -130,7 +132,11 @@
       "name": "AstraZeneca"
     },
     "NESTLE": {
-      "name": "Nestlé"
+      "name": "Nestlé",
+      "style": "Value",
+      "styleSource": "https://www.morningstar.com/stocks/pinx/nsrgy/quote.html",
+      "roic": 12.26,
+      "roicSource": "https://www.morningstar.com/stocks/pinx/nsrgy/quote.html"
     },
     "SAP": {
       "name": "SAP"
