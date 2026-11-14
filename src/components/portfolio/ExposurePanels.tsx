@@ -3,7 +3,7 @@ import { calculatePortfolioExposure, type ExposureDimension, type ExposureRegist
 
 const dims: Array<{id:ExposureDimension;label:string}>=[
   {id:"zones",label:"Zones"}, {id:"countries",label:"Pays"},
-  {id:"sizes",label:"Tailles"}, {id:"styles",label:"Facteurs"},
+  {id:"sizes",label:"Tailles"}, {id:"styles",label:"Styles"}, {id:"factors",label:"Facteurs"},
 ];
 const fmt=(x:number)=>`${x.toLocaleString("fr-FR",{maximumFractionDigits:1,minimumFractionDigits:1})} %`;
 const pct=(x:number)=>`${x.toLocaleString("fr-FR",{maximumFractionDigits:1,minimumFractionDigits:1})}`;
@@ -11,8 +11,9 @@ const colors=["#3478b8","#20a38b","#e6a23c","#9b78b2","#dc8065","#65889e","#8aa4
 const dimensionHint:Record<ExposureDimension,string>={
   zones:"Exposition par pays de classification de l'indice (pas par chiffre d'affaires des entreprises).",
   countries:"« Non détaillés » = poids non publiés dans les fiches utilisées, non imputés à un pays.",
-  sizes:"Les fiches disponibles regroupent souvent grandes et moyennes capitalisations : ne pas les séparer artificiellement.",
-  styles:"Mesure du poids investi dans des indices explicitement orientés Value, Growth ou Quality, PAS de la répartition Value/Blend/Growth des entreprises. Quality est un biais transversal.",
+  sizes:"Répartition des capitalisations : ratios MSCI à date commune quand disponibles, sinon estimations méthodologiques explicitement signalées. Les pourcentages estimés ne sont pas des compositions publiées.",
+  styles:"Style économique des entreprises (Value / Blend / Growth). Non documenté signifie que les données de composition ligne à ligne ne permettent pas une classification fiable ; ce n’est pas une exposition nulle.",
+  factors:"Biais explicites des indices (Value / Growth / Quality), et non la répartition des titres par style. Un indice généraliste contient aussi des entreprises Value et Growth. Quality est transversal.",
 };
 function Dimension({ report, dimension }:{report:PortfolioExposure;dimension:ExposureDimension}) {
   const rows=report.breakdown[dimension];
@@ -29,7 +30,9 @@ function Coverage({ report }:{report:PortfolioExposure}){
     {report.otherShare>0.01&&<span>Autres classes : {fmt(report.otherShare)}</span>}
     {report.unknownAssetShare>0.01&&<span>Non classés : {fmt(report.unknownAssetShare)}</span>}
     <span>Précision pays : {fmt(report.precision.countries)} des actions</span>
-    <span>Précision tailles : {fmt(report.precision.sizes)} des actions</span>
+    <span>Tailles mesurées : {fmt(report.precision.sizes)} des actions</span>
+    {report.precision.sizesEstimated>0.01&&<span>Tailles estimées : {fmt(report.precision.sizesEstimated)} des actions</span>}
+    <span>Styles documentés : {fmt(report.precision.styles)} des actions</span>
   </div>;
 }
 export function ExposurePanel({weights,registry,profileLabel}:{weights:Record<string,number>;registry:ExposureRegistry|null;profileLabel:string}){
@@ -50,6 +53,8 @@ export function ExposurePanel({weights,registry,profileLabel}:{weights:Record<st
         const entry=registry.assets[id];
         return <li key={id}>{entry.source?<a href={entry.source} target="_blank" rel="noopener noreferrer">{id}</a>:id} · {entry.asOf??"date non attestée"}{entry.basis==="proxy_etf"?" · proxy ETF répliquant l'indice":entry.countries?" · pays documentés":" · pays non détaillés"}</li>;
       })}</ul>
+      <p>Capitalisations : ratios d'encours flottant pour des paires de fiches MSCI datées du même mois (World, Europe) ; estimations méthodologiques sinon (notamment émergents, Japon, Pacific IMI). Pays et tailles peuvent provenir de dates différentes.</p>
+      <ul>{Object.entries(weights).filter(([id,w])=>w>0&&registry.assets[id]?.kind==="equity").map(([id])=>{const item=registry.assets[id]; return <li key={id}><strong>{id}</strong> : {item.sizeMethod==="documented"?"taille documentée":item.sizeMethod==="estimated"?"taille estimée":"taille non ventilée"}{item.sizeAsOf?` · date tailles ${item.sizeAsOf}`:""}{item.sizeSource?<a href={item.sizeSource.split(" ; ")[0]} target="_blank" rel="noopener noreferrer"> · source tailles</a>:null}{item.factorSource?<a href={item.factorSource} target="_blank" rel="noopener noreferrer"> · source facteur</a>:null}</li>})}</ul>
       <p>La couverture « précision pays » exclut les groupes Autres. Les styles correspondent à des orientations d'indices, pas à une classification ligne par ligne. Les REIT et infrastructures sont comptabilisés en dehors de la poche actions dans cette première version.</p>
     </details></>:<p>Renseigne des pondérations pour afficher la composition.</p>}
   </section>;
@@ -78,6 +83,6 @@ export function ExposurePairComparison({candidates,registry}:{candidates:Compari
     {!registry?<p>Données de composition indisponibles.</p>:!one||!two||one.equityShare===0||two.equityShare===0?<p>Comparaison indisponible : aucune pondération actions exploitable pour au moins un des modes.</p>:
       <div className="table-scroll"><table className="exposure-pair-table"><thead><tr><th>Exposition</th><th>{left?.label??"A"}</th><th>{right?.label??"B"}</th><th>Écart B − A</th></tr></thead>
       <tbody>{names.map(name=>{const x=values1[name]??0,y=values2[name]??0;return <tr key={name}><th scope="row">{name}</th><td>{fmt(x)}</td><td>{fmt(y)}</td><td className={Math.abs(y-x)<0.05?"":y>x?"positive":"negative"}>{y-x>0?"+":""}{pct(y-x)} pts</td></tr>})}</tbody></table></div>}
-    {one&&two&&<p className="method-note">Actions dans le portefeuille total : {left?.label} {fmt(one.equityShare)} · {right?.label} {fmt(two.equityShare)}. Couverture des pays nommés : {fmt(one.precision.countries)} / {fmt(two.precision.countries)}. Dates et sources des indices consultables dans Construction.</p>}
+    {one&&two&&<p className="method-note">Actions dans le portefeuille total : {left?.label} {fmt(one.equityShare)} · {right?.label} {fmt(two.equityShare)}. Couverture des pays nommés : {fmt(one.precision.countries)} / {fmt(two.precision.countries)}. Tailles mesurées : {fmt(one.precision.sizes)} / {fmt(two.precision.sizes)} ; estimées : {fmt(one.precision.sizesEstimated)} / {fmt(two.precision.sizesEstimated)}. Dates et sources des indices consultables dans Construction.</p>}
   </section>;
 }

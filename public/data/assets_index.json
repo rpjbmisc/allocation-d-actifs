@@ -181,7 +181,7 @@
   },
   {
     "id": "msci_europe_small_cap_weighted",
-    "name": "MSCI Europe Small Cap Weighted",
+    "name": "MSCI Europe Small Cap Value Weighted",
     "csvFile": "CAGR_msci-europe-small-cap-weighted_ntr.csv",
     "accentColor": "#16A34A",
     "headingClass": "text-teal-700",
@@ -191,7 +191,7 @@
   },
   {
     "id": "msci_usa_small_cap_weighted",
-    "name": "MSCI USA Small Cap Weighted",
+    "name": "MSCI USA Small Cap Value Weighted",
     "csvFile": "CAGR_msci-usa-small-cap-weighted_ntr.csv",
     "accentColor": "#65A30D",
     "headingClass": "text-teal-700",

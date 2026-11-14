@@ -128,13 +128,13 @@
       "currency": "USD",
       "levelType": "index_level",
       "returnType": "net_total_return",
-      "currencyEvidence": "User-supplied MSCI Europe Small Cap Weighted NTR historical series, USD assumed (verify original source currency)"
+      "currencyEvidence": "Rendements du CSV USD compatibles avec MSCI Europe Small Cap Value Weighted EUR NTR après FX 2021–2025 ; identification indirecte, à revalider avec une série MSCI USD officielle."
     },
     "msci_usa_small_cap_weighted": {
       "currency": "USD",
       "levelType": "index_level",
       "returnType": "net_total_return",
-      "currencyEvidence": "User-supplied MSCI USA Small Cap Weighted NTR historical series, USD assumed (verify original source currency)"
+      "currencyEvidence": "Rendements 2021–2025 du CSV identiques au MSCI USA Small Cap Value Weighted USD NTR officiel ; nom de fichier historique."
     },
     "msci_europe": {
       "currency": "USD",
