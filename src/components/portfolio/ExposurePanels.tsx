@@ -1,22 +1,35 @@
 import { useState } from "react";
 import { calculatePortfolioExposure, type ExposureDimension, type ExposureRegistry, type PortfolioExposure } from "../../domain/exposures";
+import { calculateLookthrough, type LookthroughRegistry, type LookthroughReport } from "../../domain/lookthrough";
+type ViewDimension = ExposureDimension | "profitability";
+function lookthroughFor(weights:Record<string,number>,registry:ExposureRegistry|null,lookthrough:LookthroughRegistry|null):LookthroughReport|null {
+  if(!registry||!lookthrough)return null;
+  return calculateLookthrough(weights,Object.keys(weights).filter(id=>registry.assets[id]?.kind==="equity"),lookthrough);
+}
+function viewRows(report:PortfolioExposure,dimension:ViewDimension,look:LookthroughReport|null) {
+  if(dimension==="profitability")return look?.profitability??[{name:"ROIC non documenté",percent:100}];
+  if(dimension==="styles")return look?.styles??report.breakdown.styles;
+  return report.breakdown[dimension];
+}
 
-const dims: Array<{id:ExposureDimension;label:string}>=[
+const dims: Array<{id:ViewDimension;label:string}>=[
   {id:"zones",label:"Zones"}, {id:"countries",label:"Pays"},
   {id:"sizes",label:"Tailles"}, {id:"styles",label:"Styles"}, {id:"factors",label:"Facteurs"},
+  {id:"profitability",label:"Rentabilité (proxy)"},
 ];
 const fmt=(x:number)=>`${x.toLocaleString("fr-FR",{maximumFractionDigits:1,minimumFractionDigits:1})} %`;
 const pct=(x:number)=>`${x.toLocaleString("fr-FR",{maximumFractionDigits:1,minimumFractionDigits:1})}`;
 const colors=["#3478b8","#20a38b","#e6a23c","#9b78b2","#dc8065","#65889e","#8aa44a"];
-const dimensionHint:Record<ExposureDimension,string>={
+const dimensionHint:Record<ViewDimension,string>={
   zones:"Exposition par pays de classification de l'indice (pas par chiffre d'affaires des entreprises).",
   countries:"« Non détaillés » = poids non publiés dans les fiches utilisées, non imputés à un pays.",
   sizes:"Répartition des capitalisations : ratios MSCI à date commune quand disponibles, sinon estimations méthodologiques explicitement signalées. Les pourcentages estimés ne sont pas des compositions publiées.",
   styles:"Style économique des entreprises (Value / Blend / Growth). Non documenté signifie que les données de composition ligne à ligne ne permettent pas une classification fiable ; ce n’est pas une exposition nulle.",
-  factors:"Biais explicites des indices (Value / Growth / Quality), et non la répartition des titres par style. Un indice généraliste contient aussi des entreprises Value et Growth. Quality est transversal.",
+  factors:"Biais explicites des indices (Value / Growth / Quality), et non la répartition des titres par style. Quality reste transversal.",
+  profitability:"Proxy de rentabilité : ROIC normalisé Morningstar ≥ 15 %, sur les seules positions documentées. Ce n'est PAS le facteur MSCI Quality : ni l'endettement ni la stabilité des bénéfices n'entrent ici dans le calcul.",
 };
-function Dimension({ report, dimension }:{report:PortfolioExposure;dimension:ExposureDimension}) {
-  const rows=report.breakdown[dimension];
+function Dimension({ report, dimension, look }:{report:PortfolioExposure;dimension:ViewDimension;look:LookthroughReport|null}) {
+  const rows=viewRows(report,dimension,look);
   return <div className="exposure-rows" role="list" aria-label={dims.find(d=>d.id===dimension)?.label}>
     {rows.length===0?<p>Aucune exposition actions.</p>:rows.map((row,i)=><div className="exposure-row" role="listitem" key={row.name}>
       <div className="exposure-label"><span>{row.name}</span><strong>{fmt(row.percent)}</strong></div>
@@ -24,7 +37,7 @@ function Dimension({ report, dimension }:{report:PortfolioExposure;dimension:Exp
     </div>)}
   </div>;
 }
-function Coverage({ report }:{report:PortfolioExposure}){
+function Coverage({ report, look }:{report:PortfolioExposure;look:LookthroughReport|null}){
   return <div className="exposure-coverage">
     <span>Poche actions : <strong>{fmt(report.equityShare)}</strong> du portefeuille total</span>
     {report.otherShare>0.01&&<span>Autres classes : {fmt(report.otherShare)}</span>}
@@ -32,20 +45,22 @@ function Coverage({ report }:{report:PortfolioExposure}){
     <span>Précision pays : {fmt(report.precision.countries)} des actions</span>
     <span>Tailles mesurées : {fmt(report.precision.sizes)} des actions</span>
     {report.precision.sizesEstimated>0.01&&<span>Tailles estimées : {fmt(report.precision.sizesEstimated)} des actions</span>}
-    <span>Styles documentés : {fmt(report.precision.styles)} des actions</span>
+    <span>Styles documentés : {fmt(look?.coverage.styles??report.precision.styles)} des actions</span>
+    {look&&<span>ROIC documenté : {fmt(look.coverage.profitability)} des actions</span>}
   </div>;
 }
-export function ExposurePanel({weights,registry,profileLabel}:{weights:Record<string,number>;registry:ExposureRegistry|null;profileLabel:string}){
-  const [dimension,setDimension]=useState<ExposureDimension>("zones");
+export function ExposurePanel({weights,registry,lookthrough,profileLabel}:{weights:Record<string,number>;registry:ExposureRegistry|null;lookthrough?:LookthroughRegistry|null;profileLabel:string}){
+  const [dimension,setDimension]=useState<ViewDimension>("zones");
   if(!registry)return <section className="table-card exposure-panel"><h2>Composition de l'allocation</h2><p>Données de composition indisponibles. Les performances restent accessibles.</p></section>;
   const report=calculatePortfolioExposure(weights,registry);
+  const look=lookthroughFor(weights,registry,lookthrough??null);
   return <section className="table-card exposure-panel" aria-label="Composition du portefeuille">
     <div className="card-heading compact"><div><h2>Composition du portefeuille</h2><p>Mode actif : <strong>{profileLabel}</strong> · Photographie des compositions disponibles, parfois estimées via un ETF répliquant l’indice, indépendante des rendements historiques.</p></div></div>
-    {report?<><Coverage report={report}/><div className="exposure-dimension-tabs" role="group" aria-label="Dimensions de composition">
+    {report?<><Coverage report={report} look={look}/><div className="exposure-dimension-tabs" role="group" aria-label="Dimensions de composition">
       {dims.map(d=><button type="button" key={d.id} className={dimension===d.id?"active":""} onClick={()=>setDimension(d.id)} aria-pressed={dimension===d.id}>{d.label}</button>)}
     </div>
     <p className="method-note">{dimensionHint[dimension]} Les pourcentages ci-dessous sont normalisés à la poche actions.</p>
-    <Dimension report={report} dimension={dimension}/>
+    <Dimension report={report} dimension={dimension} look={look}/>
     <details className="exposure-sources"><summary>Sources et limites des compositions</summary>
       <p>Photographies des indices à des dates parfois différentes : {report.snapshotDates.length?report.snapshotDates.join(" · "):"dates indisponibles"}. « Pays non détaillés » ne signifie pas exposition nulle.</p>
       {report.notes.map(n=><p key={n}>{n}</p>)}
@@ -55,20 +70,25 @@ export function ExposurePanel({weights,registry,profileLabel}:{weights:Record<st
       })}</ul>
       <p>Capitalisations : ratios d'encours flottant pour des paires de fiches MSCI datées du même mois (World, Europe) ; estimations méthodologiques sinon (notamment émergents, Japon, Pacific IMI). Pays et tailles peuvent provenir de dates différentes.</p>
       <ul>{Object.entries(weights).filter(([id,w])=>w>0&&registry.assets[id]?.kind==="equity").map(([id])=>{const item=registry.assets[id]; return <li key={id}><strong>{id}</strong> : {item.sizeMethod==="documented"?"taille documentée":item.sizeMethod==="estimated"?"taille estimée":"taille non ventilée"}{item.sizeAsOf?` · date tailles ${item.sizeAsOf}`:""}{item.sizeSource?<a href={item.sizeSource.split(" ; ")[0]} target="_blank" rel="noopener noreferrer"> · source tailles</a>:null}{item.factorSource?<a href={item.factorSource} target="_blank" rel="noopener noreferrer"> · source facteur</a>:null}</li>})}</ul>
+      {look&&<><p>Look-through : {fmt(look.coverage.holdings)} des actions dans les positions connues, {fmt(look.coverage.styles)} avec style documenté et {fmt(look.coverage.profitability)} avec ROIC documenté. Le reliquat n'est jamais extrapolé.</p>
+      <ul>{look.indices.map(x=><li key={x.id}><strong>{x.name}</strong> · poids actions {fmt(x.portfolioWeight)} · positions connues {fmt(x.holdingsWeight)} de cet indice · styles {fmt(x.styleWeight)} · ROIC {fmt(x.profitabilityWeight)}{x.source?<a href={x.source} target="_blank" rel="noopener noreferrer"> · données du {x.asOf}</a>:" · positions indisponibles"}</li>)}</ul>
+      <p>Style des titres : Morningstar Stock Style Box (Core assimilé à Blend). Rentabilité : ROIC normalisé, ni score MSCI Quality ni historique de performance.</p></>}
       <p>La couverture « précision pays » exclut les groupes Autres. Les styles correspondent à des orientations d'indices, pas à une classification ligne par ligne. Les REIT et infrastructures sont comptabilisés en dehors de la poche actions dans cette première version.</p>
     </details></>:<p>Renseigne des pondérations pour afficher la composition.</p>}
   </section>;
 }
 export interface ComparisonExposureCandidate { id:string;label:string;weights:Record<string,number>|null }
-export function ExposurePairComparison({candidates,registry}:{candidates:ComparisonExposureCandidate[];registry:ExposureRegistry|null}){
+export function ExposurePairComparison({candidates,registry,lookthrough}:{candidates:ComparisonExposureCandidate[];registry:ExposureRegistry|null;lookthrough?:LookthroughRegistry|null}){
   const [a,setA]=useState("Personnalisée");
   const [b,setB]=useState("Croissance");
-  const [dimension,setDimension]=useState<ExposureDimension>("zones");
+  const [dimension,setDimension]=useState<ViewDimension>("zones");
   const left=candidates.find(c=>c.id===a),right=candidates.find(c=>c.id===b);
   const one=left?.weights&&registry?calculatePortfolioExposure(left.weights,registry):null;
   const two=right?.weights&&registry?calculatePortfolioExposure(right.weights,registry):null;
-  const values1=Object.fromEntries((one?.breakdown[dimension]??[]).map(p=>[p.name,p.percent]));
-  const values2=Object.fromEntries((two?.breakdown[dimension]??[]).map(p=>[p.name,p.percent]));
+  const look1=left?.weights?lookthroughFor(left.weights,registry,lookthrough??null):null;
+  const look2=right?.weights?lookthroughFor(right.weights,registry,lookthrough??null):null;
+  const values1=Object.fromEntries((one?viewRows(one,dimension,look1):[]).map(p=>[p.name,p.percent]));
+  const values2=Object.fromEntries((two?viewRows(two,dimension,look2):[]).map(p=>[p.name,p.percent]));
   const names=Array.from(new Set([...Object.keys(values1),...Object.keys(values2)])).sort((x,y)=>Math.max(values2[y]??0,values1[y]??0)-Math.max(values2[x]??0,values1[x]??0));
   return <section className="table-card exposure-panel exposure-comparison" aria-label="Comparaison des compositions">
     <div className="card-heading compact"><div><h2>Comparer la composition de deux allocations</h2><p>Écarts d'exposition en points de pourcentage, sur les poches actions.</p></div></div>
@@ -83,6 +103,6 @@ export function ExposurePairComparison({candidates,registry}:{candidates:Compari
     {!registry?<p>Données de composition indisponibles.</p>:!one||!two||one.equityShare===0||two.equityShare===0?<p>Comparaison indisponible : aucune pondération actions exploitable pour au moins un des modes.</p>:
       <div className="table-scroll"><table className="exposure-pair-table"><thead><tr><th>Exposition</th><th>{left?.label??"A"}</th><th>{right?.label??"B"}</th><th>Écart B − A</th></tr></thead>
       <tbody>{names.map(name=>{const x=values1[name]??0,y=values2[name]??0;return <tr key={name}><th scope="row">{name}</th><td>{fmt(x)}</td><td>{fmt(y)}</td><td className={Math.abs(y-x)<0.05?"":y>x?"positive":"negative"}>{y-x>0?"+":""}{pct(y-x)} pts</td></tr>})}</tbody></table></div>}
-    {one&&two&&<p className="method-note">Actions dans le portefeuille total : {left?.label} {fmt(one.equityShare)} · {right?.label} {fmt(two.equityShare)}. Couverture des pays nommés : {fmt(one.precision.countries)} / {fmt(two.precision.countries)}. Tailles mesurées : {fmt(one.precision.sizes)} / {fmt(two.precision.sizes)} ; estimées : {fmt(one.precision.sizesEstimated)} / {fmt(two.precision.sizesEstimated)}. Dates et sources des indices consultables dans Construction.</p>}
+    {one&&two&&<p className="method-note">Actions dans le portefeuille total : {left?.label} {fmt(one.equityShare)} · {right?.label} {fmt(two.equityShare)}. Couverture des pays nommés : {fmt(one.precision.countries)} / {fmt(two.precision.countries)}. Tailles mesurées : {fmt(one.precision.sizes)} / {fmt(two.precision.sizes)} ; estimées : {fmt(one.precision.sizesEstimated)} / {fmt(two.precision.sizesEstimated)}. Couverture styles : {fmt(look1?.coverage.styles??one.precision.styles)} / {fmt(look2?.coverage.styles??two.precision.styles)} ; ROIC : {fmt(look1?.coverage.profitability??0)} / {fmt(look2?.coverage.profitability??0)}. Dates et sources dans Construction.</p>}
   </section>;
 }
