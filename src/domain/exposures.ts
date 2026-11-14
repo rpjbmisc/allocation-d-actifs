@@ -2,13 +2,20 @@
  * Expositions économiques descriptives, indépendantes des séries de rendement.
  * Les valeurs sont des photographies datées; jamais des rendements historiques.
  */
-export type ExposureDimension = "zones" | "countries" | "sizes" | "styles";
+export type ExposureDimension = "zones" | "countries" | "sizes" | "styles" | "factors";
 export type ExposureKind = "equity" | "other";
 export interface AssetExposure {
   kind: ExposureKind;
   countries?: Record<string, number>;
   sizes?: Record<string, number>;
   factor?: "none" | "value" | "growth" | "quality";
+  /** Economic Value / Blend / Growth weights. Absent when no holdings-level classification is available. */
+  styles?: Record<string, number>;
+  /** Whether capitalization splits come from matching-date index caps or modeled methodology targets. */
+  sizeMethod?: "documented" | "estimated";
+  sizeSource?: string;
+  sizeAsOf?: string;
+  factorSource?: string;
   assetClass?: string;
   source?: string;
   asOf?: string;
@@ -27,7 +34,7 @@ export interface PortfolioExposure {
   unknownAssetShare: number;
   breakdown: Record<ExposureDimension, ExposureSlice[]>;
   /** Fraction of the equity sleeve described at named-country or named-size precision. */
-  precision: { countries: number; sizes: number };
+  precision: { countries: number; sizes: number; sizesEstimated: number; styles: number };
   snapshotDates: string[];
   notes: string[];
 }
@@ -106,8 +113,8 @@ export function calculatePortfolioExposure(weights:Record<string,number>, regist
   const pairs=Object.entries(weights).filter(([,v])=>Number.isFinite(v)&&v>0);
   const total=sum(pairs.map(([,v])=>v));
   if(!Number.isFinite(total)||total<=0)return null;
-  const data={zones:{} as Record<string,number>,countries:{} as Record<string,number>,sizes:{} as Record<string,number>,styles:{} as Record<string,number>};
-  let equity=0,other=0,unknown=0,preciseCountries=0,preciseSizes=0;
+  const data={zones:{} as Record<string,number>,countries:{} as Record<string,number>,sizes:{} as Record<string,number>,styles:{} as Record<string,number>,factors:{} as Record<string,number>};
+  let equity=0,other=0,unknown=0,preciseCountries=0,preciseSizes=0,estimatedSizes=0,preciseStyles=0;
   const dates=new Set<string>(), notes=new Set<string>();
   for(const [id,weight] of pairs){
     const fraction=weight/total*100;
@@ -127,16 +134,24 @@ export function calculatePortfolioExposure(weights:Record<string,number>, regist
     const sizesMix=validMix(entry.sizes)?entry.sizes:{all_caps:100};
     for(const [key,pct] of Object.entries(sizesMix)){
       add(data.sizes,sizeLabels[key]??"Taille non détaillée",fraction*pct/100);
-      if(["Large","Mid","Small"].includes(key))preciseSizes+=fraction*pct/100;
+      if(["Large","Mid","Small"].includes(key)){
+        if(entry.sizeMethod==="estimated")estimatedSizes+=fraction*pct/100;
+        else preciseSizes+=fraction*pct/100;
+      }
     }
-    const style=entry.factor==="value"?"Indice à biais Value":entry.factor==="growth"?"Indice à biais Growth":entry.factor==="quality"?"Indice à biais Quality":"Sans biais factoriel explicite";
-    add(data.styles,style,fraction);
+    const styleMix=validMix(entry.styles)?entry.styles:{"Style non documenté":100};
+    for(const [style,pct] of Object.entries(styleMix)){
+      add(data.styles,style,fraction*pct/100);
+      if(["Value","Blend","Growth"].includes(style))preciseStyles+=fraction*pct/100;
+    }
+    const factor=entry.factor==="value"?"Indice à biais Value":entry.factor==="growth"?"Indice à biais Growth":entry.factor==="quality"?"Indice à biais Quality":"Indice sans filtre factoriel explicite";
+    add(data.factors,factor,fraction);
   }
   const normalise=(values:Record<string,number>)=>ordered(Object.fromEntries(Object.entries(values).map(([k,v])=>[k,equity>0?v/equity*100:0])));
   return {
     equityShare:equity,otherShare:other,unknownAssetShare:unknown,
-    breakdown:{zones:normalise(data.zones),countries:normalise(data.countries),sizes:normalise(data.sizes),styles:normalise(data.styles)},
-    precision:{countries:equity>0?preciseCountries/equity*100:0,sizes:equity>0?preciseSizes/equity*100:0},
+    breakdown:{zones:normalise(data.zones),countries:normalise(data.countries),sizes:normalise(data.sizes),styles:normalise(data.styles),factors:normalise(data.factors)},
+    precision:{countries:equity>0?preciseCountries/equity*100:0,sizes:equity>0?preciseSizes/equity*100:0,sizesEstimated:equity>0?estimatedSizes/equity*100:0,styles:equity>0?preciseStyles/equity*100:0},
     snapshotDates:[...dates].sort(),
     notes:[...notes],
   };
