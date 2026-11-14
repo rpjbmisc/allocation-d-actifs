@@ -22,7 +22,8 @@ describe("composition économique des portefeuilles",()=>{
     expect(zones["Japon"]).toBeCloseTo(6.6666667);
     expect(zones["Zone non détaillée"]).toBeCloseTo(13.3333333);
     expect(p.breakdown.zones.reduce((n,x)=>n+x.percent,0)).toBeCloseTo(100);
-    expect(asMap(p.breakdown.styles)["Indice à biais Value"]).toBeCloseTo(33.3333333);
+    expect(asMap(p.breakdown.factors)["Indice à biais Value"]).toBeCloseTo(33.3333333);
+    expect(asMap(p.breakdown.styles)["Style non documenté"]).toBeCloseTo(100);
   });
   it("préserve une zone connue sans inventer les pays",()=>{
     const p=calculatePortfolioExposure({euro:100},data)!;
