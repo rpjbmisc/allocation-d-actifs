@@ -89,6 +89,57 @@
       "name": "Roche (participation)",
       "style": "Blend",
       "styleSource": "https://www.morningstar.com/stocks/xswx/rop/quote"
+    },
+    "SAMSUNG": {
+      "name": "Samsung Electronics ordinary"
+    },
+    "SKHYNIX": {
+      "name": "SK Hynix"
+    },
+    "TENCENT": {
+      "name": "Tencent Holdings"
+    },
+    "MEDIATEK": {
+      "name": "MediaTek"
+    },
+    "CCB": {
+      "name": "China Construction Bank H"
+    },
+    "SAMSP": {
+      "name": "Samsung Electronics preference"
+    },
+    "HONHAI": {
+      "name": "Hon Hai Precision"
+    },
+    "HDFCBANK": {
+      "name": "HDFC Bank"
+    },
+    "ASML": {
+      "name": "ASML"
+    },
+    "SHELL": {
+      "name": "Shell"
+    },
+    "NOVARTIS": {
+      "name": "Novartis"
+    },
+    "HSBC": {
+      "name": "HSBC Holdings"
+    },
+    "ASTRA": {
+      "name": "AstraZeneca"
+    },
+    "NESTLE": {
+      "name": "Nestlé"
+    },
+    "SAP": {
+      "name": "SAP"
+    },
+    "SIEMENS": {
+      "name": "Siemens"
+    },
+    "ALLIANZ": {
+      "name": "Allianz"
     }
   },
   "indices": {
@@ -150,11 +201,43 @@
           "weight": 15.87
         },
         {
+          "id": "SAMSUNG",
+          "weight": 6.99
+        },
+        {
+          "id": "SKHYNIX",
+          "weight": 5.2
+        },
+        {
+          "id": "TENCENT",
+          "weight": 2.66
+        },
+        {
           "id": "BABA",
           "weight": 1.84
+        },
+        {
+          "id": "MEDIATEK",
+          "weight": 1.54
+        },
+        {
+          "id": "CCB",
+          "weight": 0.97
+        },
+        {
+          "id": "SAMSP",
+          "weight": 0.93
+        },
+        {
+          "id": "HONHAI",
+          "weight": 0.82
+        },
+        {
+          "id": "HDFCBANK",
+          "weight": 0.74
         }
       ],
-      "notes": "Deux premières lignes dotées d'une classification Morningstar vérifiée. La plupart des titres, y compris Samsung et SK Hynix, ne sont pas encore classifiés."
+      "notes": "Dix premières lignes officielles de MSCI Emerging Markets au 30 octobre 2026. Les sociétés sans classification ne sont PAS extrapolées."
     },
     "msci_em_asia": {
       "asOf": "2026-10-30",
@@ -166,11 +249,43 @@
           "weight": 19.15
         },
         {
+          "id": "SAMSUNG",
+          "weight": 8.43
+        },
+        {
+          "id": "SKHYNIX",
+          "weight": 6.28
+        },
+        {
+          "id": "TENCENT",
+          "weight": 3.21
+        },
+        {
           "id": "BABA",
           "weight": 2.22
+        },
+        {
+          "id": "MEDIATEK",
+          "weight": 1.85
+        },
+        {
+          "id": "CCB",
+          "weight": 1.18
+        },
+        {
+          "id": "SAMSP",
+          "weight": 1.12
+        },
+        {
+          "id": "HONHAI",
+          "weight": 0.99
+        },
+        {
+          "id": "HDFCBANK",
+          "weight": 0.89
         }
       ],
-      "notes": "Deux positions publiées MSCI EM Asia ; autres titres laissés non documentés."
+      "notes": "Dix premières lignes officielles MSCI EM Asia au 30 octobre 2026 ; quelques styles Morningstar vérifiés, les autres inconnus."
     },
     "msci_europe": {
       "asOf": "2026-10-30",
@@ -178,11 +293,47 @@
       "kind": "index",
       "holdings": [
         {
+          "id": "ASML",
+          "weight": 4.46
+        },
+        {
           "id": "ROG",
           "weight": 2.51
+        },
+        {
+          "id": "SHELL",
+          "weight": 2.28
+        },
+        {
+          "id": "NOVARTIS",
+          "weight": 2.17
+        },
+        {
+          "id": "HSBC",
+          "weight": 2.14
+        },
+        {
+          "id": "ASTRA",
+          "weight": 2.06
+        },
+        {
+          "id": "NESTLE",
+          "weight": 1.93
+        },
+        {
+          "id": "SAP",
+          "weight": 1.74
+        },
+        {
+          "id": "SIEMENS",
+          "weight": 1.56
+        },
+        {
+          "id": "ALLIANZ",
+          "weight": 1.36
         }
       ],
-      "notes": "Première couverture européenne partielle via Roche (actions participatives)."
+      "notes": "Dix premières lignes MSCI Europe au 30 octobre 2026 ; aucune classification Value/Blend/Growth supposée pour les titres sans source."
     }
   }
 }
