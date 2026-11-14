@@ -1,7 +1,7 @@
 {
-  "schemaVersion": 1,
-  "description": "Photographies partielles de compositions MSCI par indice (source et date spécifiques) ; seules les parts publiées sont attribuées à un pays. Un reliquat Autres est conservé lorsque la fiche ne ventile pas tous les pays.",
-  "updated": "2026-11-13",
+  "schemaVersion": 2,
+  "description": "Expositions descriptives avec sources séparées par dimension. Les tailles MSCI standard sont ventilées soit par ratio de capitalisations d'indices à date commune, soit par estimation de méthodologie explicitement identifiée. Les biais factoriels ne sont pas des parts Value/Blend/Growth des titres sous-jacents.",
+  "updated": "2026-11-14",
   "assets": {
     "sp500": {
       "kind": "equity",
@@ -13,7 +13,8 @@
       },
       "factor": "none",
       "source": "https://www.spglobal.com/spdji/en/indices/equity/sp-500/",
-      "asOf": "2026-10-30"
+      "asOf": "2026-10-30",
+      "sizeMethod": "documented"
     },
     "msci_world": {
       "kind": "equity",
@@ -43,13 +44,17 @@
         "NZ": 0.04
       },
       "sizes": {
-        "large_mid": 100
+        "Large": 85.66,
+        "Mid": 14.34
       },
       "factor": "none",
       "source": "https://www.ssga.com/fr/en_gb/intermediary/etfs/state-street-spdr-msci-world-ucits-etf-acc-sppw-gy",
       "asOf": "2026-11-04",
       "basis": "proxy_etf",
-      "note": "Proxy ETF State Street SPDR MSCI World : 23 pays répliquant le MSCI World, données du 4 novembre 2026. Écart de 0,01 point dû aux arrondis publiés."
+      "note": "Proxy ETF State Street SPDR MSCI World : 23 pays répliquant le MSCI World, données du 4 novembre 2026. Écart de 0,01 point dû aux arrondis publiés. Taille : Mid = 12 846 784,07 / 89 611 734,16 millions USD (ratio d'encours flottant des indices World Mid / World Standard à la même date), Large par complément.",
+      "sizeMethod": "documented",
+      "sizeSource": "https://www.msci.com/documents/10199/178e6643-6ae6-47b9-82be-e1fc565ededb ; https://www.msci.com/documents/10199/255599/msci-world-mid-cap-index.pdf",
+      "sizeAsOf": "2026-10-30"
     },
     "msci_world_ex_usa": {
       "kind": "equity",
@@ -78,13 +83,17 @@
         "NZ": 0.14749262536873153
       },
       "sizes": {
-        "large_mid": 100
+        "Large": 82.35,
+        "Mid": 17.65
       },
       "factor": "none",
       "source": "https://www.ssga.com/fr/en_gb/intermediary/etfs/state-street-spdr-msci-world-ucits-etf-acc-sppw-gy",
       "asOf": "2026-11-04",
       "basis": "proxy_etf",
-      "note": "Estimation dérivée de la ventilation pays de l'ETF SPDR MSCI World au 4 novembre 2026 : exclusion des États-Unis et renormalisation du reste. Ce n'est pas la composition publiée directement par MSCI World ex USA."
+      "note": "Estimation dérivée de la ventilation pays de l'ETF SPDR MSCI World au 4 novembre 2026 : exclusion des États-Unis et renormalisation du reste. Ce n'est pas la composition publiée directement par MSCI World ex USA. Estimation, NON une composition publiée : cible MSCI Large 70 % / Standard 85 % en capitalisation flottante ; proportions internes 70/85 et 15/85. Écarts possibles selon les pays et les conditions de marché.",
+      "sizeMethod": "estimated",
+      "sizeSource": "https://www.msci.com/indexes/documents/methodology/1_MSCI_Global_Investable_Market_Indexes_Methodology_20250513.pdf",
+      "sizeAsOf": "2025-05-13"
     },
     "msci_world_small_cap_value": {
       "kind": "equity",
@@ -102,16 +111,19 @@
         "AU": 3.52,
         "OTHER": 13.66
       },
-      "source": "https://www.msci.com/documents/10199/9f8cadb3-5923-442d-96d1-7434b6593416"
+      "source": "https://www.msci.com/documents/10199/9f8cadb3-5923-442d-96d1-7434b6593416",
+      "sizeMethod": "documented",
+      "factorSource": "https://www.msci.com/documents/10199/9f8cadb3-5923-442d-96d1-7434b6593416"
     },
     "msci_world_value": {
       "kind": "equity",
       "sizes": {
-        "large_mid": 100
+        "Large": 82.35,
+        "Mid": 17.65
       },
       "factor": "value",
       "source": "https://www.msci.com/indexes/index/105868",
-      "note": "Composition MSCI World Value : cinq pays détaillés, reliquat Autres.",
+      "note": "Composition MSCI World Value : cinq pays détaillés, reliquat Autres. Estimation, NON une composition publiée : cible MSCI Large 70 % / Standard 85 % en capitalisation flottante ; proportions internes 70/85 et 15/85. Écarts possibles selon les pays et les conditions de marché.",
       "countries": {
         "US": 72.1,
         "JP": 5.6,
@@ -120,7 +132,11 @@
         "FR": 2.5,
         "OTHER": 12.2
       },
-      "asOf": "2026-06-30"
+      "asOf": "2026-06-30",
+      "sizeMethod": "estimated",
+      "sizeSource": "https://www.msci.com/indexes/documents/methodology/1_MSCI_Global_Investable_Market_Indexes_Methodology_20250513.pdf",
+      "sizeAsOf": "2025-05-13",
+      "factorSource": "https://www.msci.com/indexes/index/105868"
     },
     "msci_em": {
       "kind": "equity",
@@ -153,13 +169,17 @@
         "US": 0.03
       },
       "sizes": {
-        "large_mid": 100
+        "Large": 82.35,
+        "Mid": 17.65
       },
       "factor": "none",
       "source": "https://www.ssga.com/dk/en_gb/intermediary/etfs/spdr-msci-emerging-markets-ucits-etf-spym-gy",
       "asOf": "2026-08-07",
       "basis": "proxy_etf",
-      "note": "Proxy : composition pays de l'ETF SPDR MSCI Emerging Markets UCITS ETF, qui suit le MSCI Emerging Markets ; des écarts de réplication et une ligne résiduelle peuvent exister."
+      "note": "Proxy : composition pays de l'ETF SPDR MSCI Emerging Markets UCITS ETF, qui suit le MSCI Emerging Markets ; des écarts de réplication et une ligne résiduelle peuvent exister. Estimation, NON une composition publiée : cible MSCI Large 70 % / Standard 85 % en capitalisation flottante ; proportions internes 70/85 et 15/85. Écarts possibles selon les pays et les conditions de marché.",
+      "sizeMethod": "estimated",
+      "sizeSource": "https://www.msci.com/indexes/documents/methodology/1_MSCI_Global_Investable_Market_Indexes_Methodology_20250513.pdf",
+      "sizeAsOf": "2025-05-13"
     },
     "reit_us": {
       "kind": "other",
@@ -175,7 +195,8 @@
         "Small": 100
       },
       "factor": "none",
-      "source": "https://www.lseg.com/en/ftse-russell/indices/russell-us"
+      "source": "https://www.lseg.com/en/ftse-russell/indices/russell-us",
+      "sizeMethod": "documented"
     },
     "us_total_market": {
       "kind": "equity",
@@ -183,10 +204,16 @@
         "US": 100
       },
       "sizes": {
-        "all_caps": 100
+        "Large": 70.71,
+        "Mid": 15.15,
+        "Small": 14.14
       },
       "factor": "none",
-      "source": "https://www.crsp.org/indexes/"
+      "source": "https://www.crsp.org/indexes/",
+      "sizeMethod": "estimated",
+      "sizeSource": "https://www.msci.com/indexes/documents/methodology/1_MSCI_Global_Investable_Market_Indexes_Methodology_20250513.pdf",
+      "sizeAsOf": "2025-05-13",
+      "note": "Estimation indicative d'après les cibles MSCI, et NON une ventilation du marché CRSP : ne pas interpréter comme une mesure observée."
     },
     "msci_pacific_ex_japan_imi": {
       "kind": "equity",
@@ -197,12 +224,17 @@
         "NZ": 1.88
       },
       "sizes": {
-        "all_caps": 100
+        "Large": 70.71,
+        "Mid": 15.15,
+        "Small": 14.14
       },
       "factor": "none",
       "source": "https://www.msci.com/documents/10199/ff245708-ddb9-48cd-8da6-c65b1598b227",
-      "note": "Ventilation exhaustive des quatre marchés dans la fiche officielle MSCI du 31 juillet 2026.",
-      "asOf": "2026-07-31"
+      "note": "Ventilation exhaustive des quatre marchés dans la fiche officielle MSCI du 31 juillet 2026. Estimation, NON une composition publiée : cibles MSCI Large 70 % / Mid 15 % / Small 14 % sur IMI 99 %, ratios normalisés ; répartition réelle variable.",
+      "asOf": "2026-07-31",
+      "sizeMethod": "estimated",
+      "sizeSource": "https://www.msci.com/indexes/documents/methodology/1_MSCI_Global_Investable_Market_Indexes_Methodology_20250513.pdf",
+      "sizeAsOf": "2025-05-13"
     },
     "msci_em_asia": {
       "kind": "equity",
@@ -215,11 +247,16 @@
         "ASIA_EM_OTHER": 2.52
       },
       "sizes": {
-        "large_mid": 100
+        "Large": 82.35,
+        "Mid": 17.65
       },
       "factor": "none",
       "source": "https://www.msci.com/documents/10199/255599/msci-emerging-markets-asia.pdf",
-      "asOf": "2026-04-30"
+      "asOf": "2026-04-30",
+      "sizeMethod": "estimated",
+      "sizeSource": "https://www.msci.com/indexes/documents/methodology/1_MSCI_Global_Investable_Market_Indexes_Methodology_20250513.pdf",
+      "sizeAsOf": "2025-05-13",
+      "note": "Estimation, NON une composition publiée : cible MSCI Large 70 % / Standard 85 % en capitalisation flottante ; proportions internes 70/85 et 15/85. Écarts possibles selon les pays et les conditions de marché."
     },
     "msci_japan": {
       "kind": "equity",
@@ -227,10 +264,15 @@
         "JP": 100
       },
       "sizes": {
-        "large_mid": 100
+        "Large": 75.15,
+        "Mid": 24.85
       },
       "factor": "none",
-      "source": "https://www.msci.com/indexes/index/990400/msci-japan-index"
+      "source": "https://www.msci.com/indexes/index/990400/msci-japan-index",
+      "sizeMethod": "documented",
+      "sizeSource": "https://www.msci.com/documents/10199/b3ee6464-f705-4d65-81a0-d8756607cf9f ; https://www.msci.com/documents/10199/9419f167-2555-42e2-a016-d3cd6537c2d1",
+      "sizeAsOf": "2026-10-30",
+      "note": "Taille : Mid = 1 272 886,39 / 5 121 811,90 millions USD (indices Japan Mid / Japan Standard à date commune)."
     },
     "msci_europe_small_cap_weighted": {
       "kind": "equity",
@@ -240,9 +282,11 @@
       "sizes": {
         "Small": 100
       },
-      "factor": "none",
-      "source": "https://www.msci.com/indexes",
-      "note": "Pays européens non ventilés (classification géographique seulement)."
+      "factor": "value",
+      "source": "https://www.msci.com/indexes/index/139245/msci-europe-small-cap-value-weighted-index",
+      "note": "Correspondance avec MSCI Europe Small Cap Value Weighted NTR à forte confiance : rendements CSV USD compatibles avec les rendements officiels EUR 2021–2025 après conversion EUR/USD ; le nom historique CSV reste inchangé. Une revalidation directe de la série source USD est conseillée. Les pays européens ne sont pas détaillés.",
+      "sizeMethod": "documented",
+      "factorSource": "https://www.msci.com/indexes/index/139245/msci-europe-small-cap-value-weighted-index"
     },
     "msci_usa_small_cap_weighted": {
       "kind": "equity",
@@ -252,9 +296,11 @@
       "sizes": {
         "Small": 100
       },
-      "factor": "none",
-      "source": "https://www.msci.com/indexes",
-      "note": "Taille small cap selon l'intitulé de l'indice ; l'exposition Value n'est pas présumée."
+      "factor": "value",
+      "source": "https://www.msci.com/indexes/index/139249/msci-usa-small-cap-value-weighted-index",
+      "note": "Identifié comme MSCI USA Small Cap Value Weighted : les rendements annuels 2021–2025 du CSV concordent exactement avec la fiche MSCI USD NTR (13,71 % en 2025 ; 9,70 % en 2024 ; 21,19 % en 2023). Nom historique du fichier CSV conservé pour compatibilité. La pondération Value est une méthode d'indice et non une classification de 100 % des titres comme Value.",
+      "sizeMethod": "documented",
+      "factorSource": "https://www.msci.com/indexes/index/139249/msci-usa-small-cap-value-weighted-index"
     },
     "msci_europe": {
       "kind": "equity",
@@ -276,13 +322,17 @@
         "PT": 0.34
       },
       "sizes": {
-        "large_mid": 100
+        "Large": 82.66,
+        "Mid": 17.34
       },
       "factor": "none",
       "source": "https://www.ssga.com/uk/en_gb/institutional/etfs/state-street-spdr-msci-europe-ucits-etf-ero-fp",
-      "note": "Proxy : composition pays de l'ETF State Street SPDR MSCI Europe UCITS ETF, qui suit le MSCI Europe ; répartition de l'ETF et non publication directe du poids de chaque pays de l'indice.",
+      "note": "Proxy : composition pays de l'ETF State Street SPDR MSCI Europe UCITS ETF, qui suit le MSCI Europe ; répartition de l'ETF et non publication directe du poids de chaque pays de l'indice. Taille : Mid = 2 130 178,61 / 12 287 147,94 millions EUR (indices Europe Mid / Europe Standard à date commune).",
       "asOf": "2026-10-13",
-      "basis": "proxy_etf"
+      "basis": "proxy_etf",
+      "sizeMethod": "documented",
+      "sizeSource": "https://www.msci.com/documents/10199/861bb4d4-7a59-489b-8cef-bb104e152e3c ; https://www.msci.com/documents/10199/a080f6fe-479c-49cc-96d5-aa84d6805e05",
+      "sizeAsOf": "2026-10-30"
     },
     "global_infrastructure": {
       "kind": "other",
