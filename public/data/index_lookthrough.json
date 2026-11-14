@@ -1,0 +1,188 @@
+{
+  "schemaVersion": 1,
+  "updated": "2026-11-14",
+  "description": "Échantillon vérifiable des principales positions d'indices MSCI. Les titres non renseignés, ou sans métrique Morningstar, restent inconnus. Les séries d'ETF PEA synthétiques ne sont PAS les holdings physiques de ces indices.",
+  "styleMethod": "Morningstar Stock Style Box individuel : Core est regroupé sous Blend dans le graphique du portefeuille. Cette classification n'est pas dérivée du simple nom de l'indice.",
+  "profitabilityMethod": "ROIC normalisé de Morningstar, seuil illustratif de 15 % ; ce diagnostic ne représente PAS le facteur MSCI Quality (qui intègre notamment stabilité des bénéfices et levier). Émetteurs financiers sans ROIC comparable non classés.",
+  "securities": {
+    "AAPL": {
+      "name": "Apple",
+      "style": "Blend",
+      "styleSource": "https://www.morningstar.com/stocks/xnas/aapl/quote",
+      "roic": 77.78,
+      "roicSource": "https://www.morningstar.com/stocks/xnas/aapl/quote"
+    },
+    "NVDA": {
+      "name": "NVIDIA",
+      "style": "Growth",
+      "styleSource": "https://www.morningstar.com/stocks/xnas/nvda/quote",
+      "roic": 95.82,
+      "roicSource": "https://www.morningstar.com/stocks/xnas/nvda/quote"
+    },
+    "MSFT": {
+      "name": "Microsoft",
+      "style": "Blend",
+      "styleSource": "https://www.morningstar.com/stocks/xnas/msft/quote",
+      "roic": 31.5,
+      "roicSource": "https://www.morningstar.com/stocks/xnas/msft/quote"
+    },
+    "AMZN": {
+      "name": "Amazon",
+      "style": "Blend",
+      "styleSource": "https://www.morningstar.com/stocks/xnas/amzn/quote"
+    },
+    "GOOGL": {
+      "name": "Alphabet A",
+      "style": "Blend",
+      "styleSource": "https://www.morningstar.com/stocks/xnas/googl/quote",
+      "roic": 27.38,
+      "roicSource": "https://www.morningstar.com/stocks/xnas/googl/quote"
+    },
+    "GOOG": {
+      "name": "Alphabet C",
+      "style": "Blend",
+      "styleSource": "https://www.morningstar.com/stocks/xnas/goog/quote",
+      "roic": 27.38,
+      "roicSource": "https://www.morningstar.com/stocks/xnas/goog/quote"
+    },
+    "AVGO": {
+      "name": "Broadcom",
+      "style": "Growth",
+      "styleSource": "https://www.morningstar.com/stocks/xnas/avgo/quote",
+      "roic": 34.36,
+      "roicSource": "https://www.morningstar.com/stocks/xnas/avgo/quote"
+    },
+    "META": {
+      "name": "Meta",
+      "style": "Blend",
+      "styleSource": "https://www.morningstar.com/stocks/xnas/meta/quote",
+      "roic": 30.92,
+      "roicSource": "https://www.morningstar.com/stocks/xnas/meta/quote"
+    },
+    "TSLA": {
+      "name": "Tesla",
+      "style": "Growth",
+      "styleSource": "https://www.morningstar.com/stocks/xnas/tsla/quote",
+      "roic": 6.77,
+      "roicSource": "https://www.morningstar.com/stocks/xnas/tsla/quote"
+    },
+    "LLY": {
+      "name": "Eli Lilly",
+      "style": "Growth",
+      "styleSource": "https://www.morningstar.com/stocks/xnys/lly/quote"
+    },
+    "TSM": {
+      "name": "Taiwan Semiconductor Manufacturing",
+      "style": "Growth",
+      "styleSource": "https://www.morningstar.com/stocks/xnys/tsm/quote",
+      "roic": 34.69,
+      "roicSource": "https://www.morningstar.com/stocks/xnys/tsm/quote"
+    },
+    "BABA": {
+      "name": "Alibaba",
+      "style": "Blend",
+      "styleSource": "https://www.morningstar.com/stocks/xnys/baba/quote",
+      "roic": 0.25,
+      "roicSource": "https://www.morningstar.com/stocks/xnys/baba/quote"
+    },
+    "ROG": {
+      "name": "Roche (participation)",
+      "style": "Blend",
+      "styleSource": "https://www.morningstar.com/stocks/xswx/rop/quote"
+    }
+  },
+  "indices": {
+    "msci_world": {
+      "asOf": "2026-10-30",
+      "source": "https://www.msci.com/documents/10199/178e6643-6ae6-47b9-82be-e1fc565ededb",
+      "kind": "index",
+      "holdings": [
+        {
+          "id": "AAPL",
+          "weight": 5.65
+        },
+        {
+          "id": "NVDA",
+          "weight": 5.25
+        },
+        {
+          "id": "MSFT",
+          "weight": 4.11
+        },
+        {
+          "id": "AMZN",
+          "weight": 2.6
+        },
+        {
+          "id": "GOOGL",
+          "weight": 1.83
+        },
+        {
+          "id": "AVGO",
+          "weight": 1.64
+        },
+        {
+          "id": "META",
+          "weight": 1.51
+        },
+        {
+          "id": "GOOG",
+          "weight": 1.45
+        },
+        {
+          "id": "TSLA",
+          "weight": 1.28
+        },
+        {
+          "id": "LLY",
+          "weight": 1.27
+        }
+      ],
+      "notes": "Top dix de la fiche MSCI World, octobre 2026, somme 26,59 % après arrondis."
+    },
+    "msci_em": {
+      "asOf": "2026-10-30",
+      "source": "https://www.msci.com/indexes/index/891800/msci-emerging-markets-index",
+      "kind": "index",
+      "holdings": [
+        {
+          "id": "TSM",
+          "weight": 15.87
+        },
+        {
+          "id": "BABA",
+          "weight": 1.84
+        }
+      ],
+      "notes": "Deux premières lignes dotées d'une classification Morningstar vérifiée. La plupart des titres, y compris Samsung et SK Hynix, ne sont pas encore classifiés."
+    },
+    "msci_em_asia": {
+      "asOf": "2026-10-30",
+      "source": "https://www.msci.com/indexes/index/899700/msci-em-asia-index",
+      "kind": "index",
+      "holdings": [
+        {
+          "id": "TSM",
+          "weight": 19.15
+        },
+        {
+          "id": "BABA",
+          "weight": 2.22
+        }
+      ],
+      "notes": "Deux positions publiées MSCI EM Asia ; autres titres laissés non documentés."
+    },
+    "msci_europe": {
+      "asOf": "2026-10-30",
+      "source": "https://www.msci.com/documents/10199/861bb4d4-7a59-489b-8cef-bb104e152e3c",
+      "kind": "index",
+      "holdings": [
+        {
+          "id": "ROG",
+          "weight": 2.51
+        }
+      ],
+      "notes": "Première couverture européenne partielle via Roche (actions participatives)."
+    }
+  }
+}
