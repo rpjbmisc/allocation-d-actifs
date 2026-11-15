@@ -16,10 +16,12 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Unit-test provider Excel parser and conservative classification
+        run: python -m unittest discover -s scripts -p 'test_refresh_holdings_audit.py'
       - name: Retrieve public physical ETF holdings and validate aggregate
         id: parse
         continue-on-error: true
-        run: python scripts/refresh_holdings_audit.py --output holdings-audit.json
+        run: python scripts/refresh_holdings_audit.py --styles-csv scripts/stock_styles_seed.csv --output holdings-audit.json
       - name: Upload derived summary (when available)
         if: ${{ hashFiles('holdings-audit.json') != '' }}
         uses: actions/upload-artifact@v4
