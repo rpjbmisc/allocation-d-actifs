@@ -1,5 +1,5 @@
 import {describe,it,expect} from "vitest";
-import { calculateLookthrough,type LookthroughRegistry } from "./lookthrough";
+import { calculateLookthrough,type LookthroughRegistry,type PhysicalAuditRegistry } from "./lookthrough";
 import observations from "../../public/data/index_lookthrough.json";
 
 const fixture:LookthroughRegistry={
@@ -42,6 +42,30 @@ describe("look-through exposures",()=>{
     const report=calculateLookthrough({invalid:100},["invalid"],fixture);
     expect(report.coverage.holdings).toBe(0);
     expect(value(report.styles,"Style non documenté")).toBe(100);
+  });
+
+  it("uses audited full physical ETF style aggregates without double counting the top-ten snapshot",()=>{
+    const audit:PhysicalAuditRegistry={
+      schemaVersion:1,asOf:"2026-11-12",
+      assets:{world:{
+        ticker:"SPPW",holdingsCount:1237,source:"https://example.org/physical.xlsx",
+        styleWeightsPct:{Value:10,Blend:20,Growth:25,"Non documenté":45},
+        styleCoveragePct:55,
+        sectorWeightsPct:{Technology:30,Financials:70}
+      }}
+    };
+    const report=calculateLookthrough({world:60,missing:40},["world","missing"],fixture,audit);
+    expect(value(report.styles,"Value")).toBeCloseTo(6);
+    expect(value(report.styles,"Blend")).toBeCloseTo(12);
+    expect(value(report.styles,"Growth")).toBeCloseTo(15);
+    expect(value(report.styles,"Style non documenté")).toBeCloseTo(67);
+    expect(report.coverage.holdings).toBeCloseTo(60);
+    expect(report.coverage.styles).toBeCloseTo(33);
+    expect(report.coverage.sectors).toBeCloseTo(60);
+    expect(value(report.sectors,"Technology")).toBeCloseTo(18);
+    expect(value(report.sectors,"Secteur non documenté")).toBeCloseTo(40);
+    // Profitability remains independently observed from the limited individual ROIC sample.
+    expect(report.coverage.profitability).toBeCloseTo(18);
   });
   it("handles zero equity and unavailable data",()=>{
     expect(calculateLookthrough({gold:100},[],fixture).styles).toEqual([]);
