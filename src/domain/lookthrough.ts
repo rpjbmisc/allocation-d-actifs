@@ -28,6 +28,19 @@ export interface LookthroughRegistry {
   securities: Record<string, SecurityObservation>;
   indices: Record<string, IndexObservation>;
 }
+export interface PhysicalAuditAsset {
+  ticker: string;
+  holdingsCount: number;
+  source: string;
+  styleWeightsPct?: Record<string,number>;
+  sectorWeightsPct?: Record<string,number>;
+  styleCoveragePct?: number;
+}
+export interface PhysicalAuditRegistry {
+  schemaVersion: number;
+  asOf?: string;
+  assets: Record<string,PhysicalAuditAsset>;
+}
 export interface LookthroughSlice { name: string; percent: number }
 export interface LookthroughIndexCoverage {
   id: string;
@@ -42,9 +55,10 @@ export interface LookthroughIndexCoverage {
 }
 export interface LookthroughReport {
   styles: LookthroughSlice[];
+  sectors: LookthroughSlice[];
   profitability: LookthroughSlice[];
   /** Percent of the *total equity sleeve* covered by verified observations. */
-  coverage: { holdings: number; styles: number; profitability: number };
+  coverage: { holdings: number; styles: number; profitability: number; sectors: number };
   indices: LookthroughIndexCoverage[];
   sources: string[];
 }
@@ -65,18 +79,44 @@ export function calculateLookthrough(
   allocation: Record<string,number>,
   equityIds: string[],
   registry: LookthroughRegistry | null,
+  audit: PhysicalAuditRegistry | null = null,
 ): LookthroughReport {
   const pairs=equityIds.map(id=>({id,weight:safeWeight(allocation[id])})).filter(p=>p.weight>0);
   const total=sum(pairs.map(p=>p.weight));
   const styleWeights:Record<string,number>={Value:0,Blend:0,Growth:0,"Style non documenté":0};
+  const sectorWeights:Record<string,number>={"Secteur non documenté":0};
   const profitWeights:Record<string,number>={"ROIC ≥ 15 % (proxy)":0,"ROIC < 15 %":0,"ROIC non documenté":0};
   const details:LookthroughIndexCoverage[]=[];
   const sources=new Set<string>();
-  let coveredHoldings=0,coveredStyles=0,coveredProfit=0;
-  if(total<=0)return {styles:[],profitability:[],coverage:{holdings:0,styles:0,profitability:0},indices:[],sources:[]};
+  let coveredHoldings=0,coveredStyles=0,coveredProfit=0,coveredSectors=0;
+  if(total<=0)return {styles:[],sectors:[],profitability:[],coverage:{holdings:0,styles:0,profitability:0,sectors:0},indices:[],sources:[]};
   for(const {id,weight} of pairs) {
     const portfolioPct=weight/total*100;
     const snapshot=registry?.indices?.[id];
+    const physical=audit?.assets?.[id];
+    const styleMap=physical?.styleWeightsPct;
+    const stylesValid=!!physical && isSource(physical.source) && !!styleMap &&
+      ["Value","Blend","Growth","Non documenté"].every(key=>Number.isFinite(styleMap[key])&&styleMap[key]>=0) &&
+      Math.abs(sum(Object.values(styleMap))-100)<0.2;
+    const sectorMap=physical?.sectorWeightsPct;
+    const sectorsValid=!!physical && isSource(physical.source) && !!sectorMap &&
+      Object.values(sectorMap).every(v=>Number.isFinite(v)&&v>=0) &&
+      Math.abs(sum(Object.values(sectorMap))-100)<0.2;
+    if(stylesValid && styleMap) {
+      for(const style of ["Value","Blend","Growth"] as const)
+        styleWeights[style]+=portfolioPct*styleMap[style]/100;
+      styleWeights["Style non documenté"]+=portfolioPct*styleMap["Non documenté"]/100;
+    }
+    if(sectorsValid && sectorMap) {
+      let sectorSum=0;
+      for(const [name,pct] of Object.entries(sectorMap)){
+        sectorWeights[name]=(sectorWeights[name]??0)+portfolioPct*pct/100;
+        sectorSum+=pct;
+      }
+      sectorWeights["Secteur non documenté"]+=portfolioPct*Math.max(0,100-sectorSum)/100;
+      coveredSectors+=portfolioPct*Math.min(100,sectorSum)/100;
+    } else sectorWeights["Secteur non documenté"]+=portfolioPct;
+    if((stylesValid||sectorsValid)&&physical) sources.add(physical.source);
     const positions=snapshot?.holdings??[];
     const ids=new Set<string>();
     const valid=!!snapshot && isSource(snapshot.source) && !!snapshot.asOf &&
@@ -90,10 +130,10 @@ export function calculateLookthrough(
       holdingsPct+=pos.weight;
       const security=registry?.securities?.[pos.id];
       const contribution=portfolioPct*pos.weight/100;
-      if(security && isStyle(security.style) && isSource(security.styleSource)) {
+      if(!stylesValid && security && isStyle(security.style) && isSource(security.styleSource)) {
         styleWeights[security.style]+=contribution;
         stylePct+=pos.weight;
-      } else styleWeights["Style non documenté"]+=contribution;
+      } else if(!stylesValid) styleWeights["Style non documenté"]+=contribution;
       if(security && typeof security.roic==="number" && Number.isFinite(security.roic) && isSource(security.roicSource)) {
         profitWeights[security.roic>=15?"ROIC ≥ 15 % (proxy)":"ROIC < 15 %"]+=contribution;
         profitPct+=pos.weight;
@@ -102,17 +142,18 @@ export function calculateLookthrough(
       if(security?.roicSource && isSource(security.roicSource)) sources.add(security.roicSource);
     }
     const remainder=Math.max(0,100-holdingsPct);
-    styleWeights["Style non documenté"]+=portfolioPct*remainder/100;
+    if(!stylesValid)styleWeights["Style non documenté"]+=portfolioPct*remainder/100;
     profitWeights["ROIC non documenté"]+=portfolioPct*remainder/100;
-    coveredHoldings+=portfolioPct*holdingsPct/100;
+    if(stylesValid&&styleMap){stylePct=100-styleMap["Non documenté"];}
+    coveredHoldings+=portfolioPct*(stylesValid?100:holdingsPct)/100;
     coveredStyles+=portfolioPct*stylePct/100;
     coveredProfit+=portfolioPct*profitPct/100;
     if(valid && snapshot) sources.add(snapshot.source);
     details.push({
       id,name:id,portfolioWeight:portfolioPct,
-      holdingsWeight:holdingsPct,styleWeight:stylePct,profitabilityWeight:profitPct,
-      asOf:valid?snapshot!.asOf:undefined,
-      source:valid?snapshot!.source:undefined,
+      holdingsWeight:stylesValid?100:holdingsPct,styleWeight:stylePct,profitabilityWeight:profitPct,
+      asOf:stylesValid?audit?.asOf:valid?snapshot!.asOf:undefined,
+      source:stylesValid?physical?.source:valid?snapshot!.source:undefined,
       notes:valid?snapshot!.notes:undefined,
     });
   }
@@ -120,8 +161,9 @@ export function calculateLookthrough(
   const clean=(v:number)=>Math.max(0,Math.min(100,v));
   return {
     styles:rows(styleWeights),
+    sectors:rows(sectorWeights),
     profitability:rows(profitWeights),
-    coverage:{holdings:clean(coveredHoldings),styles:clean(coveredStyles),profitability:clean(coveredProfit)},
+    coverage:{holdings:clean(coveredHoldings),styles:clean(coveredStyles),profitability:clean(coveredProfit),sectors:clean(coveredSectors)},
     indices:details,
     sources:[...sources],
   };
