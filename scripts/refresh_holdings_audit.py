@@ -8,6 +8,7 @@ No stock style (Value/Core/Growth) is inferred from sector or ETF name.
 """
 import argparse
 import datetime as dt
+import csv
 import json
 import re
 import urllib.request
@@ -77,7 +78,8 @@ def lookup_header(rows):
         if name is not None and weight is not None:
             sector=next((i for i,k in enumerate(keys) if k in ("sector","gics sector","secteur","sector classification")),None)
             asset=next((i for i,k in enumerate(keys) if k in ("asset class","asset type","type of security")),None)
-            return rownum,name,weight,sector,asset
+            isin=next((i for i,k in enumerate(keys) if k in ("isin","security isin")),None)
+            return rownum,name,weight,sector,asset,isin
     raise ValueError("En-têtes Name/Weight introuvables : " + repr(rows[:12])[:1700])
 
 def number(v):
@@ -89,10 +91,10 @@ def number(v):
     try: return float(t)
     except ValueError: return None
 
-def extract(raw):
+def extract(raw,style_map=None):
     rows=rows_xlsx(raw)
     as_of=next((str(r[1]).strip() for r in rows[:18] if len(r)>1 and normal(r[0])=="holdings as of:"),None)
-    header,name_idx,weight_idx,sector_idx,asset_idx=lookup_header(rows)
+    header,name_idx,weight_idx,sector_idx,asset_idx,isin_idx=lookup_header(rows)
     holdings=[]
     for row in rows[header+1:]:
         name=str(row[name_idx]).strip() if name_idx<len(row) else ""
@@ -102,7 +104,8 @@ def extract(raw):
         asset=str(row[asset_idx]).lower() if asset_idx is not None and asset_idx<len(row) else ""
         if asset and not any(t in asset for t in ("equity","stock","share","action")): continue
         sector=str(row[sector_idx]).strip() if sector_idx is not None and sector_idx<len(row) else ""
-        holdings.append({"name":name,"weight":w,"sector":sector})
+        isin=str(row[isin_idx]).strip().upper() if isin_idx is not None and isin_idx<len(row) else ""
+        holdings.append({"name":name,"weight":w,"sector":sector,"isin":isin})
     if len(holdings)<30:
         raise ValueError(f"Seulement {len(holdings)} positions reconnues, header {rows[header]!r}")
     summed=sum(h["weight"] for h in holdings)
@@ -115,11 +118,35 @@ def extract(raw):
     for h in holdings:
         if h["sector"]:
             sector_weights[h["sector"]]=round(sector_weights.get(h["sector"],0)+h["weight"],4)
+    styles={"Value":0.0,"Blend":0.0,"Growth":0.0,"Non documenté":0.0}
+    for h in holdings:
+        entry=(style_map or {}).get(h["isin"])
+        style=entry["style"] if entry else "Non documenté"
+        styles[style]+=h["weight"]
+    styles={k:round(v,4) for k,v in styles.items()}
     top=sorted(holdings,key=lambda x:x["weight"],reverse=True)[:10]
     return {"holdingsCount":len(holdings),"holdingsAsOf":as_of,"equityWeightPct":round(summed,4),
             "top10WeightPct":round(sum(h["weight"] for h in top),4),
             "top10":[{"name":h["name"],"weight":round(h["weight"],4)} for h in top],
-            "sectorWeightsPct":sector_weights}
+            "sectorWeightsPct":sector_weights,"styleWeightsPct":styles,
+            "styleCoveragePct":round(summed-styles["Non documenté"],4)}
+
+def load_style_map(path):
+    if not path:return {}
+    result={}
+    with Path(path).open(encoding="utf-8-sig",newline="") as stream:
+        for row in csv.DictReader(stream):
+            isin=(row.get("isin") or row.get("ISIN") or "").strip().upper()
+            style=(row.get("style") or row.get("Style") or "").strip().title()
+            if style=="Core":style="Blend"
+            source=(row.get("source") or row.get("Source") or "").strip()
+            if not re.fullmatch(r"[A-Z]{2}[A-Z0-9]{9}[0-9]",isin):
+                raise ValueError("ISIN invalide dans le référentiel de styles")
+            if style not in ("Value","Blend","Growth") or not source.startswith("https://"):
+                raise ValueError("Classification ou source invalide pour ISIN "+isin)
+            if isin in result:raise ValueError("ISIN dupliqué : "+isin)
+            result[isin]={"style":style,"source":source}
+    return result
 
 def fetch(url):
     request=urllib.request.Request(url,headers={"User-Agent":"Mozilla/5.0 (compatible; portfolio-research/1.0)","Accept":"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,*/*"})
@@ -133,14 +160,18 @@ def main():
     parser=argparse.ArgumentParser()
     parser.add_argument("--output",default="public/data/holdings_audit.json")
     parser.add_argument("--require-all",action="store_true")
+    parser.add_argument("--styles-csv",help="CSV privé ISIN,style,source pour classifications Value/Blend/Growth documentées")
     args=parser.parse_args()
+    style_map=load_style_map(args.styles_csv)
     data={"schemaVersion":1,"retrievedAt":dt.datetime.now(dt.timezone.utc).isoformat(),
           "description":"Diagnostics dérivés d'inventaires d'ETF physiques, non listes officielles MSCI. Pas de styles imputés aux titres.",
           "assets":{},"errors":{}}
+    data["styleMethod"]="Classification par ISIN avec URL source ; sans référentiel privé, les styles restent non documentés."
+    data["styleInputCount"]=len(style_map)
     for index,(slug,ticker,benchmark) in SOURCES.items():
         url=ROOT+f"holdings-daily-emea-en-{slug}.xlsx"
         try:
-            item=extract(fetch(url))
+            item=extract(fetch(url),style_map)
             item.update({"etf":ticker,"benchmark":benchmark,"downloadUrl":url,
                          "sourceType":"physical_etf_holdings_proxy","asOf":item["holdingsAsOf"],
                          "warning":"Le panier d'un ETF physique/échantillonné peut différer de l'indice."})
