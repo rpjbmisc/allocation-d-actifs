@@ -42,3 +42,36 @@ Le ROIC n'est pas une mesure universellement comparable pour les banques/assureu
 ## Étape suivante pour une couverture quasi complète
 
 Importer des positions exhaustives d'un émetteur ou d'un indice, puis y joindre des classifications et métriques vérifiables au moyen d'une source sous licence (ou d'un fichier exporté explicitement avec autorisation). Prévoir identifiants ISIN/FIGI, classe de titre, date de pondération, source et devise. Ne pas utiliser les dates d'un portefeuille historique pour attribuer des styles actuels.
+
+## Extension de novembre 2026 : inventaires ETF complets
+
+La routine `scripts/refresh_holdings_audit.py` télécharge les fichiers de positions quotidiennes de cinq ETF physiques State Street représentatifs (SPPW, SPYM, ERO, ZPRV, ZPRX), vérifie leurs poids et produit un **JSON agrégé uniquement**, sans republier toutes les positions. Elle fonctionne avec Python standard, sans dépendance Excel, à partir du ZIP/XLSX source. Un workflow dédié `.github/workflows/holdings-audit.yml` valide l'import et dépose un artefact consultable.
+
+**Exécution vérifiée le 15 novembre 2026**, sur les portefeuilles au 12 novembre 2026 :
+
+| ETF proxy | Positions | Top 10 (%) | Styles individuels documentés (%) |
+| --- | ---: | ---: | ---: |
+| SPPW — MSCI World | 1 237 | 26,42 | 27,75 |
+| SPYM — MSCI Emerging Markets | 1 175 | 36,46 | 17,40 |
+| ERO — MSCI Europe | 384 | 21,70 | 8,61 |
+| ZPRV — USA Small Cap Value Weighted | 1 623 | 5,53 | 0,00 |
+| ZPRX — Europe Small Cap Value Weighted | 799 | 9,41 | 0,00 |
+
+`public/data/holdings_audit.json` conserve les agrégats vérifiés : nombre de positions, secteurs GICS, et pondérations stylistiques documentées / non documentées. **5 218 lignes de positions** sont prises en compte, avec de possibles doublons d'entreprises entre ETF.
+
+Les 15 observations de style préexistantes ont été rapprochées des positions sur les **ISIN** dans `scripts/stock_styles_seed.csv`. Elles ne sont **pas** une base exhaustive de classifications ; sans correspondance étayée, le titre demeure « non documenté ». Les informations de style viennent de pages publiques Morningstar précédemment relevées et peuvent ne pas être synchronisées exactement avec le 12 novembre 2026.
+
+Le calcul prend désormais en priorité les agrégats stylistiques de l'inventaire **complet** lorsqu'ils existent, plutôt que les estimations de couverture des dix premières lignes. Les autres indices (notamment MSCI EM Asia et Pacific ex Japan IMI) restent sur les photographies limitées ou inconnues. La rentabilité/ROIC reste une dimension séparée, basée sur un échantillon de titres vérifiés.
+
+### Pour actualiser ou étendre la classification
+
+```bash
+python3 -m unittest discover -s scripts -p 'test_refresh_holdings_audit.py'
+python3 scripts/refresh_holdings_audit.py \
+  --styles-csv scripts/stock_styles_seed.csv \
+  --output holdings-audit.json
+```
+
+Le CSV facultatif des classifications doit contenir `isin,style,source`, avec `Value`, `Blend` (ou `Core`), `Growth`, et une URL HTTPS de provenance par ligne. On peut substituer un référentiel enrichi dont l'utilisation est autorisée, sans devoir publier le référentiel intégral. Aucune classification de titres ne doit être inférée automatiquement du secteur ou du nom de l'indice.
+
+**Limites persistantes :** une couverture complète des positions n'entraîne pas une couverture complète des styles ; il manque toujours des classifications pour la majorité des entreprises. Le fonds physique servant de proxy peut différer d'un indice MSCI exact, d'un ETF synthétique ou ESG ; les secteurs publiés ne sont pas la preuve d'un profil Growth/Value. La publication du résumé ne vaut pas redistribution des fichiers bruts.
