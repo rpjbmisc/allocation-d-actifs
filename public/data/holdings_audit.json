@@ -1,0 +1,113 @@
+{
+  "schemaVersion": 1,
+  "retrievedAt": "2026-11-15T18:11:57Z",
+  "asOf": "2026-11-12",
+  "note": "Validated derived aggregates from full physical ETF daily holdings. NOT necessarily exact MSCI index holdings; sector not a stock-style classifier. Total equity weight approximately 100% for each file. Original source files not redistributed.",
+  "assets": {
+    "msci_world": {
+      "ticker": "SPPW",
+      "holdingsCount": 1237,
+      "top10WeightPct": 26.4222,
+      "sectorWeightsPct": {
+        "Information Technology": 28.7055,
+        "Consumer Discretionary": 9.104,
+        "Communication Services": 7.4922,
+        "Health Care": 10.2875,
+        "Financials": 16.5528,
+        "Energy": 4.2188,
+        "Consumer Staples": 5.4473,
+        "Industrials": 10.8426,
+        "Materials": 3.1923,
+        "Utilities": 2.5229,
+        "Real Estate": 1.6324,
+        "Unassigned": 0.0001
+      },
+      "sourceType": "physical_etf_holdings_proxy",
+      "source": "https://www.ssga.com/library-content/products/fund-data/etfs/emea/holdings-daily-emea-en-sppw-gy.xlsx"
+    },
+    "msci_em": {
+      "ticker": "SPYM",
+      "holdingsCount": 1175,
+      "top10WeightPct": 36.4584,
+      "sectorWeightsPct": {
+        "Information Technology": 39.6773,
+        "Communication Services": 6.304,
+        "Consumer Discretionary": 7.9582,
+        "Financials": 21.3856,
+        "Energy": 3.6056,
+        "Industrials": 6.066,
+        "Materials": 6.0209,
+        "Health Care": 2.9924,
+        "Consumer Staples": 2.9758,
+        "Real Estate": 1.0254,
+        "Utilities": 1.9893,
+        "Unassigned": 0
+      },
+      "sourceType": "physical_etf_holdings_proxy",
+      "source": "https://www.ssga.com/library-content/products/fund-data/etfs/emea/holdings-daily-emea-en-spym-gy.xlsx"
+    },
+    "msci_europe": {
+      "ticker": "ERO",
+      "holdingsCount": 384,
+      "top10WeightPct": 21.6974,
+      "sectorWeightsPct": {
+        "Information Technology": 8.4393,
+        "Health Care": 14.1333,
+        "Financials": 24.7905,
+        "Energy": 5.3557,
+        "Consumer Staples": 9.0861,
+        "Industrials": 17.9703,
+        "Utilities": 5.0653,
+        "Materials": 5.3928,
+        "Consumer Discretionary": 6.0904,
+        "Communication Services": 3.1475,
+        "Real Estate": 0.5282,
+        "Unassigned": 0.0014
+      },
+      "sourceType": "physical_etf_holdings_proxy",
+      "source": "https://www.ssga.com/library-content/products/fund-data/etfs/emea/holdings-daily-emea-en-ero-fp.xlsx"
+    },
+    "msci_usa_small_cap_weighted": {
+      "ticker": "ZPRV",
+      "holdingsCount": 1623,
+      "top10WeightPct": 5.5276,
+      "sectorWeightsPct": {
+        "Financials": 22.7255,
+        "Consumer Staples": 6.354,
+        "Information Technology": 7.3417,
+        "Health Care": 9.5817,
+        "Energy": 7.1709,
+        "Consumer Discretionary": 15.6574,
+        "Industrials": 15.4269,
+        "Real Estate": 5.7187,
+        "Utilities": 2.6622,
+        "Materials": 4.9574,
+        "Communication Services": 2.361,
+        "Unassigned": 0.0407
+      },
+      "sourceType": "physical_etf_holdings_proxy",
+      "source": "https://www.ssga.com/library-content/products/fund-data/etfs/emea/holdings-daily-emea-en-zprv-gy.xlsx"
+    },
+    "msci_europe_small_cap_weighted": {
+      "ticker": "ZPRX",
+      "holdingsCount": 799,
+      "top10WeightPct": 9.4085,
+      "sectorWeightsPct": {
+        "Communication Services": 6.0012,
+        "Industrials": 27.4046,
+        "Consumer Discretionary": 15.2783,
+        "Energy": 4.7753,
+        "Financials": 14.5162,
+        "Materials": 9.4228,
+        "Utilities": 2.5148,
+        "Real Estate": 7.5027,
+        "Information Technology": 4.2024,
+        "Health Care": 4.7678,
+        "Consumer Staples": 3.6142,
+        "Unassigned": 0
+      },
+      "sourceType": "physical_etf_holdings_proxy",
+      "source": "https://www.ssga.com/library-content/products/fund-data/etfs/emea/holdings-daily-emea-en-zprx-gy.xlsx"
+    }
+  }
+}
