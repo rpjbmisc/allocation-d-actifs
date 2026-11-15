@@ -23,7 +23,7 @@ jobs:
       - name: One-off ETF provider audit for research PR
         if: github.event_name == 'pull_request' && github.head_ref == 'feat/lookthrough-styles-quality-2026'
         continue-on-error: true
-        run: python3 scripts/refresh_holdings_audit.py --output holdings-audit.json
+        run: python3 scripts/refresh_holdings_audit.py --styles-csv scripts/stock_styles_seed.csv --output holdings-audit.json
       - name: Preserve audited derived summary
         if: github.event_name == 'pull_request' && github.head_ref == 'feat/lookthrough-styles-quality-2026' && hashFiles('holdings-audit.json') != ''
         uses: actions/upload-artifact@v4
