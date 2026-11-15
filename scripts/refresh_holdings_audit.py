@@ -73,9 +73,9 @@ def lookup_header(rows):
         name=next((i for i,k in enumerate(keys)
                    if k in ("security name","name","security","nom du titres","nom du titre","constituent name")),None)
         weight=next((i for i,k in enumerate(keys)
-                     if k in ("weight","weight (%)","weight %","poids","poids (%)","portfolio weight")),None)
+                     if k in ("weight","weight (%)","weight %","poids","poids (%)","portfolio weight","percent of fund")),None)
         if name is not None and weight is not None:
-            sector=next((i for i,k in enumerate(keys) if k in ("sector","gics sector","secteur")),None)
+            sector=next((i for i,k in enumerate(keys) if k in ("sector","gics sector","secteur","sector classification")),None)
             asset=next((i for i,k in enumerate(keys) if k in ("asset class","asset type","type of security")),None)
             return rownum,name,weight,sector,asset
     raise ValueError("En-têtes Name/Weight introuvables : " + repr(rows[:12])[:1700])
@@ -91,6 +91,7 @@ def number(v):
 
 def extract(raw):
     rows=rows_xlsx(raw)
+    as_of=next((str(r[1]).strip() for r in rows[:18] if len(r)>1 and normal(r[0])=="holdings as of:"),None)
     header,name_idx,weight_idx,sector_idx,asset_idx=lookup_header(rows)
     holdings=[]
     for row in rows[header+1:]:
@@ -115,7 +116,7 @@ def extract(raw):
         if h["sector"]:
             sector_weights[h["sector"]]=round(sector_weights.get(h["sector"],0)+h["weight"],4)
     top=sorted(holdings,key=lambda x:x["weight"],reverse=True)[:10]
-    return {"holdingsCount":len(holdings),"equityWeightPct":round(summed,4),
+    return {"holdingsCount":len(holdings),"holdingsAsOf":as_of,"equityWeightPct":round(summed,4),
             "top10WeightPct":round(sum(h["weight"] for h in top),4),
             "top10":[{"name":h["name"],"weight":round(h["weight"],4)} for h in top],
             "sectorWeightsPct":sector_weights}
@@ -141,7 +142,7 @@ def main():
         try:
             item=extract(fetch(url))
             item.update({"etf":ticker,"benchmark":benchmark,"downloadUrl":url,
-                         "sourceType":"physical_etf_holdings_proxy","asOf":None,
+                         "sourceType":"physical_etf_holdings_proxy","asOf":item["holdingsAsOf"],
                          "warning":"Le panier d'un ETF physique/échantillonné peut différer de l'indice."})
             data["assets"][index]=item
             print(f"{ticker}: {item['holdingsCount']} positions; {item['equityWeightPct']:.2f}% poids actions; top 10 {item['top10WeightPct']:.2f}%")
