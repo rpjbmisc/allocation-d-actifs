@@ -1,0 +1,345 @@
+{
+  "schemaVersion": 1,
+  "updated": "2026-11-14",
+  "description": "Positions des indices MSCI (et non parts physiques des ETF synthétiques) et classifications de titres. Photographie partielle et datée ; aucun pourcentage non couvert n'est imputé.",
+  "styleMethod": "Morningstar Stock Style Box individuel : Core → Blend. Les classifications observées sur pages publiques en octobre/novembre 2026 ne sont pas forcément datées exactement comme les poids de l'indice.",
+  "profitabilityMethod": "ROIC normalisé Morningstar. ROIC >= 15 % est un proxy illustratif de rentabilité, PAS un facteur MSCI Quality ; données manquantes laissées non documentées et aucun ROIC bancaire imputé.",
+  "securities": {
+    "AAPL": {
+      "name": "Apple",
+      "style": "Blend",
+      "styleSource": "https://www.morningstar.com/stocks/XNAS/AAPL/quote.html",
+      "roic": 77.78,
+      "roicSource": "https://www.morningstar.com/stocks/XNAS/AAPL/quote.html"
+    },
+    "NVDA": {
+      "name": "NVIDIA",
+      "style": "Growth",
+      "styleSource": "https://www.morningstar.com/stocks/xnas/NVDA/quote",
+      "roic": 95.82,
+      "roicSource": "https://www.morningstar.com/stocks/xnas/NVDA/quote"
+    },
+    "MSFT": {
+      "name": "Microsoft",
+      "style": "Blend",
+      "styleSource": "https://www.morningstar.com/stocks/xnas/msft/quote.html",
+      "roic": 31.5,
+      "roicSource": "https://www.morningstar.com/stocks/xnas/msft/quote.html"
+    },
+    "AMZN": {
+      "name": "Amazon",
+      "style": "Blend",
+      "styleSource": "https://www.morningstar.com/stocks/XNAS/AMZN/quote.html"
+    },
+    "GOOGL": {
+      "name": "Alphabet A",
+      "style": "Blend",
+      "styleSource": "https://www.morningstar.com/stock-styles/large-core",
+      "roic": 27.38,
+      "roicSource": "https://www.morningstar.com/stocks/xnas/msft/quote.html"
+    },
+    "GOOG": {
+      "name": "Alphabet C",
+      "style": "Blend",
+      "styleSource": "https://www.morningstar.com/stocks/XNAS/GOOG",
+      "roic": 27.38,
+      "roicSource": "https://www.morningstar.com/stocks/XNAS/GOOG"
+    },
+    "AVGO": {
+      "name": "Broadcom",
+      "style": "Growth",
+      "styleSource": "https://www.morningstar.com/stocks/xnas/AVGO/quote",
+      "roic": 34.36,
+      "roicSource": "https://www.morningstar.com/stocks/xnas/AVGO/quote"
+    },
+    "META": {
+      "name": "Meta",
+      "style": "Blend",
+      "styleSource": "https://www.morningstar.com/stocks/xnas/META",
+      "roic": 30.92,
+      "roicSource": "https://www.morningstar.com/stocks/xnas/META"
+    },
+    "TSLA": {
+      "name": "Tesla",
+      "style": "Growth",
+      "styleSource": "https://www.morningstar.com/stocks/xnas/TSLA/quote",
+      "roic": 6.77,
+      "roicSource": "https://www.morningstar.com/stocks/xnas/TSLA/quote"
+    },
+    "LLY": {
+      "name": "Eli Lilly",
+      "style": "Growth",
+      "styleSource": "https://www.morningstar.com/stocks/xnys/LLY/quote"
+    },
+    "TSM": {
+      "name": "Taiwan Semiconductor Manufacturing",
+      "style": "Growth",
+      "styleSource": "https://www.morningstar.com/stocks/xnys/TSM/quote",
+      "roic": 34.69,
+      "roicSource": "https://www.morningstar.com/stocks/xnys/TSM/quote"
+    },
+    "BABA": {
+      "name": "Alibaba",
+      "style": "Blend",
+      "styleSource": "https://www.morningstar.com/stocks/XNYS/BABA",
+      "roic": 0.25,
+      "roicSource": "https://www.morningstar.com/stocks/XNYS/BABA"
+    },
+    "ROG": {
+      "name": "Roche (participation)",
+      "style": "Blend",
+      "styleSource": "https://www.morningstar.com/stocks/xswx/rop/quote"
+    },
+    "SAMSUNG": {
+      "name": "Samsung Electronics ordinary"
+    },
+    "SKHYNIX": {
+      "name": "SK Hynix"
+    },
+    "TENCENT": {
+      "name": "Tencent Holdings"
+    },
+    "MEDIATEK": {
+      "name": "MediaTek"
+    },
+    "CCB": {
+      "name": "China Construction Bank H"
+    },
+    "SAMSP": {
+      "name": "Samsung Electronics preference"
+    },
+    "HONHAI": {
+      "name": "Hon Hai Precision"
+    },
+    "HDFCBANK": {
+      "name": "HDFC Bank"
+    },
+    "ASML": {
+      "name": "ASML",
+      "style": "Growth",
+      "styleSource": "https://lt.morningstar.com/1c6qh1t6k9/stockreport/default.aspx?ClientFund=0&CurrencyId=EUR&Id=0P0000ALDL&SecurityToken=0P0000ALDL%5D3%5D0%5DE0EXG%24XAMS&tab=0&vw=sum"
+    },
+    "SHELL": {
+      "name": "Shell"
+    },
+    "NOVARTIS": {
+      "name": "Novartis"
+    },
+    "HSBC": {
+      "name": "HSBC Holdings"
+    },
+    "ASTRA": {
+      "name": "AstraZeneca"
+    },
+    "NESTLE": {
+      "name": "Nestlé",
+      "style": "Value",
+      "styleSource": "https://www.morningstar.com/stocks/pinx/nsrgy/quote.html",
+      "roic": 12.26,
+      "roicSource": "https://www.morningstar.com/stocks/pinx/nsrgy/quote.html"
+    },
+    "SAP": {
+      "name": "SAP"
+    },
+    "SIEMENS": {
+      "name": "Siemens"
+    },
+    "ALLIANZ": {
+      "name": "Allianz"
+    }
+  },
+  "indices": {
+    "msci_world": {
+      "asOf": "2026-10-30",
+      "source": "https://www.msci.com/documents/10199/178e6643-6ae6-47b9-82be-e1fc565ededb",
+      "kind": "index",
+      "holdings": [
+        {
+          "id": "AAPL",
+          "weight": 5.65
+        },
+        {
+          "id": "NVDA",
+          "weight": 5.25
+        },
+        {
+          "id": "MSFT",
+          "weight": 4.11
+        },
+        {
+          "id": "AMZN",
+          "weight": 2.6
+        },
+        {
+          "id": "GOOGL",
+          "weight": 1.83
+        },
+        {
+          "id": "AVGO",
+          "weight": 1.64
+        },
+        {
+          "id": "META",
+          "weight": 1.51
+        },
+        {
+          "id": "GOOG",
+          "weight": 1.45
+        },
+        {
+          "id": "TSLA",
+          "weight": 1.28
+        },
+        {
+          "id": "LLY",
+          "weight": 1.27
+        }
+      ],
+      "notes": "Les dix principales lignes de la fiche MSCI World d'octobre 2026 (somme des arrondis individuels 26,59 %, total officiel 26,58 %)."
+    },
+    "msci_em": {
+      "asOf": "2026-10-30",
+      "source": "https://www.msci.com/indexes/index/891800/msci-emerging-markets-index",
+      "kind": "index",
+      "holdings": [
+        {
+          "id": "TSM",
+          "weight": 15.87
+        },
+        {
+          "id": "SAMSUNG",
+          "weight": 6.99
+        },
+        {
+          "id": "SKHYNIX",
+          "weight": 5.2
+        },
+        {
+          "id": "TENCENT",
+          "weight": 2.66
+        },
+        {
+          "id": "BABA",
+          "weight": 1.84
+        },
+        {
+          "id": "MEDIATEK",
+          "weight": 1.54
+        },
+        {
+          "id": "CCB",
+          "weight": 0.97
+        },
+        {
+          "id": "SAMSP",
+          "weight": 0.93
+        },
+        {
+          "id": "HONHAI",
+          "weight": 0.82
+        },
+        {
+          "id": "HDFCBANK",
+          "weight": 0.74
+        }
+      ],
+      "notes": "Dix premières lignes officielles de MSCI Emerging Markets au 30 octobre 2026. Les sociétés sans classification ne sont PAS extrapolées."
+    },
+    "msci_em_asia": {
+      "asOf": "2026-10-30",
+      "source": "https://www.msci.com/indexes/index/899700/msci-em-asia-index",
+      "kind": "index",
+      "holdings": [
+        {
+          "id": "TSM",
+          "weight": 19.15
+        },
+        {
+          "id": "SAMSUNG",
+          "weight": 8.43
+        },
+        {
+          "id": "SKHYNIX",
+          "weight": 6.28
+        },
+        {
+          "id": "TENCENT",
+          "weight": 3.21
+        },
+        {
+          "id": "BABA",
+          "weight": 2.22
+        },
+        {
+          "id": "MEDIATEK",
+          "weight": 1.85
+        },
+        {
+          "id": "CCB",
+          "weight": 1.18
+        },
+        {
+          "id": "SAMSP",
+          "weight": 1.12
+        },
+        {
+          "id": "HONHAI",
+          "weight": 0.99
+        },
+        {
+          "id": "HDFCBANK",
+          "weight": 0.89
+        }
+      ],
+      "notes": "Dix premières lignes officielles MSCI EM Asia au 30 octobre 2026 ; quelques styles Morningstar vérifiés, les autres inconnus."
+    },
+    "msci_europe": {
+      "asOf": "2026-10-30",
+      "source": "https://www.msci.com/indexes/index/990500/msci-europe-index",
+      "kind": "index",
+      "holdings": [
+        {
+          "id": "ASML",
+          "weight": 4.46
+        },
+        {
+          "id": "ROG",
+          "weight": 2.51
+        },
+        {
+          "id": "SHELL",
+          "weight": 2.28
+        },
+        {
+          "id": "NOVARTIS",
+          "weight": 2.17
+        },
+        {
+          "id": "HSBC",
+          "weight": 2.14
+        },
+        {
+          "id": "ASTRA",
+          "weight": 2.06
+        },
+        {
+          "id": "NESTLE",
+          "weight": 1.93
+        },
+        {
+          "id": "SAP",
+          "weight": 1.74
+        },
+        {
+          "id": "SIEMENS",
+          "weight": 1.56
+        },
+        {
+          "id": "ALLIANZ",
+          "weight": 1.36
+        }
+      ],
+      "notes": "Dix premières lignes MSCI Europe au 30 octobre 2026 ; aucune classification Value/Blend/Growth supposée pour les titres sans source."
+    }
+  }
+}
