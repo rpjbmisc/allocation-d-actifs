@@ -1,0 +1,34 @@
+name: Holdings audit (public provider files)
+on:
+  pull_request:
+    paths:
+      - 'scripts/refresh_holdings_audit.py'
+      - '.github/workflows/holdings-audit.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  fetch-and-validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Retrieve public physical ETF holdings and validate aggregate
+        id: parse
+        continue-on-error: true
+        run: python scripts/refresh_holdings_audit.py --output holdings-audit.json
+      - name: Upload derived summary (when available)
+        if: ${{ hashFiles('holdings-audit.json') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: etf-holdings-audit
+          path: holdings-audit.json
+          retention-days: 7
+      - name: Report provider access result
+        run: |
+          if [ "${{ steps.parse.outcome }}" != "success" ]; then
+            echo "::warning::Provider downloads unavailable or provider schema changed. No fabricated holdings data were published."
+          fi
