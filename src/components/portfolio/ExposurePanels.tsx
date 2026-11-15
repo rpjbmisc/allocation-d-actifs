@@ -1,13 +1,14 @@
 import { useState } from "react";
 import { calculatePortfolioExposure, type ExposureDimension, type ExposureRegistry, type PortfolioExposure } from "../../domain/exposures";
-import { calculateLookthrough, type LookthroughRegistry, type LookthroughReport } from "../../domain/lookthrough";
-type ViewDimension = ExposureDimension | "profitability";
-function lookthroughFor(weights:Record<string,number>,registry:ExposureRegistry|null,lookthrough:LookthroughRegistry|null):LookthroughReport|null {
+import { calculateLookthrough, type LookthroughRegistry, type LookthroughReport, type PhysicalAuditRegistry } from "../../domain/lookthrough";
+type ViewDimension = ExposureDimension | "profitability" | "sectors";
+function lookthroughFor(weights:Record<string,number>,registry:ExposureRegistry|null,lookthrough:LookthroughRegistry|null,audit:PhysicalAuditRegistry|null):LookthroughReport|null {
   if(!registry||!lookthrough)return null;
-  return calculateLookthrough(weights,Object.keys(weights).filter(id=>registry.assets[id]?.kind==="equity"),lookthrough);
+  return calculateLookthrough(weights,Object.keys(weights).filter(id=>registry.assets[id]?.kind==="equity"),lookthrough,audit);
 }
 function viewRows(report:PortfolioExposure,dimension:ViewDimension,look:LookthroughReport|null) {
   if(dimension==="profitability")return look?.profitability??[{name:"ROIC non documenté",percent:100}];
+  if(dimension==="sectors")return look?.sectors??[{name:"Secteur non documenté",percent:100}];
   if(dimension==="styles")return look?.styles??report.breakdown.styles;
   return report.breakdown[dimension];
 }
@@ -15,7 +16,7 @@ function viewRows(report:PortfolioExposure,dimension:ViewDimension,look:Lookthro
 const dims: Array<{id:ViewDimension;label:string}>=[
   {id:"zones",label:"Zones"}, {id:"countries",label:"Pays"},
   {id:"sizes",label:"Tailles"}, {id:"styles",label:"Styles"}, {id:"factors",label:"Facteurs"},
-  {id:"profitability",label:"Rentabilité (proxy)"},
+  {id:"profitability",label:"Rentabilité (proxy)"}, {id:"sectors",label:"Secteurs"},
 ];
 const fmt=(x:number)=>`${x.toLocaleString("fr-FR",{maximumFractionDigits:1,minimumFractionDigits:1})} %`;
 const pct=(x:number)=>`${x.toLocaleString("fr-FR",{maximumFractionDigits:1,minimumFractionDigits:1})}`;
@@ -26,6 +27,7 @@ const dimensionHint:Record<ViewDimension,string>={
   sizes:"Répartition des capitalisations : ratios MSCI à date commune quand disponibles, sinon estimations méthodologiques explicitement signalées. Les pourcentages estimés ne sont pas des compositions publiées.",
   styles:"Style économique des entreprises (Value / Blend / Growth). Non documenté signifie que les données de composition ligne à ligne ne permettent pas une classification fiable ; ce n’est pas une exposition nulle.",
   factors:"Biais explicites des indices (Value / Growth / Quality), et non la répartition des titres par style. Quality reste transversal.",
+  sectors:"Ventilation GICS des positions complètes de cinq ETF physiques. Les indices non couverts restent non documentés ; le secteur ne permet pas de déduire directement Growth / Value.",
   profitability:"Proxy de rentabilité : ROIC normalisé Morningstar ≥ 15 %, sur les seules positions documentées. Ce n'est PAS le facteur MSCI Quality : ni l'endettement ni la stabilité des bénéfices n'entrent ici dans le calcul.",
 };
 function Dimension({ report, dimension, look }:{report:PortfolioExposure;dimension:ViewDimension;look:LookthroughReport|null}) {
@@ -47,13 +49,14 @@ function Coverage({ report, look }:{report:PortfolioExposure;look:LookthroughRep
     {report.precision.sizesEstimated>0.01&&<span>Tailles estimées : {fmt(report.precision.sizesEstimated)} des actions</span>}
     <span>Styles documentés : {fmt(look?.coverage.styles??report.precision.styles)} des actions</span>
     {look&&<span>ROIC documenté : {fmt(look.coverage.profitability)} des actions</span>}
+    {look&&look.coverage.sectors>0&&<span>Secteurs documentés : {fmt(look.coverage.sectors)} des actions</span>}
   </div>;
 }
-export function ExposurePanel({weights,registry,lookthrough,profileLabel}:{weights:Record<string,number>;registry:ExposureRegistry|null;lookthrough?:LookthroughRegistry|null;profileLabel:string}){
+export function ExposurePanel({weights,registry,lookthrough,audit,profileLabel}:{weights:Record<string,number>;registry:ExposureRegistry|null;lookthrough?:LookthroughRegistry|null;audit?:PhysicalAuditRegistry|null;profileLabel:string}){
   const [dimension,setDimension]=useState<ViewDimension>("zones");
   if(!registry)return <section className="table-card exposure-panel"><h2>Composition de l'allocation</h2><p>Données de composition indisponibles. Les performances restent accessibles.</p></section>;
   const report=calculatePortfolioExposure(weights,registry);
-  const look=lookthroughFor(weights,registry,lookthrough??null);
+  const look=lookthroughFor(weights,registry,lookthrough??null,audit??null);
   return <section className="table-card exposure-panel" aria-label="Composition du portefeuille">
     <div className="card-heading compact"><div><h2>Composition du portefeuille</h2><p>Mode actif : <strong>{profileLabel}</strong> · Photographie des compositions disponibles, parfois estimées via un ETF répliquant l’indice, indépendante des rendements historiques.</p></div></div>
     {report?<><Coverage report={report} look={look}/><div className="exposure-dimension-tabs" role="group" aria-label="Dimensions de composition">
@@ -78,15 +81,15 @@ export function ExposurePanel({weights,registry,lookthrough,profileLabel}:{weigh
   </section>;
 }
 export interface ComparisonExposureCandidate { id:string;label:string;weights:Record<string,number>|null }
-export function ExposurePairComparison({candidates,registry,lookthrough}:{candidates:ComparisonExposureCandidate[];registry:ExposureRegistry|null;lookthrough?:LookthroughRegistry|null}){
+export function ExposurePairComparison({candidates,registry,lookthrough,audit}:{candidates:ComparisonExposureCandidate[];registry:ExposureRegistry|null;lookthrough?:LookthroughRegistry|null;audit?:PhysicalAuditRegistry|null}){
   const [a,setA]=useState("Personnalisée");
   const [b,setB]=useState("Croissance");
   const [dimension,setDimension]=useState<ViewDimension>("zones");
   const left=candidates.find(c=>c.id===a),right=candidates.find(c=>c.id===b);
   const one=left?.weights&&registry?calculatePortfolioExposure(left.weights,registry):null;
   const two=right?.weights&&registry?calculatePortfolioExposure(right.weights,registry):null;
-  const look1=left?.weights?lookthroughFor(left.weights,registry,lookthrough??null):null;
-  const look2=right?.weights?lookthroughFor(right.weights,registry,lookthrough??null):null;
+  const look1=left?.weights?lookthroughFor(left.weights,registry,lookthrough??null,audit??null):null;
+  const look2=right?.weights?lookthroughFor(right.weights,registry,lookthrough??null,audit??null):null;
   const values1=Object.fromEntries((one?viewRows(one,dimension,look1):[]).map(p=>[p.name,p.percent]));
   const values2=Object.fromEntries((two?viewRows(two,dimension,look2):[]).map(p=>[p.name,p.percent]));
   const names=Array.from(new Set([...Object.keys(values1),...Object.keys(values2)])).sort((x,y)=>Math.max(values2[y]??0,values1[y]??0)-Math.max(values2[x]??0,values1[x]??0));
