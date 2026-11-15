@@ -6,7 +6,7 @@ import { optimizeProspective } from "./optimization/prospective";
 import ToutTerrainPanel from "./components/portfolio/ToutTerrainPanel";
 import { ExposurePanel, ExposurePairComparison } from "./components/portfolio/ExposurePanels";
 import type { ExposureRegistry } from "./domain/exposures";
-import type { LookthroughRegistry } from "./domain/lookthrough";
+import type { LookthroughRegistry, PhysicalAuditRegistry } from "./domain/lookthrough";
 import type { ProspectiveResult } from "./optimization/prospective";
 import {
   Area,
@@ -1042,6 +1042,15 @@ function PortfolioView({
 }) {
   const [exposureRegistry,setExposureRegistry] = useState<ExposureRegistry|null>(null);
   const [lookthroughRegistry,setLookthroughRegistry] = useState<LookthroughRegistry|null>(null);
+  const [physicalAudit,setPhysicalAudit] = useState<PhysicalAuditRegistry|null>(null);
+  useEffect(() => {
+    let alive=true;
+    fetch(`${import.meta.env.BASE_URL}data/holdings_audit.json`)
+      .then(r=>{if(!r.ok)throw Error("Composition ETF indisponible");return r.json();})
+      .then((value:PhysicalAuditRegistry)=>{if(alive)setPhysicalAudit(value);})
+      .catch(()=>{if(alive)setPhysicalAudit(null);});
+    return ()=>{alive=false;};
+  }, []);
   useEffect(() => {
     let alive=true;
     fetch(`${import.meta.env.BASE_URL}data/index_lookthrough.json`)
@@ -1153,7 +1162,7 @@ function PortfolioView({
           <Metric label="Pire année" value={portfolio.worst ? `${portfolio.worst.year} · ${formatPercent(portfolio.worst.return)}` : "n.d."} description="Rendement annuel le plus faible." negative />
           <Metric label="Récupération" value={portfolio.recoveryYears === null ? "n.d." : `${portfolio.recoveryYears} an${portfolio.recoveryYears > 1 ? "s" : ""}`} description="Temps pour retrouver le précédent sommet." />
          </section>
-         <ExposurePanel weights={Object.fromEntries(assets.map(asset => [asset.id, weights[asset.id] ?? 0]))} registry={exposureRegistry} lookthrough={lookthroughRegistry} profileLabel={optimizationProfileLabel(optimizationProfile)} />
+         <ExposurePanel weights={Object.fromEntries(assets.map(asset => [asset.id, weights[asset.id] ?? 0]))} registry={exposureRegistry} lookthrough={lookthroughRegistry} audit={physicalAudit} profileLabel={optimizationProfileLabel(optimizationProfile)} />
          <PortfolioComparison portfolio={portfolio} equalPortfolio={equalPortfolio} mode={mode} />
          {currencyComparison && <CurrencyEffectCard portfolio={portfolio} comparison={currencyComparison} />}
          <section className="chart-card portfolio-chart">
@@ -1177,7 +1186,7 @@ function PortfolioView({
     </> : <div className="error-panel portfolio-empty">Données insuffisantes ou incohérentes : vérifie les pondérations et les rendements de chaque année de la période. Aucun rendement manquant n’est remplacé par zéro.</div>}
     </div>
     </div>}
-    {space === "comparison" && <PortfolioComparisonDashboard assets={assets} weights={weights} portfolio={portfolio} equalPortfolio={equalPortfolio} benchmarkPortfolio={benchmarkPortfolio} growthOptimization={growthProposal} robustOptimization={robustProposal} goalOptimization={goalProposal} mode={mode} exposureRegistry={exposureRegistry} lookthroughRegistry={lookthroughRegistry} savedCustomWeights={savedCustomWeights} assetCatalog={assetCatalog} data={data} start={start} end={end} />}
+    {space === "comparison" && <PortfolioComparisonDashboard assets={assets} weights={weights} portfolio={portfolio} equalPortfolio={equalPortfolio} benchmarkPortfolio={benchmarkPortfolio} growthOptimization={growthProposal} robustOptimization={robustProposal} goalOptimization={goalProposal} mode={mode} exposureRegistry={exposureRegistry} lookthroughRegistry={lookthroughRegistry} physicalAudit={physicalAudit} savedCustomWeights={savedCustomWeights} assetCatalog={assetCatalog} data={data} start={start} end={end} />}
     {space === "validation" && <WalkForwardView assets={assets} result={walkForward} settings={validationSettings} robustScenarioSettings={robustScenarioSettings} onSettingsChange={onValidationSettingsChange} />}
   </div>;
 }
@@ -1221,6 +1230,7 @@ function PortfolioComparisonDashboard({
   mode,
   exposureRegistry,
   lookthroughRegistry,
+  physicalAudit,
   savedCustomWeights,
 }: {
   assets: Asset[];
@@ -1238,6 +1248,7 @@ function PortfolioComparisonDashboard({
   mode: Mode;
   exposureRegistry: ExposureRegistry|null;
   lookthroughRegistry: LookthroughRegistry|null;
+  physicalAudit: PhysicalAuditRegistry|null;
   savedCustomWeights: Record<string,number>|null;
 }) {
   const rows: Array<{ label: string; type: string; weights: Record<string, number> | null; stats: PortfolioStats | null; note?: string }> = [
@@ -1254,7 +1265,7 @@ function PortfolioComparisonDashboard({
       <div className="card-heading compact"><div className="heading-icon warm"><BarChart3 size={17} /></div><div><h2>Comparer les allocations</h2><p>Résultats historiques sur la même période, devise, lecture et règles de rééquilibrage. Le hors échantillon est séparé dans Validation.</p></div></div>
        <div className="table-scroll"><table><thead><tr><th>Allocation</th><th>Nature</th><th>TCAM historique</th><th>Lecture des scénarios</th><th>Volatilité</th><th>Drawdown annuel</th><th>Pondérations</th></tr></thead><tbody>{rows.map(row => <tr key={row.label}><td>{row.label}</td><td>{row.type}{row.note && <small className="table-note">{row.note}</small>}</td><td>{formatPercent(row.stats?.cagr)}</td><td>{row.label === "Tout-terrain" ? robustOptimization.prospectiveSummary ? "4 futurs étudiés" : "n.d." : row.label === "Objectif patrimonial" ? goalOptimization.goalSummary ? `${goalOptimization.goalSummary.probabilityPct.toFixed(1)} % de réussite` : "n.d." : "n.a."}</td><td>{formatPercent(row.stats?.volatility)}</td><td>{formatPercent(row.stats?.maxDrawdown)}</td><td>{row.label === "MSCI World" ? row.stats ? "100 % MSCI World" : "n.d." : allocationLabel(assetCatalog, row.weights)}</td></tr>)}</tbody></table></div>
     </section>
-    <ExposurePairComparison registry={exposureRegistry} lookthrough={lookthroughRegistry} candidates={rows.map(row=>({id:row.label,label:row.label,weights:row.label==="Personnalisée"?(savedCustomWeights??null):row.weights}))}/>
+    <ExposurePairComparison registry={exposureRegistry} lookthrough={lookthroughRegistry} audit={physicalAudit} candidates={rows.map(row=>({id:row.label,label:row.label,weights:row.label==="Personnalisée"?(savedCustomWeights??null):row.weights}))}/>
     <section className="insight-card comparison-reading">
       <div className="card-heading compact"><div className="heading-icon cool"><CircleHelp size={17} /></div><div><h2>Lire cette comparaison</h2><p>Une bonne performance historique ne constitue pas une prévision.</p></div></div>
       <p>Les lignes in-sample décrivent les rendements observés sur la période complète. La validation walk-forward gèle les poids à chaque date de décision et mesure uniquement les années qui suivent, avec un CAGR composé hors échantillon. Les coûts, la fiscalité et les drawdowns intra-annuels ne sont pas modélisés.</p>
