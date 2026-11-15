@@ -23,7 +23,14 @@
         "Unassigned": 0.0001
       },
       "sourceType": "physical_etf_holdings_proxy",
-      "source": "https://www.ssga.com/library-content/products/fund-data/etfs/emea/holdings-daily-emea-en-sppw-gy.xlsx"
+      "source": "https://www.ssga.com/library-content/products/fund-data/etfs/emea/holdings-daily-emea-en-sppw-gy.xlsx",
+      "styleWeightsPct": {
+        "Value": 0.2902,
+        "Blend": 18.1804,
+        "Growth": 9.2766,
+        "Non documenté": 72.2529
+      },
+      "styleCoveragePct": 27.7471
     },
     "msci_em": {
       "ticker": "SPYM",
@@ -44,7 +51,14 @@
         "Unassigned": 0
       },
       "sourceType": "physical_etf_holdings_proxy",
-      "source": "https://www.ssga.com/library-content/products/fund-data/etfs/emea/holdings-daily-emea-en-spym-gy.xlsx"
+      "source": "https://www.ssga.com/library-content/products/fund-data/etfs/emea/holdings-daily-emea-en-spym-gy.xlsx",
+      "styleWeightsPct": {
+        "Value": 0,
+        "Blend": 1.7895,
+        "Growth": 15.6096,
+        "Non documenté": 82.6009
+      },
+      "styleCoveragePct": 17.3991
     },
     "msci_europe": {
       "ticker": "ERO",
@@ -65,7 +79,14 @@
         "Unassigned": 0.0014
       },
       "sourceType": "physical_etf_holdings_proxy",
-      "source": "https://www.ssga.com/library-content/products/fund-data/etfs/emea/holdings-daily-emea-en-ero-fp.xlsx"
+      "source": "https://www.ssga.com/library-content/products/fund-data/etfs/emea/holdings-daily-emea-en-ero-fp.xlsx",
+      "styleWeightsPct": {
+        "Value": 1.9158,
+        "Blend": 2.453,
+        "Growth": 4.2419,
+        "Non documenté": 91.3892
+      },
+      "styleCoveragePct": 8.6108
     },
     "msci_usa_small_cap_weighted": {
       "ticker": "ZPRV",
@@ -86,7 +107,14 @@
         "Unassigned": 0.0407
       },
       "sourceType": "physical_etf_holdings_proxy",
-      "source": "https://www.ssga.com/library-content/products/fund-data/etfs/emea/holdings-daily-emea-en-zprv-gy.xlsx"
+      "source": "https://www.ssga.com/library-content/products/fund-data/etfs/emea/holdings-daily-emea-en-zprv-gy.xlsx",
+      "styleWeightsPct": {
+        "Value": 0,
+        "Blend": 0,
+        "Growth": 0,
+        "Non documenté": 100
+      },
+      "styleCoveragePct": 0
     },
     "msci_europe_small_cap_weighted": {
       "ticker": "ZPRX",
@@ -107,7 +135,16 @@
         "Unassigned": 0
       },
       "sourceType": "physical_etf_holdings_proxy",
-      "source": "https://www.ssga.com/library-content/products/fund-data/etfs/emea/holdings-daily-emea-en-zprx-gy.xlsx"
+      "source": "https://www.ssga.com/library-content/products/fund-data/etfs/emea/holdings-daily-emea-en-zprx-gy.xlsx",
+      "styleWeightsPct": {
+        "Value": 0,
+        "Blend": 0,
+        "Growth": 0,
+        "Non documenté": 100
+      },
+      "styleCoveragePct": 0
     }
-  }
+  },
+  "styleMethod": "Morningstar Stock Style Box: 15 previously sourced company-level observations joined by ISIN, on complete physical ETF holdings dated 2026-11-12. All unmatched securities remain unknown. Does not reproduce MSCI factor index style inclusion.",
+  "styleInputCount": 15
 }
